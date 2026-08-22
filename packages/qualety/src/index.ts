@@ -26,7 +26,7 @@ export interface Violation {
   suggestion: string;
 }
 
-/** ponytail: options schemas are validated at runtime, not type-checked here. */
+/** Stored on `meta.schema` only; not applied until an options WP. */
 export type JSONSchema = Record<string, unknown>;
 
 /**
@@ -54,7 +54,7 @@ export interface RuleMeta {
 
 export interface RuleContext {
   id: string;
-  /** Already validated against `meta.schema`. */
+  /** Not applied until an options WP; `meta.schema` is stored only. */
   options: unknown;
   report(violation: Omit<Violation, "ruleId">): void;
   getCwd(): string;

@@ -18,7 +18,7 @@ These decisions are considered stable unless a major new constraint appears:
    Exit codes 0/1/2. JSON/SARIF output. Optional MCP server as a thin wrapper around the same engine. Official GitHub Action + pre-commit examples.
 
 2. **Configuration**  
-   Primary path is a typed `defineConfig` function (TypeScript) that provides IntelliSense, autocomplete, and runtime validation of unknown keys / mismatched rule ids. JSON/YAML remains supported for non-TS projects. Every rule is independently toggleable; installing a plugin does **not** force all of its rules on.
+   Primary path is a typed `defineConfig` function (TypeScript) that provides IntelliSense, autocomplete, and runtime validation of unknown keys / mismatched rule ids. On-disk load is JSON + TS/JS (`qualety.config.ts` / `.mts` / `.js` / `.mjs` / `.json`). Every rule is independently toggleable; installing a plugin does **not** force all of its rules on.
 
 3. **Core language & multi-language strategy**  
    Core engine, CLI, MCP, and config system are written in **TypeScript**. Default artifact providers (e.g. `"typescript"`) may parse with language-specific libraries **inside** `build` (ts-morph for TypeScript). Rules consume native AST types via `getArtifact` plus their own imports. **The core never imports language-specific AST types** (`SourceFile` is not on `ArtifactMap`; `ParsedProject.sources` stays `unknown`). There is no public `LanguageFrontend` / `hasFrontend` / `createFrontend` product API.
@@ -50,7 +50,7 @@ These decisions are considered stable unless a major new constraint appears:
 8. **One provider map / one engine loop**  
     No unified cross-language AST. Same product idea on two languages ⇒ **two rules** (convention, not `meta.kind`), each `requires` that artifact id. There is a single `Rule` / `RuleContext`. Optional `meta.requires: string[]` names artifacts. In-repo / TypeScript plugin authors use `defineRule` (identity) so `getArtifact(id)` is typed from `ArtifactMap` (no `as ParsedProject` / `as DupehoundIndex`). Runtime engine `getArtifact` stays untyped at the `Map<string, unknown>` boundary. Load path is Zod (`pluginSchema` / `ruleSchema` / `artifactProviderSchema`), not hand guards.
 
-   **Who provides:** one map. Start empty → register every `provides` entry from loaded **plugin modules** (collision → exit 2, names **both owners**) → for each id in the **default registry** still missing, fill with `owner: "default"`. Defaults only fill gaps; they never replace a plugin-provided id. A plugin `provides.typescript` **wins** (default skipped for that id). v1 default registry is `as const` with `"typescript"` → today’s `ParsedProject`. `dupehound` stays in `@qualety/dry`. Multi-team shared providers load as **ruleless plugins** via `plugins[]`. There is **no** `config.languages` and **no** reserved-id category.
+   **Who provides:** one map. Start empty → register every `provides` entry from loaded **plugin modules** (collision → exit 2, names **both owners**) → for each id in the **default registry** still missing, fill with `owner: "default"`. Defaults only fill gaps; they never replace a plugin-provided id. A plugin `provides.typescript` **wins** (default skipped for that id). v1 default registry is `as const` with `"typescript"` → today’s `ParsedProject`. Default providers are compiled-in trusted factories (`DEFAULT_PROVIDERS` / `createTypeScriptProvider`), gap-filled after plugin `provides`, and are **not** loaded through `pluginSchema`. `dupehound` stays in `@qualety/dry`. Multi-team shared providers load as **ruleless plugins** via `plugins[]`. There is **no** `config.languages` and **no** reserved-id category.
 
    **Engine:** collect all providers into one map → union `requires` from enabled rules → **build each id once** (`await provider.build(context)`) → `create` every rule once with the same context. One include/exclude file pass; extension filtering lives **inside** the typescript provider’s `build` (`.ts`/`.tsx`/`.mts`/`.cts`). Empty sources after filter is success, not an error.
 
@@ -146,7 +146,7 @@ export interface Rule {
 
 export interface RuleContext {
   id: string;
-  options: unknown;             // already validated against schema
+  options: unknown;             // not applied until an options WP; schema stored only
   report(violation: Omit<Violation, "ruleId">): void;
   getCwd(): string;
   getFiles(): readonly string[]; // one include/exclude pass, display paths
@@ -167,7 +167,7 @@ export interface ArtifactMap {
 export function defineRule<T extends Rule>(rule: T): T;
 ```
 
-Runtime schemas (engine `safeParse` at load; do **not** replace the TypeScript interfaces above): `requiresSchema`, `ruleMetaSchema`, `functionSchema`, `ruleSchema`, `artifactProviderSchema`, `pluginProvidesSchema`, `pluginSchema`. `defineRule` is a typed identity and does **not** parse — JS / fixture plugins skip it, so the engine must validate the advertised catalog anyway (malformed rule → exit 2 even if that rule is `"off"`). `meta.schema` is stored only; it is not applied to rule options in this WP. Parsed output is not substituted for the original object (`create` / `build` identity stays).
+Runtime schemas (engine `safeParse` at load; do **not** replace the TypeScript interfaces above): `requiresSchema`, `ruleMetaSchema`, `functionSchema`, `ruleSchema`, `artifactProviderSchema`, `pluginProvidesSchema`, `pluginSchema`. Those schemas (and siblings) re-exported from core `index` are supported surface for authors who want to parse; `userConfigSchema` stays on the config module (already exported). `defineRule` is a typed identity and does **not** parse — JS / fixture plugins skip it, so the engine must validate the advertised catalog anyway (malformed rule → exit 2 even if that rule is `"off"`). `meta.schema` is stored only; it is not applied until an options WP. Parsed output is not substituted for the original object (`create` / `build` identity stays).
 
 `create` is invoked once per enabled rule, not once per file. Rules never touch the filesystem or the CLI; they only receive their context and call `context.report`. TypeScript consumers: `requires: ["typescript"]` and `getArtifact("typescript")` (typed as `ParsedProject` via `ArtifactMap`; `.project` / `.sources`). Core `ParsedProject.sources` stays `unknown`; plugins kill `as SourceFile` with `instanceof` / type guards (locked #3). A plugin `provides.build` function **may** spawn tools; rules must not. Duplicate artifact id fails closed (both owners named). Defaults only fill gaps — a plugin `provides.typescript` wins. This keeps rules testable and isolatable.
 
@@ -349,7 +349,7 @@ export default defineConfig({
 });
 ```
 
-`defineConfig` performs both type-level and runtime validation.
+`defineConfig` performs both type-level and runtime validation (`validateConfig` / `userConfigSchema`). The loader validates again on read.
 
 **Do not exclude test paths** (`**/*.test.*`, `**/*.spec.*`, `__tests__/**`) when `ts/public-exports-tested` is enabled. The rule only sees files in the TypeScript artifact; wiping tests from the set makes every public export fail. Keep tests in `include`. Default exclude is `node_modules` and `dist` only.
 
