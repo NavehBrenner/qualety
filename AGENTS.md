@@ -60,6 +60,7 @@ PR body: `Closes #<github-issue>`, then what changed, why, and how to verify. Th
 |-------|----------|
 | [create-plugin](skills/create-plugin/SKILL.md) | Scaffolding a new plugin package |
 | [add-rule](skills/add-rule/SKILL.md) | Adding one rule + fixtures to an existing plugin |
+| [ponytail](skills/ponytail/SKILL.md) | Default on plan/build: lazy-senior ladder (kill overengineering). Intensity **full** unless a comment asks lite/ultra. |
 
 Process skills (issues/PRs) live under [docs/CONTRIBUTING-AGENTS.md](docs/CONTRIBUTING-AGENTS.md) until dedicated skill folders exist.
 
