@@ -1,11 +1,15 @@
 import type { Range } from "qualety";
 import {
   type ArrowFunction,
+  type CallExpression,
+  type ElementAccessExpression,
   type FunctionDeclaration,
   type FunctionExpression,
   type MethodDeclaration,
   Node,
+  type ObjectBindingPattern,
   type ParameterDeclaration,
+  type PropertyAccessExpression,
 } from "ts-morph";
 
 export type FunctionLike =
@@ -69,7 +73,7 @@ export function isUnknownTyped(param: ParameterDeclaration): boolean {
   return typeNode !== undefined && typeNode.getText() === "unknown";
 }
 
-export function isSchemaParseCall(node: Node): boolean {
+export function isSchemaParseCall(node: Node): node is CallExpression {
   if (!Node.isCallExpression(node)) {
     return false;
   }
@@ -85,7 +89,7 @@ export function isSchemaParseCall(node: Node): boolean {
   return !(Node.isIdentifier(obj) && obj.getText() === "JSON");
 }
 
-export function isJsonParseCall(node: Node): boolean {
+export function isJsonParseCall(node: Node): node is CallExpression {
   if (!Node.isCallExpression(node)) {
     return false;
   }
@@ -133,7 +137,10 @@ export function aliasesOf(fn: FunctionLike, root: string): Set<string> {
   return names;
 }
 
-export function isPropertyUse(node: Node, names: ReadonlySet<string>): boolean {
+export function isPropertyUse(
+  node: Node,
+  names: ReadonlySet<string>,
+): node is PropertyAccessExpression | ElementAccessExpression | ObjectBindingPattern {
   if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
     const expr = node.getExpression();
     return Node.isIdentifier(expr) && names.has(expr.getText());

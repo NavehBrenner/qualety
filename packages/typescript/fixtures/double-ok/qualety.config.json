@@ -1,6 +1,6 @@
 {
   "plugins": ["../../dist/index.js"],
   "rules": {
-    "ts/no-double-validation": "error"
+    "ts/no-constant-condition": "error"
   }
 }

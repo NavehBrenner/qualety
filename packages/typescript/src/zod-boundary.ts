@@ -2,6 +2,7 @@ import { defineRule, type RuleContext } from "qualety";
 import { Node, SourceFile } from "ts-morph";
 import {
   aliasesOf,
+  type FunctionLike,
   firstArgIdentifier,
   functionLikeName,
   isArgToSchemaParse,
@@ -46,10 +47,7 @@ function scanFile(sourceFile: SourceFile, file: string, context: Pick<RuleContex
   });
 }
 
-function scanBoundary(fn: Node, file: string, context: Pick<RuleContext, "report">) {
-  if (!isFunctionLike(fn)) {
-    return;
-  }
+function scanBoundary(fn: FunctionLike, file: string, context: Pick<RuleContext, "report">) {
   const name = functionLikeName(fn);
   if (name === undefined || !isBoundaryName(name)) {
     return;

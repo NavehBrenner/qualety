@@ -8,7 +8,8 @@ export default defineConfig({
     "dev/no-fs-in-rules": "error",
     "dev/concrete-suggestion": "error",
     "ts/zod-boundary": "error",
-    "ts/no-double-validation": "error",
+    "ts/type-narrowing-checks": "error",
+    "ts/no-constant-condition": "error",
   },
   exclude: ["**/node_modules/**", "**/dist/**", "**/fixtures/**"],
 });

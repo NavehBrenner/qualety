@@ -314,10 +314,9 @@ function wrapMissing(e: unknown, requiredBy: readonly string[]): DupehoundError 
 }
 
 export function missingBinaryMessage(requiredBy: readonly string[]): string {
-  const who =
-    requiredBy.length > 0
-      ? `Cannot run ${byLabel(requiredBy)}`
-      : "Cannot run dupehound-backed rules";
+  const who = requiredBy.length
+    ? `Cannot run ${byLabel(requiredBy)}`
+    : "Cannot run dupehound-backed rules";
   return (
     `${who}: dupehound is not installed or not runnable. ` +
     `Install ${DUPEHOUND_PIN} from https://github.com/Rafaelpta/dupehound/releases ` +
@@ -327,7 +326,7 @@ export function missingBinaryMessage(requiredBy: readonly string[]): string {
 }
 
 function byLabel(ids: readonly string[]): string {
-  return ids.length > 0 ? ids.join(", ") : "a dupehound-backed rule";
+  return ids.length ? ids.join(", ") : "a dupehound-backed rule";
 }
 
 type CommandResult = {
