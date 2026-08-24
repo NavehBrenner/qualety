@@ -8,7 +8,6 @@ import {
   type MethodDeclaration,
   Node,
   type ObjectBindingPattern,
-  type ParameterDeclaration,
   type PropertyAccessExpression,
 } from "ts-morph";
 
@@ -58,7 +57,8 @@ export function isBoundaryName(name: string): boolean {
 export function unknownParamNames(node: FunctionLike): string[] {
   const names: string[] = [];
   for (const param of node.getParameters()) {
-    if (isUnknownTyped(param)) {
+    const typeNode = param.getTypeNode();
+    if (typeNode !== undefined && typeNode.getText() === "unknown") {
       const name = param.getName();
       if (!name.startsWith("{") && !name.startsWith("[")) {
         names.push(name);
@@ -66,11 +66,6 @@ export function unknownParamNames(node: FunctionLike): string[] {
     }
   }
   return names;
-}
-
-export function isUnknownTyped(param: ParameterDeclaration): boolean {
-  const typeNode = param.getTypeNode();
-  return typeNode !== undefined && typeNode.getText() === "unknown";
 }
 
 export function isSchemaParseCall(node: Node): node is CallExpression {

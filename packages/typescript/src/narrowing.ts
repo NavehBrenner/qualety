@@ -1,6 +1,5 @@
 import {
   type CallExpression,
-  type Symbol as MorphSymbol,
   Node,
   type SourceFile,
   SyntaxKind,
@@ -15,26 +14,22 @@ import {
   isSchemaParseCall,
 } from "./parse-flow.ts";
 
-export type CheckKind =
-  | "predicate"
-  | "typeof"
-  | "instanceof"
-  | "nullish"
-  | "truthiness"
-  | "nonempty"
-  | "schema-parse";
-
 export type CheckCandidate = {
   node: Node;
   subject: string;
-  kind: CheckKind;
+  kind:
+    | "predicate"
+    | "typeof"
+    | "instanceof"
+    | "nullish"
+    | "truthiness"
+    | "nonempty"
+    | "schema-parse";
 };
-
-export type ConstantReason = "param-type" | "prior-guard" | "call-site" | "literal" | "prior-parse";
 
 export type ConstantHit = {
   polarity: "true" | "false";
-  reason: ConstantReason;
+  reason: "param-type" | "prior-guard" | "call-site" | "literal" | "prior-parse";
   suggestion: string;
   reportAt: Node;
   message?: string;
@@ -78,35 +73,81 @@ export function classifyCondition(fn: FunctionLike, cond: Node): CheckCandidate 
 
 function classifyExpr(fn: FunctionLike, node: Node): CheckCandidate | undefined {
   const expr = unwrapParens(node);
-  if (Node.isIdentifier(expr)) {
-    const init = initializerOf(fn, expr.getText());
-    if (init !== undefined) {
-      const fromInit = classifyExpr(fn, init);
-      if (fromInit !== undefined) {
-        return fromInit;
-      }
-    }
-    if (canRefineTruthy(expr)) {
-      return { node: expr, subject: expr.getText(), kind: "truthiness" };
-    }
+  return classifyIdent(fn, expr) ?? classifyCall(expr) ?? classifyBinary(expr);
+}
+
+function classifyIdent(fn: FunctionLike, expr: Node): CheckCandidate | undefined {
+  if (!Node.isIdentifier(expr)) {
     return undefined;
   }
-  if (Node.isCallExpression(expr)) {
-    const arg = expr.getArguments()[0];
-    if (arg === undefined || !Node.isIdentifier(arg)) {
-      return undefined;
+  let init: Node | undefined;
+  fn.forEachDescendant((node) => {
+    if (Node.isVariableDeclaration(node) && node.getName() === expr.getText()) {
+      init = node.getInitializer();
     }
-    const subject = arg.getText();
-    if (isSchemaParseCall(expr)) {
-      return { node: expr, subject, kind: "schema-parse" };
+  });
+  if (init !== undefined) {
+    const fromInit = classifyExpr(fn, init);
+    if (fromInit !== undefined) {
+      return fromInit;
     }
-    if (hasTypePredicate(expr) || isGuardName(expr)) {
-      return { node: expr, subject, kind: "predicate" };
-    }
+  }
+  const type = expr.getType();
+  if (
+    !(type.isBoolean() && !type.isBooleanLiteral() && !type.isUnion()) &&
+    type.isUnion() &&
+    hasNullish(type)
+  ) {
+    return { node: expr, subject: expr.getText(), kind: "truthiness" };
+  }
+  return undefined;
+}
+
+function classifyCall(expr: Node): CheckCandidate | undefined {
+  if (!Node.isCallExpression(expr)) {
     return undefined;
   }
-  if (Node.isBinaryExpression(expr)) {
-    return classifyBinary(expr);
+  const arg = expr.getArguments()[0];
+  if (arg === undefined || !Node.isIdentifier(arg)) {
+    return undefined;
+  }
+  const subject = arg.getText();
+  const callee = expr.getExpression();
+  if (isSchemaParseCall(expr)) {
+    return { node: expr, subject, kind: "schema-parse" };
+  }
+  const guardName = Node.isIdentifier(callee)
+    ? callee.getText()
+    : Node.isPropertyAccessExpression(callee)
+      ? callee.getName()
+      : undefined;
+  if (hasTypePredicate(expr) || (guardName !== undefined && /^(is|assert)[A-Z]/.test(guardName))) {
+    return { node: expr, subject, kind: "predicate" };
+  }
+  return undefined;
+}
+
+function classifyNullishBinary(
+  node: Node,
+  op: string,
+  left: Node,
+  right: Node,
+): CheckCandidate | undefined {
+  if (
+    (op !== "===" && op !== "==" && op !== "!==" && op !== "!=") ||
+    !(isNullishLiteral(left) || isNullishLiteral(right))
+  ) {
+    return undefined;
+  }
+  if (Node.isIdentifier(left) && isNullishLiteral(right)) {
+    return { node, subject: left.getText(), kind: "nullish" };
+  }
+  if (Node.isIdentifier(right) && isNullishLiteral(left)) {
+    return { node, subject: right.getText(), kind: "nullish" };
+  }
+  const objectName = objectVsNullish(left, right);
+  if (objectName !== undefined) {
+    return { node, subject: objectName, kind: "nullish" };
   }
   return undefined;
 }
@@ -123,18 +164,16 @@ function classifyBinary(node: Node): CheckCandidate | undefined {
   }
   const typeofId = typeofOperand(left) ?? typeofOperand(right);
   const lit = stringLit(left) ?? stringLit(right);
-  if (typeofId !== undefined && lit !== undefined && isEqualityOp(op)) {
+  if (
+    typeofId !== undefined &&
+    lit !== undefined &&
+    (op === "===" || op === "==" || op === "!==" || op === "!=")
+  ) {
     return { node, subject: typeofId, kind: "typeof" };
   }
-  if (isNullishCompare(op, left, right)) {
-    const ident = identVsNullish(left, right);
-    if (ident !== undefined) {
-      return { node, subject: ident, kind: "nullish" };
-    }
-    const objectName = objectVsNullish(left, right);
-    if (objectName !== undefined) {
-      return { node, subject: objectName, kind: "nullish" };
-    }
+  const nullish = classifyNullishBinary(node, op, left, right);
+  if (nullish !== undefined) {
+    return nullish;
   }
   const nonEmpty = nonEmptySubject(node);
   if (nonEmpty !== undefined) {
@@ -156,83 +195,131 @@ export function diagnoseConstant(
     return undefined;
   }
   const { negated } = splitNegation(unwrapParens(cond));
-  if (hasPriorParse(fn, cand.subject, cond.getStart()) && isRestatingAfterParse(cand)) {
-    return {
-      polarity: negated ? "false" : "true",
-      reason: "prior-parse",
-      suggestion: DROP_PARSE,
-      reportAt: cond,
-    };
+  return (
+    priorParseHit(fn, cand, cond, negated) ??
+    paramTypeHit(fn, cand, cond, negated) ??
+    priorGuardHit(fn, cand, cond, negated) ??
+    diagnoseAllCallers(fn, cand, cond, negated, sourceFile)
+  );
+}
+
+function priorParseHit(
+  fn: FunctionLike,
+  cand: CheckCandidate,
+  cond: Node,
+  negated: boolean,
+): ConstantHit | undefined {
+  if (
+    !hasPriorParse(fn, cand.subject, cond.getStart()) ||
+    (cand.kind !== "predicate" &&
+      cand.kind !== "typeof" &&
+      cand.kind !== "nullish" &&
+      cand.kind !== "schema-parse")
+  ) {
+    return undefined;
   }
+  return {
+    polarity: negated ? "false" : "true",
+    reason: "prior-parse",
+    suggestion: DROP_PARSE,
+    reportAt: cond,
+  };
+}
+
+function paramTypeHit(
+  fn: FunctionLike,
+  cand: CheckCandidate,
+  cond: Node,
+  negated: boolean,
+): ConstantHit | undefined {
   const param = fn.getParameters().find((item) => item.getName() === cand.subject);
-  if (param !== undefined) {
-    const implied = declaredTypeImplies(param, cand);
-    if (implied !== undefined) {
-      const alwaysTrue = negated ? !implied : implied;
-      return {
-        polarity: alwaysTrue ? "true" : "false",
-        reason: "param-type",
-        suggestion: DROP_INTERNAL,
-        reportAt: cond,
-      };
-    }
+  if (param === undefined) {
+    return undefined;
   }
-  if (priorFactImplies(fn, cond, cand)) {
-    return {
-      polarity: negated ? "false" : "true",
-      reason: "prior-guard",
-      suggestion: DROP_RESTATED,
-      reportAt: cond,
-    };
+  const implied = declaredTypeImplies(param, cand);
+  if (implied === undefined) {
+    return undefined;
   }
-  return diagnoseAllCallers(fn, cand, cond, negated, sourceFile);
+  return {
+    polarity: (negated ? !implied : implied) ? "true" : "false",
+    reason: "param-type",
+    suggestion: DROP_INTERNAL,
+    reportAt: cond,
+  };
+}
+
+function priorGuardHit(
+  fn: FunctionLike,
+  cand: CheckCandidate,
+  cond: Node,
+  negated: boolean,
+): ConstantHit | undefined {
+  if (!priorFactImplies(fn, cond, cand)) {
+    return undefined;
+  }
+  return {
+    polarity: negated ? "false" : "true",
+    reason: "prior-guard",
+    suggestion: DROP_RESTATED,
+    reportAt: cond,
+  };
 }
 
 export function mixedCallerHits(fn: FunctionLike, sourceFile: SourceFile): ConstantHit[] {
   const hits: ConstantHit[] = [];
   for (const cond of conditionNodes(fn)) {
-    const cand = classifyCondition(fn, cond);
-    if (cand === undefined) {
-      continue;
-    }
-    const paramIndex = fn.getParameters().findIndex((item) => item.getName() === cand.subject);
-    if (paramIndex < 0) {
-      continue;
-    }
-    const calls = sameFileCalls(sourceFile, fn);
-    if (calls.length < 2) {
-      continue;
-    }
-    const implying = calls.filter((call) => argImpliesGuard(call, paramIndex, cand));
-    if (implying.length === 0 || implying.length === calls.length) {
-      continue;
-    }
-    for (const call of implying) {
-      const caller = enclosingFunction(call);
-      if (caller === undefined) {
-        continue;
-      }
-      const arg = call.getArguments()[paramIndex];
-      if (arg === undefined || !Node.isIdentifier(arg)) {
-        continue;
-      }
-      const guard = wrappingGuard(call, caller, arg.getText(), cand);
-      if (guard === undefined) {
-        continue;
-      }
-      if (bindingUsedElsewhere(caller, arg.getText(), [call, guard])) {
-        continue;
-      }
-      hits.push({
-        polarity: "true",
-        reason: "call-site",
-        suggestion: DROP_CALLER,
-        reportAt: guard,
-        message: "This check is redundant given the subsequent call.",
-      });
-    }
+    hits.push(...mixedHitsForCondition(fn, cond, sourceFile));
   }
   return hits;
+}
+
+function mixedHitsForCondition(
+  fn: FunctionLike,
+  cond: Node,
+  sourceFile: SourceFile,
+): ConstantHit[] {
+  const cand = classifyCondition(fn, cond);
+  if (cand === undefined) {
+    return [];
+  }
+  const paramIndex = fn.getParameters().findIndex((item) => item.getName() === cand.subject);
+  if (paramIndex < 0) {
+    return [];
+  }
+  const calls = sameFileCalls(sourceFile, fn);
+  if (calls.length < 2) {
+    return [];
+  }
+  const implying = calls.filter((call) => argImpliesGuard(call, paramIndex, cand));
+  if (implying.length === 0 || implying.length === calls.length) {
+    return [];
+  }
+  return implying.flatMap((call) => mixedHitForCall(call, paramIndex, cand));
+}
+
+function mixedHitForCall(
+  call: CallExpression,
+  paramIndex: number,
+  cand: CheckCandidate,
+): ConstantHit[] {
+  const caller = enclosingFunction(call);
+  const arg = call.getArguments()[paramIndex];
+  if (caller === undefined || arg === undefined || !Node.isIdentifier(arg)) {
+    return [];
+  }
+  const guard = wrappingGuard(call, caller, arg.getText(), cand);
+  if (guard === undefined || bindingUsedElsewhere(caller, arg.getText(), [call, guard])) {
+    return [];
+  }
+  return [
+    {
+      polarity: "true",
+      reason: "call-site",
+      suggestion: DROP_CALLER,
+      reportAt: guard,
+      message: "This check is redundant given the subsequent call.",
+    },
+  ];
 }
 
 export function secondParseNodes(fn: FunctionLike): Node[] {
@@ -367,6 +454,7 @@ function literalConstant(cond: Node): ConstantHit | undefined {
   };
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: kind dispatch; splitting recreates single-use helpers
 function declaredTypeImplies(
   param: { getTypeNode: () => TypeNode | undefined; getType: () => Type },
   cand: CheckCandidate,
@@ -384,10 +472,7 @@ function declaredTypeImplies(
     return text === lit ? true : undefined;
   }
   if (cand.kind === "nullish") {
-    if (/\bnull\b|\bundefined\b|\?/.test(text)) {
-      return undefined;
-    }
-    return true;
+    return /\bnull\b|\bundefined\b|\?/.test(text) ? undefined : true;
   }
   if (cand.kind === "predicate" && Node.isCallExpression(cand.node)) {
     const target = predicateTargetType(cand.node);
@@ -461,19 +546,8 @@ function isBareBooleanGuard(node: Node): boolean {
 
 function guardPolarity(subjectType: Type, cand: CheckCandidate): boolean | undefined {
   switch (cand.kind) {
-    case "typeof": {
-      const lit = typeofLiteralFrom(cand.node);
-      if (lit === undefined) {
-        return undefined;
-      }
-      if (typeMatchesTypeof(subjectType, lit)) {
-        return true;
-      }
-      if (typeExcludesTypeof(subjectType, lit)) {
-        return false;
-      }
-      return undefined;
-    }
+    case "typeof":
+      return typeofPolarity(subjectType, cand);
     case "predicate": {
       if (!Node.isCallExpression(cand.node)) {
         return undefined;
@@ -484,22 +558,30 @@ function guardPolarity(subjectType: Type, cand: CheckCandidate): boolean | undef
       }
       return subjectType.isAssignableTo(target) ? true : undefined;
     }
-    case "nullish": {
+    case "nullish":
       return hasNullish(subjectType) ? undefined : true;
-    }
-    case "nonempty": {
+    case "nonempty":
       return isNonEmptyType(subjectType) ? true : undefined;
-    }
-    case "truthiness": {
-      if (subjectType.isBooleanLiteral()) {
-        return subjectType.getText() === "true";
-      }
-      return undefined;
-    }
+    case "truthiness":
+      return subjectType.isBooleanLiteral() ? subjectType.getText() === "true" : undefined;
     case "instanceof":
     case "schema-parse":
       return undefined;
   }
+}
+
+function typeofPolarity(subjectType: Type, cand: CheckCandidate): boolean | undefined {
+  const lit = typeofLiteralFrom(cand.node);
+  if (lit === undefined) {
+    return undefined;
+  }
+  if (typeMatchesTypeof(subjectType, lit)) {
+    return true;
+  }
+  if (typeExcludesTypeof(subjectType, lit)) {
+    return false;
+  }
+  return undefined;
 }
 
 function argImpliesGuard(call: CallExpression, paramIndex: number, cand: CheckCandidate): boolean {
@@ -525,7 +607,13 @@ function walkOwn(fn: FunctionLike, visit: (node: Node) => void): void {
 }
 
 function sameFileCalls(sourceFile: SourceFile, fn: FunctionLike): CallExpression[] {
-  const target = calleeSymbol(fn);
+  const parent = fn.getParent();
+  const target =
+    Node.isFunctionDeclaration(fn) || Node.isMethodDeclaration(fn)
+      ? fn.getSymbol()
+      : Node.isVariableDeclaration(parent)
+        ? parent.getNameNode()?.getSymbol()
+        : fn.getSymbol();
   if (target === undefined) {
     return [];
   }
@@ -539,7 +627,15 @@ function sameFileCalls(sourceFile: SourceFile, fn: FunctionLike): CallExpression
       return;
     }
     const symbol = expr.getSymbol();
-    if (symbol === undefined || !sameSymbol(symbol, target)) {
+    if (symbol === undefined) {
+      return;
+    }
+    const aliased = symbol.getAliasedSymbol() ?? symbol;
+    if (
+      symbol !== target &&
+      aliased !== target &&
+      aliased.getFullyQualifiedName() !== target.getFullyQualifiedName()
+    ) {
       return;
     }
     if (node.getStart() >= fn.getStart() && node.getEnd() <= fn.getEnd()) {
@@ -548,25 +644,6 @@ function sameFileCalls(sourceFile: SourceFile, fn: FunctionLike): CallExpression
     calls.push(node);
   });
   return calls;
-}
-
-function calleeSymbol(fn: FunctionLike): MorphSymbol | undefined {
-  if (Node.isFunctionDeclaration(fn) || Node.isMethodDeclaration(fn)) {
-    return fn.getSymbol();
-  }
-  const parent = fn.getParent();
-  if (Node.isVariableDeclaration(parent)) {
-    return parent.getNameNode()?.getSymbol();
-  }
-  return fn.getSymbol();
-}
-
-function sameSymbol(left: MorphSymbol, right: MorphSymbol): boolean {
-  if (left === right) {
-    return true;
-  }
-  const aliased = left.getAliasedSymbol() ?? left;
-  return aliased === right || aliased.getFullyQualifiedName() === right.getFullyQualifiedName();
 }
 
 function wrappingGuard(
@@ -616,36 +693,6 @@ export function enclosingFunction(node: Node): FunctionLike | undefined {
     current = current.getParent();
   }
   return undefined;
-}
-
-function initializerOf(fn: FunctionLike, name: string): Node | undefined {
-  let init: Node | undefined;
-  fn.forEachDescendant((node) => {
-    if (Node.isVariableDeclaration(node) && node.getName() === name) {
-      init = node.getInitializer();
-    }
-  });
-  return init;
-}
-
-function isRestatingAfterParse(cand: CheckCandidate): boolean {
-  return (
-    cand.kind === "predicate" ||
-    cand.kind === "typeof" ||
-    cand.kind === "nullish" ||
-    cand.kind === "schema-parse"
-  );
-}
-
-function canRefineTruthy(ident: Node): boolean {
-  if (!Node.isIdentifier(ident)) {
-    return false;
-  }
-  const type = ident.getType();
-  if (type.isBoolean() && !type.isBooleanLiteral() && !type.isUnion()) {
-    return false;
-  }
-  return type.isUnion() && hasNullish(type);
 }
 
 function sameGuardShape(left: CheckCandidate, right: CheckCandidate): boolean {
@@ -710,16 +757,6 @@ function returnTypeNode(decl: Node): TypeNode | undefined {
   return undefined;
 }
 
-function isGuardName(call: CallExpression): boolean {
-  const expr = call.getExpression();
-  const name = Node.isIdentifier(expr)
-    ? expr.getText()
-    : Node.isPropertyAccessExpression(expr)
-      ? expr.getName()
-      : undefined;
-  return name !== undefined && /^(is|assert)[A-Z]/.test(name);
-}
-
 function typeofOperand(node: Node): string | undefined {
   if (!Node.isTypeOfExpression(node)) {
     return undefined;
@@ -735,29 +772,8 @@ function stringLit(node: Node): string | undefined {
   return undefined;
 }
 
-function isEqualityOp(op: string): boolean {
-  return op === "===" || op === "==" || op === "!==" || op === "!=";
-}
-
-function isNullishCompare(op: string, left: Node, right: Node): boolean {
-  if (!isEqualityOp(op)) {
-    return false;
-  }
-  return isNullishLiteral(left) || isNullishLiteral(right);
-}
-
 function isNullishLiteral(node: Node): boolean {
   return Node.isNullLiteral(node) || (Node.isIdentifier(node) && node.getText() === "undefined");
-}
-
-function identVsNullish(left: Node, right: Node): string | undefined {
-  if (Node.isIdentifier(left) && isNullishLiteral(right)) {
-    return left.getText();
-  }
-  if (Node.isIdentifier(right) && isNullishLiteral(left)) {
-    return right.getText();
-  }
-  return undefined;
 }
 
 function objectVsNullish(left: Node, right: Node): string | undefined {
@@ -794,7 +810,8 @@ function nonEmptySubject(node: Node): string | undefined {
     return undefined;
   }
   const num = Number(right.getLiteralText());
-  const isNonZero = isEqualityOp(op) && num === 0 && op.startsWith("!");
+  const isNonZero =
+    (op === "===" || op === "==" || op === "!==" || op === "!=") && num === 0 && op.startsWith("!");
   if ((op === ">" && num === 0) || (op === ">=" && num === 1) || isNonZero) {
     return object.getText();
   }

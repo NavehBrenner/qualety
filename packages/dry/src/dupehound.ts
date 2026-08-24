@@ -96,6 +96,7 @@ export type ParsedScanReport = {
   clusters: RawCluster[];
 };
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: env/path dispatch; splitting recreates a single-use helper
 export function resolveDupehoundBinary(
   env: NodeJS.ProcessEnv = process.env,
   cwd = process.cwd(),
@@ -104,7 +105,13 @@ export function resolveDupehoundBinary(
   if (override !== undefined && override.length > 0) {
     if (override.includes("/") || override.includes("\\") || isAbsolute(override)) {
       const path = isAbsolute(override) ? override : join(cwd, override);
-      assertRunnable(path, override);
+      try {
+        accessSync(path, constants.X_OK);
+      } catch {
+        throw new DupehoundError(
+          `${DUPEHOUND_ENV} is set to "${override}" but that binary is not runnable.`,
+        );
+      }
       return path;
     }
     const found = findOnPath(override, env.PATH ?? "");
@@ -246,7 +253,7 @@ export function filterClusters(
     if (!members.some((member) => member.representative)) {
       const first = members[0];
       if (first !== undefined) {
-        first.representative = true;
+        members[0] = { ...first, representative: true };
       }
     }
     out.push({
@@ -286,16 +293,6 @@ function findOnPath(cmd: string, pathVar: string): string | undefined {
     } catch {}
   }
   return undefined;
-}
-
-function assertRunnable(path: string, shown: string): void {
-  try {
-    accessSync(path, constants.X_OK);
-  } catch {
-    throw new DupehoundError(
-      `${DUPEHOUND_ENV} is set to "${shown}" but that binary is not runnable.`,
-    );
-  }
 }
 
 function wrapMissing(e: unknown, requiredBy: readonly string[]): DupehoundError {

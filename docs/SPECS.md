@@ -35,9 +35,9 @@ These decisions are considered stable unless a major new constraint appears:
    High-quality TypeScript/React engine first. Python (and other languages) later, reusing the same core protocol.
 
 7. **Relationship to classic linters/formatters**  
-   `qualety` is the *higher-order* layer. It does **not** wrap, re-implement, or own configuration for Biome, ESLint, Prettier, Oxlint, or Ruff. Users are expected to run a fast linter/formatter of their choice. We may later offer a thin convenience flag that invokes the user’s existing Biome/ESLint config and then runs our rules, but we never own those tools’ configuration or rule sets. Custom plugins that need classic lint/format results should call those tools themselves.
+   `qualety` is the *higher-order* layer. It does **not** wrap, re-implement, or own configuration for Biome, ESLint, Prettier, Oxlint, or Ruff. Users are expected to run a fast linter/formatter of their choice.     We may later offer a thin convenience flag that invokes the user’s existing Biome/ESLint config and then runs our rules, but we never own those tools’ configuration or rule sets. This monorepo enables Biome `noExcessiveCognitiveComplexity` (error, max 15) for its own sources; that is not a qualety product rule and we do not own the metric for consumers. Custom plugins that need classic lint/format results should call those tools themselves.
 
-     **TypeScript baseline — what we own:** `ts/public-exports-tested` (static R5-lite), `ts/zod-boundary` (Z1 load/parse + Z2 `JSON.parse`), `ts/type-narrowing-checks`, `ts/no-constant-condition`.
+      **TypeScript baseline — what we own:** `ts/public-exports-tested` (static R5-lite), `ts/zod-boundary` (Z1 load/parse + Z2 `JSON.parse`), `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`.
 
     **React plugin — what we own:** `react/no-fetch-in-useeffect` and `react/query-error-handled` (R1-lite). TanStack stays inside `@qualety/react` (detectors only). **R3 semantic tokens → future `@qualety/tailwind` (or DS), not react.**
 
@@ -104,7 +104,7 @@ These decisions are considered stable unless a major new constraint appears:
 
   `NO_SUGGESTION = "No suggestion available for this rule."`
 
-  Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-functions`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
+   Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-functions`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
 - **Plugin**: A package that exports `name` plus optional `rules` and/or `provides`. Ruleless plugins (`name` + `provides` only) are shared providers.
 - **Artifact**: Opaque value built once per check when an enabled rule `requires` its id. One provider map: plugin `provides` first, then default registry gap-fill (`"typescript"` → `ParsedProject`; `"dupehound"` in `@qualety/dry`). Vector / embedding index is still future.
 
@@ -285,6 +285,7 @@ See [docs/rulesets/typescript.md](./rulesets/typescript.md).
 | `ts/zod-boundary` | Implemented (Z1 load/parse + Z2 `JSON.parse`; see [typescript.md](./rulesets/typescript.md)) |
 | `ts/type-narrowing-checks` | Implemented (checker-visible narrowing; see [typescript.md](./rulesets/typescript.md)) |
 | `ts/no-constant-condition` | Implemented (constant conditions + same-file call-site facts; see [typescript.md](./rulesets/typescript.md)) |
+| `ts/no-unnecessary-abstraction` | Implemented (same-file single-use helpers and types; see [typescript.md](./rulesets/typescript.md)) |
 
 **Not catalogued** (do not implement in this plugin): circular imports, max relative import depth, simple path bans, deep-import / internal-module bans, generic layer charts. Use Biome / ESLint / dependency-cruiser.
 
@@ -352,7 +353,7 @@ export default defineConfig({
 });
 ```
 
-`defineConfig` performs both type-level and runtime validation (`validateConfig` / `userConfigSchema`). The loader validates again on read.
+`defineConfig` is a typed identity (same policy as `defineRule`). Runtime validation is load-time Zod only (`validateConfig` / `readConfigFile`).
 
 **Do not exclude test paths** (`**/*.test.*`, `**/*.spec.*`, `__tests__/**`) when `ts/public-exports-tested` is enabled. The rule only sees files in the TypeScript artifact; wiping tests from the set makes every public export fail. Keep tests in `include`. Default exclude is `node_modules` and `dist` only.
 

@@ -1,0 +1,7 @@
+{
+  "name": "abstraction-ok-react",
+  "type": "module",
+  "dependencies": {
+    "react": "19.0.0"
+  }
+}

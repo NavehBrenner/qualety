@@ -163,11 +163,13 @@ test("filterClusters promotes a new representative when the original is dropped"
       ],
     }),
   );
+  const keptA = parsed.clusters[0]?.members.find((member) => member.name === "keptA");
   const kept = filterClusters(parsed.clusters, ["src/invoice.ts", "src/billing.ts"]);
   expect(kept).toHaveLength(1);
   expect(kept[0]?.members.map((m) => m.name)).toEqual(["keptA", "keptB"]);
   expect(kept[0]?.members[0]?.representative).toBe(true);
   expect(kept[0]?.members[1]?.representative).toBe(false);
+  expect(keptA?.representative).toBe(false);
 });
 
 test("resolveDupehoundBinary fails closed when missing", () => {

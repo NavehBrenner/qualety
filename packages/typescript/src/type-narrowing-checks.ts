@@ -28,21 +28,18 @@ export const typeNarrowingChecks = defineRule({
   create(context) {
     const sources = context.getArtifact("typescript").sources;
     for (const [abs, unit] of sources) {
-      if (unit instanceof SourceFile) {
-        scanFile(unit, abs, context);
+      if (!(unit instanceof SourceFile)) {
+        continue;
       }
+      const reported = new Set<string>();
+      unit.forEachDescendant((node) => {
+        if (isFunctionLike(node)) {
+          scanFunction(node, abs, unit, context, reported);
+        }
+      });
     }
   },
 });
-
-function scanFile(sourceFile: SourceFile, file: string, context: Pick<RuleContext, "report">) {
-  const reported = new Set<string>();
-  sourceFile.forEachDescendant((node) => {
-    if (isFunctionLike(node)) {
-      scanFunction(node, file, sourceFile, context, reported);
-    }
-  });
-}
 
 function scanFunction(
   fn: FunctionLike,
@@ -75,52 +72,51 @@ function scanFunction(
     }
     emitA(context, file, cond, cand.subject, reported);
   }
-  scanRawAfterParse(fn, file, sourceFile, context, reported);
+  fn.forEachDescendant((node) => {
+    considerRawAfterParse(fn, node, file, sourceFile, context, reported);
+  });
 }
 
-function scanRawAfterParse(
+function considerRawAfterParse(
   fn: FunctionLike,
+  node: Node,
   file: string,
   sourceFile: SourceFile,
   context: Pick<RuleContext, "report">,
   reported: Set<string>,
 ) {
-  fn.forEachDescendant((node) => {
-    if (!isSchemaParseCall(node)) {
-      return;
+  if (!isSchemaParseCall(node)) {
+    return;
+  }
+  const subject = firstArgIdentifier(node);
+  if (subject === undefined || hasPriorParse(fn, subject, node.getStart())) {
+    return;
+  }
+  if (diagnoseConstant(fn, node, sourceFile) !== undefined) {
+    return;
+  }
+  let rawUse: Node | undefined;
+  fn.forEachDescendant((child) => {
+    if (child.getStart() > node.getStart() && isPropertyUse(child, new Set([subject]))) {
+      rawUse = rawUse ?? child;
     }
-    const subject = firstArgIdentifier(node);
-    if (subject === undefined || hasPriorParse(fn, subject, node.getStart())) {
-      return;
-    }
-    if (diagnoseConstant(fn, node, sourceFile) !== undefined) {
-      return;
-    }
-    let rawUse: Node | undefined;
-    fn.forEachDescendant((child) => {
-      if (child.getStart() <= node.getStart()) {
-        return;
-      }
-      if (isPropertyUse(child, new Set([subject]))) {
-        rawUse = rawUse ?? child;
-      }
-    });
-    if (rawUse === undefined) {
-      return;
-    }
-    const beforeNode = subjectIdentIn(node, subject);
-    const afterNode =
-      Node.isPropertyAccessExpression(rawUse) || Node.isElementAccessExpression(rawUse)
-        ? rawUse.getExpression()
-        : subjectIdentIn(rawUse, subject);
-    if (beforeNode === undefined || afterNode === undefined) {
-      return;
-    }
-    if (isStrictRefinement(beforeNode.getType(), afterNode.getType())) {
-      return;
-    }
-    emitA(context, file, node, subject, reported);
   });
+  if (rawUse === undefined || refinedAfterParse(node, rawUse, subject)) {
+    return;
+  }
+  emitA(context, file, node, subject, reported);
+}
+
+function refinedAfterParse(parseNode: Node, rawUse: Node, subject: string): boolean {
+  const beforeNode = subjectIdentIn(parseNode, subject);
+  const afterNode =
+    Node.isPropertyAccessExpression(rawUse) || Node.isElementAccessExpression(rawUse)
+      ? rawUse.getExpression()
+      : subjectIdentIn(rawUse, subject);
+  if (beforeNode === undefined || afterNode === undefined) {
+    return true;
+  }
+  return isStrictRefinement(beforeNode.getType(), afterNode.getType());
 }
 
 function emitA(

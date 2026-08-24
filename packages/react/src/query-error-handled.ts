@@ -28,16 +28,12 @@ export const queryErrorHandled = defineRule({
   create(context) {
     const parsed = context.getArtifact("typescript");
     for (const [abs, unit] of parsed.sources) {
-      if (isSourceFile(unit)) {
+      if (unit instanceof SourceFile) {
         scanFile(unit, abs, context);
       }
     }
   },
 });
-
-function isSourceFile(value: unknown): value is SourceFile {
-  return value instanceof SourceFile;
-}
 
 function scanFile(sf: SourceFile, file: string, context: Pick<RuleContext, "report">): void {
   const { hooks, namespaces } = collectQueryHookBindings(sf);
@@ -233,27 +229,36 @@ function bindPattern(name: Node, facts: Facts): boolean {
   }
   let changed = false;
   for (const el of name.getElements()) {
-    if (!Node.isBindingElement(el)) {
-      continue;
-    }
-    const local = el.getNameNode();
-    if (!Node.isIdentifier(local)) {
-      continue;
-    }
-    if (el.getDotDotDotToken() !== undefined) {
-      changed = take(facts.results, local.getText()) || changed;
-      continue;
-    }
-    const key = bindingKey(el);
-    if (key === "isError") {
-      changed = take(facts.isError, local.getText()) || changed;
-    } else if (key === "status") {
-      changed = take(facts.status, local.getText()) || changed;
-    } else if (key === "error") {
-      changed = take(facts.error, local.getText()) || changed;
-    }
+    changed = bindOneElement(el, facts) || changed;
   }
   return changed;
+}
+
+function bindOneElement(el: Node, facts: Facts): boolean {
+  if (!Node.isBindingElement(el)) {
+    return false;
+  }
+  const local = el.getNameNode();
+  if (!Node.isIdentifier(local)) {
+    return false;
+  }
+  if (el.getDotDotDotToken() !== undefined) {
+    return take(facts.results, local.getText());
+  }
+  return takeBoundFact(bindingKey(el), local.getText(), facts);
+}
+
+function takeBoundFact(key: string | undefined, local: string, facts: Facts): boolean {
+  if (key === "isError") {
+    return take(facts.isError, local);
+  }
+  if (key === "status") {
+    return take(facts.status, local);
+  }
+  if (key === "error") {
+    return take(facts.error, local);
+  }
+  return false;
 }
 
 function bindingKey(el: Node): string | undefined {

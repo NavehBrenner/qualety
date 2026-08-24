@@ -1,5 +1,6 @@
 import type { Plugin } from "qualety";
 import { noConstantCondition } from "./no-constant-condition.ts";
+import { noUnnecessaryAbstraction } from "./no-unnecessary-abstraction.ts";
 import { publicExportsTested } from "./public-exports-tested.ts";
 import { typeNarrowingChecks } from "./type-narrowing-checks.ts";
 import { zodBoundary } from "./zod-boundary.ts";
@@ -8,6 +9,7 @@ const plugin: Plugin = {
   name: "ts",
   rules: {
     "no-constant-condition": noConstantCondition,
+    "no-unnecessary-abstraction": noUnnecessaryAbstraction,
     "public-exports-tested": publicExportsTested,
     "type-narrowing-checks": typeNarrowingChecks,
     "zod-boundary": zodBoundary,
@@ -16,6 +18,7 @@ const plugin: Plugin = {
     recommended: {
       rules: {
         "ts/no-constant-condition": "error",
+        "ts/no-unnecessary-abstraction": "error",
         "ts/public-exports-tested": "error",
         "ts/type-narrowing-checks": "error",
         "ts/zod-boundary": "error",

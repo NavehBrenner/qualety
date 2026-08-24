@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { defineRule, type RuleContext } from "qualety";
-import { Node, type SourceFile } from "ts-morph";
+import { Node, type ObjectLiteralExpression, type SourceFile } from "ts-morph";
 import { findSource, lineRange, rangeOf } from "./ast.ts";
 
 const PLUGIN_CATALOGS = [
@@ -69,8 +69,12 @@ function checkCatalogs(
 ) {
   for (const item of PLUGIN_CATALOGS) {
     const pluginFile = findSource(sources, `/packages/${item.dir}/src/index.ts`);
-    const implemented =
-      pluginFile !== undefined ? readPluginRules(pluginFile) : new Map<string, Node>();
+    const implemented = new Map<string, Node>();
+    if (pluginFile !== undefined) {
+      pluginFile.forEachDescendant((node) => {
+        addRulesFromLiteral(node, implemented);
+      });
+    }
     const documented = tableNames(files.get(item.catalog) ?? "", "Implemented", "ID");
     const catalogPath = join(context.getCwd(), item.catalog);
     for (const [id, node] of implemented) {
@@ -106,82 +110,96 @@ function collectExportNames(sourceFile: SourceFile): Map<string, Node> {
     }
   };
   for (const stmt of sourceFile.getStatements()) {
-    if (Node.isExportDeclaration(stmt)) {
-      if (stmt.isNamespaceExport()) {
-        continue;
-      }
-      for (const spec of stmt.getNamedExports()) {
-        push(spec.getName(), spec.getNameNode());
-      }
-      continue;
-    }
-    if (Node.isExportAssignment(stmt) && !stmt.isExportEquals()) {
-      push("default", stmt);
-      continue;
-    }
-    if (
-      Node.isFunctionDeclaration(stmt) ||
-      Node.isClassDeclaration(stmt) ||
-      Node.isEnumDeclaration(stmt)
-    ) {
-      if (!stmt.hasExportKeyword()) {
-        continue;
-      }
-      if (stmt.isDefaultExport()) {
-        push("default", stmt.getNameNode() ?? stmt);
-        continue;
-      }
-      const name = stmt.getName();
-      const nameNode = stmt.getNameNode();
-      if (name !== undefined && nameNode !== undefined) {
-        push(name, nameNode);
-      }
-      continue;
-    }
-    if (Node.isVariableStatement(stmt) && stmt.hasExportKeyword()) {
-      for (const decl of stmt.getDeclarations()) {
-        push(decl.getName(), decl.getNameNode() ?? decl);
-      }
-      continue;
-    }
-    if (
-      (Node.isTypeAliasDeclaration(stmt) || Node.isInterfaceDeclaration(stmt)) &&
-      stmt.hasExportKeyword()
-    ) {
-      push(stmt.getName(), stmt.getNameNode());
-    }
+    addExportFromStatement(stmt, push);
   }
   return names;
 }
 
-function readPluginRules(sourceFile: SourceFile): Map<string, Node> {
-  const ids = new Map<string, Node>();
-  sourceFile.forEachDescendant((node) => {
-    if (!Node.isObjectLiteralExpression(node)) {
-      return;
-    }
-    const nameProp = node.getProperty("name");
-    const rulesProp = node.getProperty("rules");
-    if (!Node.isPropertyAssignment(nameProp) || !Node.isPropertyAssignment(rulesProp)) {
-      return;
-    }
-    const nameInit = nameProp.getInitializer();
-    const rulesInit = rulesProp.getInitializer();
-    if (!Node.isStringLiteral(nameInit) || !Node.isObjectLiteralExpression(rulesInit)) {
-      return;
-    }
-    const pluginName = nameInit.getLiteralValue();
-    for (const prop of rulesInit.getProperties()) {
-      if (!Node.isPropertyAssignment(prop) && !Node.isShorthandPropertyAssignment(prop)) {
-        continue;
-      }
-      const key = prop.getName().replaceAll(/['"]/g, "");
-      if (key.length > 0) {
-        ids.set(`${pluginName}/${key}`, prop);
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: export-form dispatch; splitting recreates single-use helpers
+function addExportFromStatement(stmt: Node, push: (name: string, node: Node) => void) {
+  if (Node.isExportDeclaration(stmt)) {
+    if (!stmt.isNamespaceExport()) {
+      for (const spec of stmt.getNamedExports()) {
+        push(spec.getName(), spec.getNameNode());
       }
     }
-  });
-  return ids;
+    return;
+  }
+  if (Node.isExportAssignment(stmt) && !stmt.isExportEquals()) {
+    push("default", stmt);
+    return;
+  }
+  if (addNamedExportable(stmt, push)) {
+    return;
+  }
+  if (Node.isVariableStatement(stmt) && stmt.hasExportKeyword()) {
+    for (const decl of stmt.getDeclarations()) {
+      push(decl.getName(), decl.getNameNode() ?? decl);
+    }
+    return;
+  }
+  if (
+    (Node.isTypeAliasDeclaration(stmt) || Node.isInterfaceDeclaration(stmt)) &&
+    stmt.hasExportKeyword()
+  ) {
+    push(stmt.getName(), stmt.getNameNode());
+  }
+}
+
+function addNamedExportable(stmt: Node, push: (name: string, node: Node) => void): boolean {
+  if (
+    !Node.isFunctionDeclaration(stmt) &&
+    !Node.isClassDeclaration(stmt) &&
+    !Node.isEnumDeclaration(stmt)
+  ) {
+    return false;
+  }
+  if (!stmt.hasExportKeyword()) {
+    return true;
+  }
+  if (stmt.isDefaultExport()) {
+    push("default", stmt.getNameNode() ?? stmt);
+    return true;
+  }
+  const name = stmt.getName();
+  const nameNode = stmt.getNameNode();
+  if (name !== undefined && nameNode !== undefined) {
+    push(name, nameNode);
+  }
+  return true;
+}
+
+function addRulesFromLiteral(node: Node, ids: Map<string, Node>) {
+  if (!Node.isObjectLiteralExpression(node)) {
+    return;
+  }
+  const nameProp = node.getProperty("name");
+  const rulesProp = node.getProperty("rules");
+  if (!Node.isPropertyAssignment(nameProp) || !Node.isPropertyAssignment(rulesProp)) {
+    return;
+  }
+  const nameInit = nameProp.getInitializer();
+  const rulesInit = rulesProp.getInitializer();
+  if (!Node.isStringLiteral(nameInit) || !Node.isObjectLiteralExpression(rulesInit)) {
+    return;
+  }
+  addRuleIds(nameInit.getLiteralValue(), rulesInit, ids);
+}
+
+function addRuleIds(
+  pluginName: string,
+  rulesInit: ObjectLiteralExpression,
+  ids: Map<string, Node>,
+) {
+  for (const prop of rulesInit.getProperties()) {
+    if (!Node.isPropertyAssignment(prop) && !Node.isShorthandPropertyAssignment(prop)) {
+      continue;
+    }
+    const key = prop.getName().replaceAll(/['"]/g, "");
+    if (key.length > 0) {
+      ids.set(`${pluginName}/${key}`, prop);
+    }
+  }
 }
 
 function tableNames(

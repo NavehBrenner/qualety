@@ -29,23 +29,20 @@ export const zodBoundary = defineRule({
   create(context) {
     const sources = context.getArtifact("typescript").sources;
     for (const [abs, unit] of sources) {
-      if (unit instanceof SourceFile) {
-        scanFile(unit, abs, context);
+      if (!(unit instanceof SourceFile)) {
+        continue;
       }
+      unit.forEachDescendant((node) => {
+        if (isFunctionLike(node)) {
+          scanBoundary(node, abs, context);
+        }
+        if (isJsonParseCall(node)) {
+          scanJsonParse(node, abs, context);
+        }
+      });
     }
   },
 });
-
-function scanFile(sourceFile: SourceFile, file: string, context: Pick<RuleContext, "report">) {
-  sourceFile.forEachDescendant((node) => {
-    if (isFunctionLike(node)) {
-      scanBoundary(node, file, context);
-    }
-    if (isJsonParseCall(node)) {
-      scanJsonParse(node, file, context);
-    }
-  });
-}
 
 function scanBoundary(fn: FunctionLike, file: string, context: Pick<RuleContext, "report">) {
   const name = functionLikeName(fn);
