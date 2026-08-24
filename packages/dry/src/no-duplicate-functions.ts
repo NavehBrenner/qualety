@@ -11,8 +11,10 @@ export const noDuplicateFunctions = defineRule({
   },
   create(context) {
     const index = context.getArtifact("dupehound");
-    for (const item of reportsFromIndex(index)) {
-      context.report(item);
+    for (const cluster of index.clusters) {
+      for (const item of reportsFromCluster(cluster)) {
+        context.report(item);
+      }
     }
   },
 });

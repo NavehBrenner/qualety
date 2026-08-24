@@ -28,10 +28,12 @@ export const publicExportsTested = defineRule({
     const exported: PublicExport[] = [];
 
     for (const [abs, unit] of sources) {
-      if (isDeclarationFile(abs) || !isSourceFile(unit)) {
+      if (/\.d\.(?:ts|mts|cts)$/.test(posix(abs)) || !(unit instanceof SourceFile)) {
         continue;
       }
-      if (isTestPath(abs)) {
+      const normalized = posix(abs);
+      const base = normalized.slice(normalized.lastIndexOf("/") + 1);
+      if (/\.(?:test|spec)\./.test(base) || normalized.split("/").includes("__tests__")) {
         collectReferences(unit, abs, sources, referenced);
       } else {
         const display = displayByAbs.get(abs) ?? posix(abs);
@@ -56,23 +58,6 @@ export const publicExportsTested = defineRule({
   },
 });
 
-function isSourceFile(value: unknown): value is SourceFile {
-  return value instanceof SourceFile;
-}
-
-function isTestPath(filePath: string): boolean {
-  const normalized = posix(filePath);
-  const base = normalized.slice(normalized.lastIndexOf("/") + 1);
-  if (/\.(?:test|spec)\./.test(base)) {
-    return true;
-  }
-  return normalized.split("/").includes("__tests__");
-}
-
-function isDeclarationFile(filePath: string): boolean {
-  return /\.d\.(?:ts|mts|cts)$/.test(posix(filePath));
-}
-
 function mapDisplayPaths(
   context: Pick<RuleContext, "getCwd" | "getFiles">,
   sources: ReadonlyMap<string, unknown>,
@@ -91,52 +76,68 @@ function mapDisplayPaths(
 function collectPublicExports(sf: SourceFile, abs: string, display: string): PublicExport[] {
   const result: PublicExport[] = [];
   const push = (name: string, node: Node) => {
+    const start = sf.getLineAndColumnAtPos(node.getStart());
+    const end = sf.getLineAndColumnAtPos(node.getEnd());
     result.push({
       key: `${abs}#${name}`,
       name,
       file: abs,
       display,
-      range: rangeOf(node),
+      range: {
+        start: { line: start.line, column: start.column },
+        end: { line: end.line, column: end.column },
+      },
     });
   };
 
   for (const stmt of sf.getStatements()) {
-    if (Node.isExportDeclaration(stmt)) {
-      collectExportDeclaration(stmt, push);
-      continue;
-    }
-    if (Node.isExportAssignment(stmt)) {
-      if (!stmt.isExportEquals()) {
-        push("default", defaultKeyword(stmt) ?? stmt);
-      }
-      continue;
-    }
-    if (
-      Node.isFunctionDeclaration(stmt) ||
-      Node.isClassDeclaration(stmt) ||
-      Node.isEnumDeclaration(stmt)
-    ) {
-      if (!stmt.hasExportKeyword()) {
-        continue;
-      }
-      if (stmt.isDefaultExport()) {
-        push("default", defaultKeyword(stmt) ?? stmt.getNameNode() ?? stmt);
-        continue;
-      }
-      const nameNode = stmt.getNameNode();
-      const name = stmt.getName();
-      if (name !== undefined && nameNode !== undefined) {
-        push(name, nameNode);
-      }
-      continue;
-    }
-    if (Node.isVariableStatement(stmt) && stmt.hasExportKeyword()) {
-      for (const decl of stmt.getDeclarations()) {
-        push(decl.getName(), decl.getNameNode() ?? decl);
-      }
-    }
+    collectStatementExport(stmt, push);
   }
   return result;
+}
+
+function collectStatementExport(stmt: Node, push: (name: string, node: Node) => void) {
+  if (Node.isExportDeclaration(stmt)) {
+    collectExportDeclaration(stmt, push);
+    return;
+  }
+  if (Node.isExportAssignment(stmt)) {
+    if (!stmt.isExportEquals()) {
+      push("default", defaultKeyword(stmt) ?? stmt);
+    }
+    return;
+  }
+  if (collectNamedValueExport(stmt, push)) {
+    return;
+  }
+  if (Node.isVariableStatement(stmt) && stmt.hasExportKeyword()) {
+    for (const decl of stmt.getDeclarations()) {
+      push(decl.getName(), decl.getNameNode() ?? decl);
+    }
+  }
+}
+
+function collectNamedValueExport(stmt: Node, push: (name: string, node: Node) => void): boolean {
+  if (
+    !Node.isFunctionDeclaration(stmt) &&
+    !Node.isClassDeclaration(stmt) &&
+    !Node.isEnumDeclaration(stmt)
+  ) {
+    return false;
+  }
+  if (!stmt.hasExportKeyword()) {
+    return true;
+  }
+  if (stmt.isDefaultExport()) {
+    push("default", defaultKeyword(stmt) ?? stmt.getNameNode() ?? stmt);
+    return true;
+  }
+  const nameNode = stmt.getNameNode();
+  const name = stmt.getName();
+  if (name !== undefined && nameNode !== undefined) {
+    push(name, nameNode);
+  }
+  return true;
 }
 
 function collectExportDeclaration(
@@ -207,16 +208,6 @@ function resolveRelativeSpecifier(
 
 function defaultKeyword(node: Node): Node | undefined {
   return node.getFirstChildByKind(SyntaxKind.DefaultKeyword);
-}
-
-function rangeOf(node: Node): Range {
-  const sf = node.getSourceFile();
-  const start = sf.getLineAndColumnAtPos(node.getStart());
-  const end = sf.getLineAndColumnAtPos(node.getEnd());
-  return {
-    start: { line: start.line, column: start.column },
-    end: { line: end.line, column: end.column },
-  };
 }
 
 function posix(filePath: string): string {

@@ -3,13 +3,14 @@
 Honest catalog for **`@qualety/typescript`** (`Plugin.name: "ts"`).  
 This is the implementation list for this plugin. [typescript-baseline.md](./typescript-baseline.md) and [typescript-nice-to-have.md](./typescript-nice-to-have.md) are research inventories, **not** an implementation backlog.
 
-Core has no built-in rule bag. Rules exist only on this plugin’s `rules` map. Installing the plugin does **not** enable them. `configs.recommended` sets `ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, and `ts/no-constant-condition` to `"error"` for users who opt into that preset.
+Core has no built-in rule bag. Rules exist only on this plugin’s `rules` map. Installing the plugin does **not** enable them. `configs.recommended` sets `ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, and `ts/no-unnecessary-abstraction` to `"error"` for users who opt into that preset.
 
 ## Implemented
 
 | ID | Intent | Default in recommended |
 |----|--------|------------------------|
 | `ts/no-constant-condition` | Do not branch on a condition the analyzer can prove always true or always false (param type, prior narrowing, prior parse, same-file call-site facts, cheap literals). `defineRule` / `requires: ["typescript"]` | `error` |
+| `ts/no-unnecessary-abstraction` | Do not keep a local abstraction that does not pay for its indirection: same-file single-use pass-through / small-flat helpers and single-use type aliases. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/public-exports-tested` | Every public value export in included non-test sources is referenced from a test path (static R5-lite; not coverage). `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/type-narrowing-checks` | A runtime check on a value is legitimate only if the TypeScript checker shows a strict refinement of that subject on the true/success path. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/zod-boundary` | Load/parse functions with an `unknown` param (Z1) and `JSON.parse` results (Z2) must hit schema `.parse` / `.safeParse` before property access. `defineRule` / `requires: ["typescript"]` | `error` |
@@ -56,6 +57,18 @@ Do not branch on a condition the analyzer can prove always true or always false.
 Proof sources: param type already implies the guard; same-function prior narrowing; same-function prior schema parse (second parse, or hand-guard on raw that restates parse); same-file single-hop call-site facts (all callers already narrowed → report at callee; mixed sites → caller-side redundant checks only if unused elsewhere in the caller); cheap literals (`if (true)`).
 
 Cross-file call sites are a known miss (v2).
+
+### `ts/no-unnecessary-abstraction`
+
+Do not keep a local abstraction that does not pay for its indirection. **Underapproximate** — silence when uncertain. **Same-file only** for caller and type-reference counts (cross-file single-caller is out).
+
+**Quiet barrel / exports:** never flag symbols in a file named `index.ts` / `index.tsx` / `index.mts` / `index.cts`, or a straightforward `package.json` `"exports"` target (string form, or one level of `import` / `require` / `default` / `types`). No `main`/`types` matching; no dist↔src mapping.
+
+**Functions:** exactly one same-file call site (self-calls do not count) **and** either pass-through (body is one call / `return` of one call; unwrap parens / `void` / `await`) **or** small + flat: ≤ 10 non-blank lines of `getBody()` text (`split(/\n/)`, trim, drop empty; braces count if they occupy their own line) and no nested `if` / loop / `try` / `switch`. Zero callers are left to unused/dead-code tools.
+
+**Types:** `type` / `interface` with exactly one same-file type-reference (declaration name does not count). Multiple decls, `extends`, intersections, and unique-symbol brands are silenced.
+
+**React:** only if the owning or workspace-root `package.json` lists `react` / `react-dom` / `preact` in `dependencies` | `peerDependencies` | `devDependencies`, skip `/^use[A-Z]/` names and PascalCase decls that return JSX or are typed as `React.FC` / `FC` / `FunctionComponent`.
 
 ### Split (A vs B vs `ts/zod-boundary`)
 

@@ -25,7 +25,14 @@ export const concreteSuggestion = defineRule({
 function scanReports(sourceFile: SourceFile, file: string, context: Pick<RuleContext, "report">) {
   const sentinels = sentinelNames(sourceFile);
   sourceFile.forEachDescendant((node) => {
-    if (!Node.isCallExpression(node) || !isReportCall(node)) {
+    if (!Node.isCallExpression(node)) {
+      return;
+    }
+    const expr = node.getExpression();
+    const isReport =
+      (Node.isIdentifier(expr) && expr.getText() === "report") ||
+      (Node.isPropertyAccessExpression(expr) && expr.getName() === "report");
+    if (!isReport) {
       return;
     }
     const arg = node.getArguments()[0];
@@ -60,6 +67,11 @@ function sentinelNames(sourceFile: SourceFile): Set<string> {
       }
     }
   }
+  addImportedSentinelAliases(sourceFile, names);
+  return names;
+}
+
+function addImportedSentinelAliases(sourceFile: SourceFile, names: Set<string>) {
   for (const decl of sourceFile.getImportDeclarations()) {
     if (
       decl.getModuleSpecifierValue() !== "qualety" &&
@@ -73,18 +85,6 @@ function sentinelNames(sourceFile: SourceFile): Set<string> {
       }
     }
   }
-  return names;
-}
-
-function isReportCall(node: Node): boolean {
-  if (!Node.isCallExpression(node)) {
-    return false;
-  }
-  const expr = node.getExpression();
-  if (Node.isIdentifier(expr)) {
-    return expr.getText() === "report";
-  }
-  return Node.isPropertyAccessExpression(expr) && expr.getName() === "report";
 }
 
 function isSentinelValue(node: Node, sentinels: ReadonlySet<string>): boolean {

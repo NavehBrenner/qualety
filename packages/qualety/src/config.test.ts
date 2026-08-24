@@ -18,36 +18,36 @@ async function writeTree(files: Record<string, string>): Promise<string> {
   return dir;
 }
 
-test("defineConfig is exported and returns the validated config", () => {
+test("defineConfig is exported and returns the same reference", () => {
   expect(exportedDefineConfig).toBe(defineConfig);
-  expect(defineConfig(valid)).toEqual(valid);
+  expect(defineConfig(valid)).toBe(valid);
 });
 
-test("defineConfig rejects unknown keys", () => {
+test("validateConfig rejects unknown keys", () => {
   expect(() => validateConfig({ ...valid, architecture: {} })).toThrow(
     /Unknown config key: architecture/,
   );
 });
 
-test("defineConfig rejects languages", () => {
+test("validateConfig rejects languages", () => {
   expect(() => validateConfig({ ...valid, languages: ["typescript"] })).toThrow(
     /Unknown config key: languages/,
   );
 });
 
-test("defineConfig rejects invalid severity", () => {
+test("validateConfig rejects invalid severity", () => {
   expect(() =>
     validateConfig({ ...valid, rules: { "ts/public-exports-tested": "fatal" } }),
   ).toThrow(/Invalid severity for "ts\/public-exports-tested"/);
 });
 
-test("defineConfig requires plugins and rules", () => {
+test("validateConfig requires plugins and rules", () => {
   expect(() => validateConfig({})).toThrow(/must include "plugins" and "rules"/);
   expect(() => validateConfig({ plugins: [] })).toThrow(/must include "plugins" and "rules"/);
   expect(() => validateConfig({ rules: {} })).toThrow(/must include "plugins" and "rules"/);
 });
 
-test("defineConfig accepts config without languages", () => {
+test("validateConfig accepts config without languages", () => {
   expect(validateConfig({ plugins: ["./plugin"], rules: { "demo/ping": "error" } })).toEqual({
     plugins: ["./plugin"],
     rules: { "demo/ping": "error" },

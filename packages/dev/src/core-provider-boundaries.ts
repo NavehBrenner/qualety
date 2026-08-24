@@ -37,29 +37,48 @@ function scanDupehound(sourceFile: SourceFile, file: string, context: Pick<RuleC
     }
   }
   sourceFile.forEachDescendant((node) => {
-    if (Node.isCallExpression(node) && isRequireLike(node)) {
-      const spec = stringArg(node, 0);
-      if (spec?.includes("dupehound") === true) {
-        reportDupe(context, file, node);
-      }
+    if (reportDupehoundCall(node, file, context)) {
       return;
     }
-    if (Node.isCallExpression(node) && isSpawnLike(node) && callMentionsDupehound(node)) {
-      reportDupe(context, file, node);
-      return;
-    }
-    if (Node.isIdentifier(node) && node.getText() === "QUALETY_DUPEHOUND") {
-      reportDupe(context, file, node);
-      return;
-    }
-    if (isStringy(node) && node.getLiteralText().includes("QUALETY_DUPEHOUND")) {
-      reportDupe(context, file, node);
-      return;
-    }
-    if (isStringy(node) && node.getLiteralText().includes("dupehound")) {
-      reportDupe(context, file, node);
-    }
+    reportDupehoundText(node, file, context);
   });
+}
+
+function reportDupehoundCall(
+  node: Node,
+  file: string,
+  context: Pick<RuleContext, "report">,
+): boolean {
+  if (!Node.isCallExpression(node)) {
+    return false;
+  }
+  if (isRequireLike(node) && stringArg(node, 0)?.includes("dupehound") === true) {
+    reportDupe(context, file, node);
+    return true;
+  }
+  const expr = node.getExpression();
+  const spawnLike =
+    (Node.isIdentifier(expr) && SPAWN_CALLEES.has(expr.getText())) ||
+    (Node.isPropertyAccessExpression(expr) && SPAWN_CALLEES.has(expr.getName()));
+  if (spawnLike && callMentionsDupehound(node)) {
+    reportDupe(context, file, node);
+    return true;
+  }
+  return false;
+}
+
+function reportDupehoundText(node: Node, file: string, context: Pick<RuleContext, "report">) {
+  if (Node.isIdentifier(node) && node.getText() === "QUALETY_DUPEHOUND") {
+    reportDupe(context, file, node);
+    return;
+  }
+  if (!isStringy(node)) {
+    return;
+  }
+  const text = node.getLiteralText();
+  if (text.includes("QUALETY_DUPEHOUND") || text.includes("dupehound")) {
+    reportDupe(context, file, node);
+  }
 }
 
 function scanTsMorph(sourceFile: SourceFile, file: string, context: Pick<RuleContext, "report">) {
@@ -122,17 +141,6 @@ function isRequireLike(node: Node): boolean {
   }
   const expr = node.getExpression();
   return Node.isIdentifier(expr) && expr.getText() === "require";
-}
-
-function isSpawnLike(node: Node): boolean {
-  if (!Node.isCallExpression(node)) {
-    return false;
-  }
-  const expr = node.getExpression();
-  if (Node.isIdentifier(expr)) {
-    return SPAWN_CALLEES.has(expr.getText());
-  }
-  return Node.isPropertyAccessExpression(expr) && SPAWN_CALLEES.has(expr.getName());
 }
 
 function callMentionsDupehound(node: Node): boolean {

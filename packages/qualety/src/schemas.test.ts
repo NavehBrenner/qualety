@@ -1,5 +1,6 @@
 import { expect, test } from "vitest";
-import { pluginSchema } from "./schemas.ts";
+import { artifactProviderSchema, pluginSchema } from "./schemas.ts";
+import { createTypeScriptProvider } from "./typescript-frontend.ts";
 
 test("pluginSchema accepts a ruleless provider module", () => {
   const parsed = pluginSchema.safeParse({
@@ -38,4 +39,8 @@ test("pluginSchema rejects a provider without build", () => {
     provides: { fake: {} },
   });
   expect(parsed.success).toBe(false);
+});
+
+test("default typescript provider satisfies artifactProviderSchema", () => {
+  expect(artifactProviderSchema.safeParse(createTypeScriptProvider()).success).toBe(true);
 });

@@ -2,6 +2,7 @@ import { access, readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
+import { isRecord } from "./record.ts";
 
 const severitySchema = z.enum(["error", "warn", "off"]);
 
@@ -31,9 +32,9 @@ export class ConfigError extends Error {
   }
 }
 
-/** Typed config helper. Validates unknown keys and value shapes at runtime. */
-export function defineConfig(config: UserConfig): UserConfig {
-  return validateConfig(config);
+/** Identity helper. The loader parses via `validateConfig`; this does not parse. */
+export function defineConfig<T extends UserConfig>(config: T): T {
+  return config;
 }
 
 export function validateConfig(raw: unknown): UserConfig {
@@ -113,36 +114,51 @@ function mapConfigZodError(raw: unknown, error: z.ZodError): ConfigError {
     );
   }
 
-  const issues = error.issues;
-  const missingRequired = issues.some((issue) => {
-    const key = issue.path[0];
-    return (key === "plugins" || key === "rules") && isMissingIssue(issue, raw);
-  });
-  if (missingRequired) {
+  if (
+    error.issues.some((issue) => {
+      const key = issue.path[0];
+      return (
+        (key === "plugins" || key === "rules") &&
+        issue.code === "invalid_type" &&
+        valueAt(raw, issue.path) === undefined
+      );
+    })
+  ) {
     return new ConfigError('Config must include "plugins" and "rules"');
   }
+  return (
+    firstFieldError(raw, error) ?? new ConfigError(error.issues[0]?.message ?? "Invalid config")
+  );
+}
 
-  for (const issue of issues) {
-    const key = issue.path[0];
-    if (key === "plugins" || key === "include" || key === "exclude") {
-      return new ConfigError(`"${String(key)}" must be an array of strings`);
-    }
-    if (key === "rules") {
-      if (issue.path.length === 1) {
-        return new ConfigError('"rules" must be an object of rule ids to "error" | "warn" | "off"');
-      }
-      const id = issue.path[1];
-      if (typeof id === "string") {
-        const received = valueAt(raw, issue.path);
-        return new ConfigError(
-          `Invalid severity for "${id}": ${JSON.stringify(received)}. Use "error", "warn", or "off".`,
-        );
-      }
+function firstFieldError(raw: unknown, error: z.ZodError): ConfigError | undefined {
+  for (const issue of error.issues) {
+    const mapped = mapFieldIssue(raw, issue);
+    if (mapped !== undefined) {
+      return mapped;
     }
   }
+  return undefined;
+}
 
-  const first = issues[0];
-  return new ConfigError(first?.message ?? "Invalid config");
+function mapFieldIssue(raw: unknown, issue: z.ZodIssue): ConfigError | undefined {
+  const key = issue.path[0];
+  if (key === "plugins" || key === "include" || key === "exclude") {
+    return new ConfigError(`"${String(key)}" must be an array of strings`);
+  }
+  if (key !== "rules") {
+    return undefined;
+  }
+  if (issue.path.length === 1) {
+    return new ConfigError('"rules" must be an object of rule ids to "error" | "warn" | "off"');
+  }
+  const id = issue.path[1];
+  if (typeof id !== "string") {
+    return undefined;
+  }
+  return new ConfigError(
+    `Invalid severity for "${id}": ${JSON.stringify(valueAt(raw, issue.path))}. Use "error", "warn", or "off".`,
+  );
 }
 
 function unrecognizedConfigKeys(error: z.ZodError): string[] {
@@ -156,10 +172,6 @@ function unrecognizedConfigKeys(error: z.ZodError): string[] {
   return keys;
 }
 
-function isMissingIssue(issue: z.ZodIssue, raw: unknown): boolean {
-  return issue.code === "invalid_type" && valueAt(raw, issue.path) === undefined;
-}
-
 function valueAt(raw: unknown, path: PropertyKey[]): unknown {
   let current: unknown = raw;
   for (const key of path) {
@@ -169,10 +181,6 @@ function valueAt(raw: unknown, path: PropertyKey[]): unknown {
     current = current[String(key)];
   }
   return current;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 function messageOf(e: unknown): string {

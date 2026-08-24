@@ -25,16 +25,12 @@ export const noFetchInUseEffect = defineRule({
   create(context) {
     const parsed = context.getArtifact("typescript");
     for (const [abs, unit] of parsed.sources) {
-      if (isSourceFile(unit)) {
+      if (unit instanceof SourceFile) {
         scanFile(unit, abs, context);
       }
     }
   },
 });
-
-function isSourceFile(value: unknown): value is SourceFile {
-  return value instanceof SourceFile;
-}
 
 function scanFile(sf: SourceFile, file: string, context: Pick<RuleContext, "report">): void {
   const { effects, namespaces } = collectReactEffectBindings(sf);

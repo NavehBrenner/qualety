@@ -10,6 +10,7 @@ export default defineConfig({
     "ts/zod-boundary": "error",
     "ts/type-narrowing-checks": "error",
     "ts/no-constant-condition": "error",
+    "ts/no-unnecessary-abstraction": "error",
   },
   exclude: ["**/node_modules/**", "**/dist/**", "**/fixtures/**"],
 });

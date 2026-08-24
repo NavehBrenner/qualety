@@ -1,0 +1,7 @@
+{
+  "name": "abstraction-ok-exports",
+  "type": "module",
+  "exports": {
+    ".": "./src/impl.ts"
+  }
+}

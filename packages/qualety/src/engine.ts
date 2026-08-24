@@ -1,7 +1,6 @@
 import { glob } from "node:fs/promises";
 import { basename, dirname, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { z } from "zod";
 import { CONFIG_FILENAMES, ConfigError, loadConfig } from "./config.ts";
 import { DEFAULT_PROVIDERS } from "./default-providers.ts";
 import {
@@ -10,11 +9,11 @@ import {
   NO_SUGGESTION,
   type Plugin,
   type Rule,
-  type RuleContext,
   type Severity,
   type UserConfig,
   type Violation,
 } from "./index.ts";
+import { isRecord } from "./record.ts";
 import { pluginSchema } from "./schemas.ts";
 
 const NOTHING_TO_CHECK = "No rules configured — nothing to check.";
@@ -58,7 +57,10 @@ async function runCheck(cwd: string, out: (msg: string) => void): Promise<number
     return 0;
   }
 
-  const plugins = await loadPlugins(config.plugins, dirname(configPath));
+  const plugins: Plugin[] = [];
+  for (const spec of config.plugins) {
+    plugins.push(await loadPlugin(spec, dirname(configPath)));
+  }
   const enabled = resolveEnabledRules(plugins, config.rules);
   if (enabled.length === 0) {
     out(NOTHING_TO_CHECK);
@@ -79,43 +81,40 @@ async function runCheck(cwd: string, out: (msg: string) => void): Promise<number
   });
 
   const violations: Violation[] = [];
-  const report = (item: Enabled, violation: Omit<Violation, "ruleId">) => {
-    violations.push({
-      ...violation,
-      ruleId: item.id,
-      severity: item.severity,
-      file: displayPath(cwd, violation.file),
-      suggestion: violation.suggestion ?? NO_SUGGESTION,
-    });
-  };
-
   for (const item of enabled) {
     const allowed = new Set(requiresOf(item));
+    function getArtifact<Id extends string>(
+      id: Id,
+    ): Id extends keyof ArtifactMap ? ArtifactMap[Id] : unknown;
+    function getArtifact(id: string): unknown {
+      return readArtifact(id, allowed, artifacts);
+    }
     item.rule.create({
       id: item.id,
       options: undefined,
       getCwd: () => cwd,
       getFiles: () => displayPaths,
-      getArtifact: artifactGetter(allowed, artifacts),
+      getArtifact,
       report(violation) {
-        report(item, violation);
+        violations.push({
+          ...violation,
+          ruleId: item.id,
+          severity: item.severity,
+          file: displayPath(cwd, violation.file),
+          suggestion: violation.suggestion ?? NO_SUGGESTION,
+        });
       },
     });
   }
 
   violations.sort(compareViolations);
   for (const violation of violations) {
-    out(formatViolation(violation));
+    const loc = `${violation.file}:${violation.range.start.line}:${violation.range.start.column}`;
+    const extra =
+      violation.suggestion === NO_SUGGESTION ? "" : `\n  suggestion: ${violation.suggestion}`;
+    out(`${loc}  ${violation.severity}  ${violation.ruleId}  ${violation.message}${extra}`);
   }
   return violations.length > 0 ? 1 : 0;
-}
-
-export async function loadPlugins(specs: string[], fromDir: string): Promise<Plugin[]> {
-  const plugins: Plugin[] = [];
-  for (const spec of specs) {
-    plugins.push(await loadPlugin(spec, fromDir));
-  }
-  return plugins;
 }
 
 async function loadPlugin(spec: string, fromDir: string): Promise<Plugin> {
@@ -137,56 +136,41 @@ async function loadPlugin(spec: string, fromDir: string): Promise<Plugin> {
   return candidate;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: assertion plus Zod path dispatch
 function requirePlugin(
   spec: string,
   candidate: unknown,
   parsed: ReturnType<typeof pluginSchema.safeParse>,
 ): asserts candidate is Plugin {
-  if (!parsed.success) {
-    throw mapPluginZodError(spec, candidate, parsed.error);
+  if (parsed.success) {
+    return;
   }
-}
-
-function pluginDisplayName(spec: string, candidate: unknown): string {
-  if (isRecord(candidate) && typeof candidate.name === "string" && candidate.name.length > 0) {
-    return candidate.name;
-  }
-  return spec;
-}
-
-function mapPluginZodError(spec: string, candidate: unknown, error: z.ZodError): ConfigError {
-  const name = pluginDisplayName(spec, candidate);
-  for (const issue of error.issues) {
+  const name =
+    isRecord(candidate) && typeof candidate.name === "string" && candidate.name.length > 0
+      ? candidate.name
+      : spec;
+  for (const issue of parsed.error.issues) {
     if (issue.path.length === 0 || (issue.path.length === 1 && issue.path[0] === "name")) {
-      return new ConfigError(`Module "${spec}" does not export a Plugin (default or "plugin")`);
+      throw new ConfigError(`Module "${spec}" does not export a Plugin (default or "plugin")`);
     }
-    if (issue.path[0] === "provides") {
-      if (issue.path.length === 1) {
-        return new ConfigError(`Plugin "${name}" has invalid provides.`);
-      }
-      const artifactId = issue.path[1];
-      if (artifactId === "") {
-        return new ConfigError(`Plugin "${name}" provides an empty artifact id.`);
-      }
-      if (typeof artifactId === "string") {
-        return new ConfigError(
-          `Plugin "${name}" provides "${artifactId}" without a build function.`,
-        );
-      }
+    if (issue.path[0] === "provides" && issue.path[1] === "") {
+      throw new ConfigError(`Plugin "${name}" provides an empty artifact id.`);
     }
-    if (issue.path[0] === "rules" && typeof issue.path[1] === "string") {
-      const ruleId = `${name}/${issue.path[1]}`;
-      if (issue.path[2] === "meta" && issue.path[3] === "requires") {
-        return new ConfigError(
-          `Rule "${ruleId}" has invalid requires; must be an array of non-empty artifact ids.`,
-        );
-      }
-      return new ConfigError(
-        `Rule "${ruleId}" is invalid: must have meta.docs.description and a create function.`,
+    if (
+      issue.path[0] === "rules" &&
+      typeof issue.path[1] === "string" &&
+      issue.path[2] === "meta" &&
+      issue.path[3] === "requires"
+    ) {
+      throw new ConfigError(
+        `Rule "${name}/${issue.path[1]}" has invalid requires; must be an array of non-empty artifact ids.`,
       );
     }
   }
-  return new ConfigError(`Module "${spec}" does not export a Plugin (default or "plugin")`);
+  const first = parsed.error.issues[0];
+  const zodPath = first === undefined ? "" : first.path.map(String).join(".");
+  const detail = first === undefined ? "invalid" : first.message;
+  throw new ConfigError(`Plugin "${name}" is invalid (${zodPath}: ${detail}).`);
 }
 
 function resolveEnabledRules(plugins: Plugin[], rules: Record<string, Severity>): Enabled[] {
@@ -207,17 +191,13 @@ function resolveEnabledRules(plugins: Plugin[], rules: Record<string, Severity>)
     if (severity === "off") {
       continue;
     }
-    enabled.push({ id, severity, rule: requireCatalogRule(catalog, id) });
+    const rule = catalog.get(id);
+    if (rule === undefined) {
+      throw new ConfigError(`Unknown rule id: ${id}. No loaded plugin defines this rule.`);
+    }
+    enabled.push({ id, severity, rule });
   }
   return enabled;
-}
-
-function requireCatalogRule(catalog: Map<string, Rule>, id: string): Rule {
-  const rule = catalog.get(id);
-  if (rule === undefined) {
-    throw new ConfigError(`Unknown rule id: ${id}. No loaded plugin defines this rule.`);
-  }
-  return rule;
 }
 
 function requiresOf(item: Enabled): string[] {
@@ -240,31 +220,37 @@ async function buildRequiredArtifacts(
   const providers = collectProviders(plugins);
   const artifacts = new Map<string, unknown>();
   for (const [id, rules] of requiredBy) {
-    const entry = providers.get(id);
-    if (entry === undefined) {
-      throw new ConfigError(`No provider for artifact "${id}" (required by ${rules.join(", ")}).`);
-    }
-    try {
-      artifacts.set(
-        id,
-        await entry.provider.build({
-          cwd: base.cwd,
-          files: base.files,
-          exclude: base.exclude,
-          requiredBy: rules,
-        }),
-      );
-    } catch (e) {
-      const detail = e instanceof Error ? e.message : String(e);
-      if (rules.some((ruleId) => detail.includes(ruleId))) {
-        throw e instanceof ConfigError ? e : new ConfigError(detail);
-      }
-      throw new ConfigError(
-        `Failed to build artifact "${id}" (required by ${rules.join(", ")}): ${detail}`,
-      );
-    }
+    artifacts.set(id, await buildOneArtifact(id, rules, providers, base));
   }
   return artifacts;
+}
+
+async function buildOneArtifact(
+  id: string,
+  rules: string[],
+  providers: Map<string, ProviderEntry>,
+  base: { cwd: string; files: readonly string[]; exclude: readonly string[] },
+): Promise<unknown> {
+  const entry = providers.get(id);
+  if (entry === undefined) {
+    throw new ConfigError(`No provider for artifact "${id}" (required by ${rules.join(", ")}).`);
+  }
+  try {
+    return await entry.provider.build({
+      cwd: base.cwd,
+      files: base.files,
+      exclude: base.exclude,
+      requiredBy: rules,
+    });
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    if (rules.some((ruleId) => detail.includes(ruleId))) {
+      throw e instanceof ConfigError ? e : new ConfigError(detail);
+    }
+    throw new ConfigError(
+      `Failed to build artifact "${id}" (required by ${rules.join(", ")}): ${detail}`,
+    );
+  }
 }
 
 function collectProviders(plugins: Plugin[]): Map<string, ProviderEntry> {
@@ -297,19 +283,6 @@ function registerPluginProvides(plugin: Plugin, providers: Map<string, ProviderE
   }
 }
 
-function artifactGetter(
-  allowed: ReadonlySet<string>,
-  artifacts: ReadonlyMap<string, unknown>,
-): RuleContext["getArtifact"] {
-  function getArtifact<Id extends string>(
-    id: Id,
-  ): Id extends keyof ArtifactMap ? ArtifactMap[Id] : unknown;
-  function getArtifact(id: string): unknown {
-    return readArtifact(id, allowed, artifacts);
-  }
-  return getArtifact;
-}
-
 function readArtifact(
   id: string,
   allowed: ReadonlySet<string>,
@@ -337,7 +310,7 @@ async function listWorkspaceFiles(cwd: string, config: UserConfig): Promise<stri
   for (const pattern of include) {
     for await (const entry of glob(pattern, { cwd, exclude })) {
       const abs = resolve(cwd, entry);
-      if (isConfigFilename(abs)) {
+      if (CONFIG_FILENAMES.some((filename) => filename === basename(abs))) {
         continue;
       }
       found.add(abs);
@@ -346,21 +319,10 @@ async function listWorkspaceFiles(cwd: string, config: UserConfig): Promise<stri
   return [...found].sort();
 }
 
-function isConfigFilename(path: string): boolean {
-  const name = basename(path);
-  return CONFIG_FILENAMES.some((filename) => filename === name);
-}
-
 function displayPath(cwd: string, file: string): string {
   const abs = resolve(cwd, file);
   const rel = relative(cwd, abs);
   return (rel === "" ? file : rel).split(sep).join("/");
-}
-
-function formatViolation(v: Violation): string {
-  const loc = `${v.file}:${v.range.start.line}:${v.range.start.column}`;
-  const extra = v.suggestion === NO_SUGGESTION ? "" : `\n  suggestion: ${v.suggestion}`;
-  return `${loc}  ${v.severity}  ${v.ruleId}  ${v.message}${extra}`;
 }
 
 function compareViolations(a: Violation, b: Violation): number {
@@ -370,8 +332,4 @@ function compareViolations(a: Violation, b: Violation): number {
     a.range.start.column - b.range.start.column ||
     a.ruleId.localeCompare(b.ruleId)
   );
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }

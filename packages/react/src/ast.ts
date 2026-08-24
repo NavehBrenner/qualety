@@ -57,7 +57,8 @@ export function collectReactEffectBindings(sf: SourceFile): {
   const effects = new Set<string>();
   const namespaces = new Set<string>();
   for (const decl of sf.getImportDeclarations()) {
-    if (!isReactSpecifier(decl.getModuleSpecifierValue())) {
+    const spec = decl.getModuleSpecifierValue();
+    if (spec !== "react" && !spec.startsWith("react/")) {
       continue;
     }
     const def = decl.getDefaultImport();
@@ -80,7 +81,8 @@ export function collectReactEffectBindings(sf: SourceFile): {
 export function collectHttpClientBindings(sf: SourceFile): Set<string> {
   const clients = new Set<string>();
   for (const decl of sf.getImportDeclarations()) {
-    if (!isHttpPackage(decl.getModuleSpecifierValue())) {
+    const spec = decl.getModuleSpecifierValue();
+    if (!HTTP_PACKAGES.some((pkg) => spec === pkg || spec.startsWith(`${pkg}/`))) {
       continue;
     }
     const def = decl.getDefaultImport();
@@ -121,7 +123,8 @@ export function collectQueryHookBindings(sf: SourceFile): {
   const hooks = new Map<string, string>();
   const namespaces = new Set<string>();
   for (const decl of sf.getImportDeclarations()) {
-    if (!isTanstackQuerySpecifier(decl.getModuleSpecifierValue())) {
+    const spec = decl.getModuleSpecifierValue();
+    if (spec !== "@tanstack/react-query" && !spec.startsWith("@tanstack/react-query/")) {
       continue;
     }
     const def = decl.getDefaultImport();
@@ -242,10 +245,15 @@ export function inlineCallback(call: Node): Node | undefined {
   return undefined;
 }
 
-export function enclosingFunction(node: Node): Node | undefined {
+export function enclosingFunction(node: Node): FunctionLike | undefined {
   let parent = node.getParent();
   while (parent !== undefined) {
-    if (isFunctionLike(parent)) {
+    if (
+      Node.isFunctionDeclaration(parent) ||
+      Node.isFunctionExpression(parent) ||
+      Node.isArrowFunction(parent) ||
+      Node.isMethodDeclaration(parent)
+    ) {
       return parent;
     }
     parent = parent.getParent();

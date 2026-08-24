@@ -7,6 +7,12 @@
     "rules": {
       "preset": "recommended",
       "suspicious": { "noConfusingVoidType": "off" },
+      "complexity": {
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": { "maxAllowedComplexity": 15 }
+        }
+      },
       "nursery": { "noUnsafeTypeAssertion": "error" }
     }
   },

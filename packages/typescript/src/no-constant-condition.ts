@@ -30,22 +30,18 @@ export const noConstantCondition = defineRule({
   create(context) {
     const sources = context.getArtifact("typescript").sources;
     for (const [abs, unit] of sources) {
-      if (unit instanceof SourceFile) {
-        scanFile(unit, abs, context);
+      if (!(unit instanceof SourceFile)) {
+        continue;
       }
+      const reported = new Set<string>();
+      unit.forEachDescendant((node) => {
+        if (isFunctionLike(node)) {
+          scanFunction(node, abs, unit, context, reported);
+        }
+      });
     }
   },
 });
-
-function scanFile(sourceFile: SourceFile, file: string, context: Pick<RuleContext, "report">) {
-  const reported = new Set<string>();
-  sourceFile.forEachDescendant((node) => {
-    if (!isFunctionLike(node)) {
-      return;
-    }
-    scanFunction(node, file, sourceFile, context, reported);
-  });
-}
 
 function scanFunction(
   fn: FunctionLike,

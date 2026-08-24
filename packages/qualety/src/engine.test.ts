@@ -790,7 +790,7 @@ test("provider without build exits 2", async () => {
   });
   const errors: string[] = [];
   expect(await check(dir, silent, (m) => errors.push(String(m)))).toBe(2);
-  expect(errors.join("\n")).toMatch(/without a build function/);
+  expect(errors.join("\n")).toMatch(/Plugin "fixture" is invalid \(provides\.fake/);
 });
 
 test("rule missing create exits 2", async () => {
@@ -809,9 +809,7 @@ test("rule missing create exits 2", async () => {
   });
   const errors: string[] = [];
   expect(await check(dir, silent, (m) => errors.push(String(m)))).toBe(2);
-  expect(errors.join("\n")).toMatch(
-    /Rule "fixture\/ping" is invalid: must have meta.docs.description and a create function/,
-  );
+  expect(errors.join("\n")).toMatch(/Plugin "fixture" is invalid \(rules\.ping\.create/);
 });
 
 test("rule missing docs description exits 2", async () => {
@@ -831,7 +829,5 @@ test("rule missing docs description exits 2", async () => {
   });
   const errors: string[] = [];
   expect(await check(dir, silent, (m) => errors.push(String(m)))).toBe(2);
-  expect(errors.join("\n")).toMatch(
-    /Rule "fixture\/ping" is invalid: must have meta.docs.description and a create function/,
-  );
+  expect(errors.join("\n")).toMatch(/Plugin "fixture" is invalid \(rules\.ping\.meta\.docs/);
 });
