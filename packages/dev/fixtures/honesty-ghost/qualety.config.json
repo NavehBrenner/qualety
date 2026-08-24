@@ -1,0 +1,6 @@
+{
+  "plugins": ["../../dist/index.js"],
+  "rules": {
+    "dev/docs-export-honesty": "error"
+  }
+}

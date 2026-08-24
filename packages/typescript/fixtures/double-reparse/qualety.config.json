@@ -1,0 +1,6 @@
+{
+  "plugins": ["../../dist/index.js"],
+  "rules": {
+    "ts/no-constant-condition": "error"
+  }
+}

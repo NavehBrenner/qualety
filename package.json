@@ -9,11 +9,15 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "vitest run",
-    "check": "biome check"
+    "check": "biome check",
+    "qualety": "node ./packages/qualety/dist/cli.js check"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",
+    "@qualety/dev": "workspace:*",
+    "@qualety/typescript": "workspace:*",
     "@types/node": "^26.2.0",
+    "qualety": "workspace:*",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   }
