@@ -15,6 +15,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.10",
     "@qualety/dev": "workspace:*",
+    "@qualety/plugin-kit": "workspace:*",
     "@qualety/typescript": "workspace:*",
     "@types/node": "^26.2.0",
     "qualety": "workspace:*",

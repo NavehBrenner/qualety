@@ -1,4 +1,5 @@
 import { expect, test } from "vitest";
+import { defineRule } from "./define-rule.ts";
 import { artifactProviderSchema, pluginSchema } from "./schemas.ts";
 import { createTypeScriptProvider } from "./typescript-frontend.ts";
 
@@ -24,10 +25,10 @@ test("pluginSchema rejects an empty require id", () => {
   const parsed = pluginSchema.safeParse({
     name: "fixture",
     rules: {
-      ping: {
+      ping: defineRule({
         meta: { requires: [""], docs: { description: "bad requires" } },
         create() {},
-      },
+      }),
     },
   });
   expect(parsed.success).toBe(false);

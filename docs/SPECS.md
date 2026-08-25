@@ -26,7 +26,7 @@ These decisions are considered stable unless a major new constraint appears:
 4. **Plugins**  
    First-class and user-writable. There is one explicit contract (see § Plugin contract). Plugins can be published as npm packages or loaded from local paths. Agent skills for creating and maintaining plugins are part of the deliverable.  
    **v1 plugin language is TypeScript only.** Plugins are TypeScript/JavaScript packages that export the `Plugin` interface. Python-written plugins may be supported later via the same protocol once a Python frontend exists.  
-    **Core has no built-in rule bag.** Every check is a plugin rule. Core is the engine, default artifact providers, config/CLI, and a generic artifact seam — not a default catalog and **not** a dupehound (or other niche binary) host.     Baseline TypeScript rules live in `@qualety/typescript` (`Plugin.name: "ts"`). React compositional rules live in `@qualety/react` (`Plugin.name: "react"`). Structural DRY lives in `@qualety/dry` (`Plugin.name: "dry"`), which **provides** the `dupehound` artifact. `@qualety/dev` (`Plugin.name: "dev"`) is this monorepo’s dogfood plugin, not a product catalog. Shared/provider-only packages load as **ruleless plugins** (`name` + `provides`, no `rules`) via `plugins[]`. A plugin may ship `configs.recommended`; installing a plugin does **not** enable its rules (locked #2).
+    **Core has no built-in rule bag.** Every check is a plugin rule. Core is the engine, default artifact providers, config/CLI, and a generic artifact seam — not a default catalog and **not** a dupehound (or other niche binary) host.     Baseline TypeScript rules live in `@qualety/typescript` (`Plugin.name: "ts"`). React compositional rules live in `@qualety/react` (`Plugin.name: "react"`). Structural DRY lives in `@qualety/dry` (`Plugin.name: "dry"`), which **provides** the `dupehound` artifact. `@qualety/plugin-kit` (`Plugin.name: "plugin-kit"`) is the portable plugin-authoring ruleset — not core, not `@qualety/dev`, not a product app catalog. `@qualety/dev` (`Plugin.name: "dev"`) is this monorepo’s dogfood plugin, not a product catalog. Shared/provider-only packages load as **ruleless plugins** (`name` + `provides`, no `rules`) via `plugins[]`. A plugin may ship `configs.recommended`; installing a plugin does **not** enable its rules (locked #2).
 
 5. **Runtime helpers**  
    Optional companion packages (e.g. a future official `DataRegion`). Static rules work both with the official helpers and with equivalent structural patterns the user already has. **Helpers are optional; this WP ships none.** TanStack Query detectors live under `@qualety/react`, not a separate package.
@@ -372,12 +372,16 @@ Thin wrapper exposing at least: `check_file`, `check_diff`, `query_similar`, `li
 | Test-presence                 | Yes        | Yes     |
 | Architecture fitness          | Yes        | Yes     |
 
-## 8. Agent skills (required deliverable)
+## 8. Agent skills
 
-- Skill for scaffolding a new plugin that obeys the contract
-- Skill for implementing and testing a rule against the TypeScript frontend
-- Skill for registering the plugin in a consumer config
-- Later: skills for filing issues and opening PRs against this repository
+Supported skills (not drafts):
+
+- [`skills/create-plugin`](../skills/create-plugin/SKILL.md) — scaffold a contract-valid plugin (rules or ruleless provider). Consumer config wiring (`plugins[]` + enable one rule) is a closing section of this skill, not a third skill.
+- [`skills/add-rule`](../skills/add-rule/SKILL.md) — add one tested rule to an existing plugin.
+
+Later: skills for filing issues and opening PRs against this repository.
+
+Portable authoring rules that statically catch the smells these skills teach live in `@qualety/plugin-kit` (not core, not `@qualety/dev`).
 
 ## 9. Success metrics for v0.1
 

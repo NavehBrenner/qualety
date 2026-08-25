@@ -33,7 +33,7 @@ Requires `typescript` and `workspace-docs` (markdown/text only; the rule does no
 
 Scope: `packages/{typescript,react,dry,dev}/**`, skip tests. Flag `node:fs` / `fs` imports on the rule-side module graph (files reachable from plugin `rules` entries). Exempt files reachable from `provides.*.build`.
 
-Known miss: dynamic specifier concat; non-`fs` IO (`node:child_process` in a rule — #26).
+Known miss: dynamic specifier concat; non-`fs` IO (`node:child_process` in a rule → `plugin-kit/no-spawn-in-create`).
 
 ### `dev/concrete-suggestion`
 

@@ -1,7 +1,7 @@
 import { defineConfig } from "qualety";
 
 export default defineConfig({
-  plugins: ["@qualety/typescript", "@qualety/dev"],
+  plugins: ["@qualety/typescript", "@qualety/dev", "@qualety/plugin-kit"],
   rules: {
     "dev/core-provider-boundaries": "error",
     "dev/docs-export-honesty": "error",
@@ -11,6 +11,8 @@ export default defineConfig({
     "ts/type-narrowing-checks": "error",
     "ts/no-constant-condition": "error",
     "ts/no-unnecessary-abstraction": "error",
+    "plugin-kit/no-spawn-in-create": "error",
+    "plugin-kit/prefer-define-rule": "error",
   },
   exclude: ["**/node_modules/**", "**/dist/**", "**/fixtures/**"],
 });
