@@ -122,6 +122,9 @@ jobs:
       - uses: anomalyco/opencode/github@v1.18.18
         env:
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          # CI has no human for interactive permission prompts. #17 plan hung
+          # ~58m on external_directory ask for _github_workflow, then 60m cancel.
+          OPENCODE_PERMISSION: '{"*":"allow"}'
         with:
           use_github_token: true
           model: ${{ steps.resolve-model.outputs.model }}
