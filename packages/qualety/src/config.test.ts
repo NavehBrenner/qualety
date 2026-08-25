@@ -2,9 +2,29 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { expect, test } from "vitest";
-import { defineConfig, findConfigPath, loadConfig, validateConfig } from "./config.ts";
+import rootVitestConfig from "../../../vitest.config.ts";
+import {
+  CONFIG_FILENAMES,
+  ConfigError,
+  defineConfig,
+  findConfigPath,
+  loadConfig,
+  readConfigFile,
+  userConfigSchema,
+  validateConfig,
+} from "./config.ts";
 import type { UserConfig } from "./index.ts";
-import { defineConfig as exportedDefineConfig } from "./index.ts";
+import {
+  defineConfig as exportedDefineConfig,
+  artifactProviderSchema as indexArtifactProviderSchema,
+  defineRule as indexDefineRule,
+  functionSchema as indexFunctionSchema,
+  pluginProvidesSchema as indexPluginProvidesSchema,
+  pluginSchema as indexPluginSchema,
+  requiresSchema as indexRequiresSchema,
+  ruleMetaSchema as indexRuleMetaSchema,
+  ruleSchema as indexRuleSchema,
+} from "./index.ts";
 
 const valid: UserConfig = { plugins: [], rules: {} };
 
@@ -21,6 +41,19 @@ async function writeTree(files: Record<string, string>): Promise<string> {
 test("defineConfig is exported and returns the same reference", () => {
   expect(exportedDefineConfig).toBe(defineConfig);
   expect(defineConfig(valid)).toBe(valid);
+  expect(CONFIG_FILENAMES.length).toBeGreaterThan(0);
+  expect(userConfigSchema).toBeDefined();
+  expect(new ConfigError("x")).toBeInstanceOf(Error);
+  expect(readConfigFile).toEqual(expect.any(Function));
+  expect(indexDefineRule).toEqual(expect.any(Function));
+  expect(indexArtifactProviderSchema).toBeDefined();
+  expect(indexFunctionSchema).toBeDefined();
+  expect(indexPluginProvidesSchema).toBeDefined();
+  expect(indexPluginSchema).toBeDefined();
+  expect(indexRequiresSchema).toBeDefined();
+  expect(indexRuleMetaSchema).toBeDefined();
+  expect(indexRuleSchema).toBeDefined();
+  expect(rootVitestConfig).toBeDefined();
 });
 
 test("validateConfig rejects unknown keys", () => {

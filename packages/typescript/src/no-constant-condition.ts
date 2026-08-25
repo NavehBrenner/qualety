@@ -1,15 +1,14 @@
 import { defineRule, type RuleContext } from "qualety";
-import { SourceFile } from "ts-morph";
+import type { SourceFile } from "ts-morph";
 import {
+  bindFunctionScan,
   type ConstantHit,
   conditionNodes,
   diagnoseConstant,
   type FunctionLike,
-  isFunctionLike,
   mixedCallerHits,
   secondParseNodes,
 } from "./narrowing.ts";
-import { rangeOf } from "./parse-flow.ts";
 
 const REASON: Record<string, string> = {
   "param-type": "param type",
@@ -27,20 +26,7 @@ export const noConstantCondition = defineRule({
         "Do not branch on a condition the analyzer can prove always true or always false.",
     },
   },
-  create(context) {
-    const sources = context.getArtifact("typescript").sources;
-    for (const [abs, unit] of sources) {
-      if (!(unit instanceof SourceFile)) {
-        continue;
-      }
-      const reported = new Set<string>();
-      unit.forEachDescendant((node) => {
-        if (isFunctionLike(node)) {
-          scanFunction(node, abs, unit, context, reported);
-        }
-      });
-    }
-  },
+  create: bindFunctionScan(scanFunction),
 });
 
 function scanFunction(
@@ -80,7 +66,11 @@ function emit(
   hit: ConstantHit,
   reported: Set<string>,
 ) {
-  const range = rangeOf(hit.reportAt);
+  const sourceFile = hit.reportAt.getSourceFile();
+  const range = {
+    start: sourceFile.getLineAndColumnAtPos(hit.reportAt.getStart()),
+    end: sourceFile.getLineAndColumnAtPos(hit.reportAt.getEnd()),
+  };
   const key = `${file}:${range.start.line}:${range.start.column}:${range.end.line}:${range.end.column}`;
   if (reported.has(key)) {
     return;

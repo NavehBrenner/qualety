@@ -2,10 +2,8 @@ import { defineRule, type RuleContext } from "qualety";
 import { Node, SourceFile } from "ts-morph";
 import {
   entryValue,
-  isFn,
   objectInit,
   pluginLiterals,
-  rangeOf,
   resolveBinding,
   ruleCreate,
   unwrapRule,
@@ -115,7 +113,10 @@ function scanCreate(create: Node, context: Pick<RuleContext, "report">) {
         context.report({
           severity: "error",
           file,
-          range: rangeOf(node),
+          range: {
+            start: node.getSourceFile().getLineAndColumnAtPos(node.getStart()),
+            end: node.getSourceFile().getLineAndColumnAtPos(node.getEnd()),
+          },
           message: `Do not call ${api} inside a rule create function.`,
           suggestion: SUGGESTION,
         });
@@ -142,7 +143,13 @@ function fileFunctions(sourceFile: SourceFile): Map<string, Node> {
   for (const stmt of sourceFile.getVariableStatements()) {
     for (const decl of stmt.getDeclarations()) {
       const init = decl.getInitializer();
-      if (init !== undefined && isFn(init)) {
+      if (
+        init !== undefined &&
+        (Node.isFunctionDeclaration(init) ||
+          Node.isFunctionExpression(init) ||
+          Node.isArrowFunction(init) ||
+          Node.isMethodDeclaration(init))
+      ) {
         map.set(decl.getName(), init);
       }
     }

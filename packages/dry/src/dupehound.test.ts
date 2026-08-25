@@ -5,9 +5,13 @@ import { expect, test } from "vitest";
 import {
   buildDupehoundIndex,
   DUPEHOUND_ENV,
+  DUPEHOUND_PIN,
+  DupehoundError,
   filterClusters,
+  missingBinaryMessage,
   parseScanReport,
   resolveDupehoundBinary,
+  SCAN_TIMEOUT_MS,
 } from "./dupehound.ts";
 
 const emptyReport = JSON.stringify({ schema_version: 2, clusters: [] });
@@ -170,6 +174,13 @@ test("filterClusters promotes a new representative when the original is dropped"
   expect(kept[0]?.members[0]?.representative).toBe(true);
   expect(kept[0]?.members[1]?.representative).toBe(false);
   expect(keptA?.representative).toBe(false);
+});
+
+test("dupehound constants and error type are exported", () => {
+  expect(DUPEHOUND_PIN).toMatch(/^v/);
+  expect(SCAN_TIMEOUT_MS).toBeGreaterThan(0);
+  expect(new DupehoundError("x")).toBeInstanceOf(Error);
+  expect(missingBinaryMessage(["dry/no-duplicate-functions"])).toMatch(/dupehound/);
 });
 
 test("resolveDupehoundBinary fails closed when missing", () => {

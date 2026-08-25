@@ -1,7 +1,8 @@
+import type { RuleContext } from "qualety";
 import {
   type CallExpression,
   Node,
-  type SourceFile,
+  SourceFile,
   SyntaxKind,
   type Type,
   type TypeNode,
@@ -66,9 +67,51 @@ export function splitNegation(node: Node): { inner: Node; negated: boolean } {
   return { inner: current, negated };
 }
 
+export function bindFunctionScan(
+  scan: (
+    fn: FunctionLike,
+    file: string,
+    sourceFile: SourceFile,
+    context: Pick<RuleContext, "report">,
+    reported: Set<string>,
+  ) => void,
+): (context: RuleContext) => void {
+  return (context) => {
+    const sources = context.getArtifact("typescript").sources;
+    for (const [abs, unit] of sources) {
+      if (!(unit instanceof SourceFile)) {
+        continue;
+      }
+      const reported = new Set<string>();
+      unit.forEachDescendant((node) => {
+        if (isFunctionLike(node)) {
+          scan(node, abs, unit, context, reported);
+        }
+      });
+    }
+  };
+}
+
 export function classifyCondition(fn: FunctionLike, cond: Node): CheckCandidate | undefined {
   const { inner } = splitNegation(unwrapParens(cond));
   return classifyExpr(fn, inner);
+}
+
+export function conditionLeaves(fn: FunctionLike, cond: Node): CheckCandidate[] {
+  const found: CheckCandidate[] = [];
+  const queue = [cond];
+  while (queue.length > 0) {
+    const expr = unwrapParens(queue.pop() ?? cond);
+    if (Node.isBinaryExpression(expr) && expr.getOperatorToken().getText() === "&&") {
+      queue.push(expr.getLeft(), expr.getRight());
+      continue;
+    }
+    const cand = classifyCondition(fn, expr);
+    if (cand !== undefined) {
+      found.push(cand);
+    }
+  }
+  return found;
 }
 
 function classifyExpr(fn: FunctionLike, node: Node): CheckCandidate | undefined {
@@ -377,8 +420,10 @@ export function subjectIdentIn(root: Node, name: string): Node | undefined {
     if (found !== undefined) {
       return;
     }
-    if (Node.isIdentifier(node) && node.getText() === name && !isNameOfDecl(node)) {
-      found = node;
+    if (Node.isIdentifier(node)) {
+      if (node.getText() === name && !declaresName(node)) {
+        found = node;
+      }
     }
   });
   return found;
@@ -669,7 +714,7 @@ function wrappingGuard(
 function bindingUsedElsewhere(fn: FunctionLike, name: string, ignored: Node[]): boolean {
   let used = false;
   fn.forEachDescendant((node) => {
-    if (!Node.isIdentifier(node) || node.getText() !== name || isNameOfDecl(node)) {
+    if (!Node.isIdentifier(node) || node.getText() !== name || declaresName(node)) {
       return;
     }
     if (ignored.some((item) => containsNode(item, node))) {
@@ -907,7 +952,7 @@ function looksLikeArrayBinding(ident: Node): boolean {
   return false;
 }
 
-function isNameOfDecl(node: Node): boolean {
+function declaresName(node: Node): boolean {
   const parent = node.getParent();
   if (parent === undefined) {
     return false;

@@ -10,7 +10,7 @@ import {
   SyntaxKind,
   type TypeAliasDeclaration,
 } from "ts-morph";
-import { type FunctionLike, functionLikeName, isFunctionLike, rangeOf } from "./parse-flow.ts";
+import { type FunctionLike, functionLikeName, isFunctionLike } from "./parse-flow.ts";
 
 const FUNCTION_SUGGESTION =
   "Inline at its only call site, or keep only if the name still hides real complexity; wait for a second real call site before keeping a pass-through.";
@@ -113,10 +113,15 @@ function considerFunction(
   if (sameFileCallCount(fn) !== 1 || (!isPassThrough(fn) && !isSmallAndFlat(fn))) {
     return;
   }
+  const fnAt = nameNodeOf(fn) ?? fn;
+  const fnFile = fnAt.getSourceFile();
   context.report({
     severity: "error",
     file,
-    range: rangeOf(nameNodeOf(fn) ?? fn),
+    range: {
+      start: fnFile.getLineAndColumnAtPos(fnAt.getStart()),
+      end: fnFile.getLineAndColumnAtPos(fnAt.getEnd()),
+    },
     message: `"${name}" is only called once in this file and does not pay for the indirection.`,
     suggestion: FUNCTION_SUGGESTION,
   });
@@ -151,10 +156,15 @@ function considerType(
   if (sameFileTypeUses(decl) !== 1) {
     return;
   }
+  const typeAt = decl.getNameNode();
+  const typeFile = typeAt.getSourceFile();
   context.report({
     severity: "error",
     file,
-    range: rangeOf(decl.getNameNode()),
+    range: {
+      start: typeFile.getLineAndColumnAtPos(typeAt.getStart()),
+      end: typeFile.getLineAndColumnAtPos(typeAt.getEnd()),
+    },
     message: `"${decl.getName()}" is only referenced once in this file.`,
     suggestion: TYPE_SUGGESTION,
   });

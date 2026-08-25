@@ -1,19 +1,8 @@
 import { dirname, extname, join, resolve } from "node:path";
-import type { Range } from "qualety";
 import { Node, type ObjectLiteralExpression, SourceFile } from "ts-morph";
 
 const TS_EXTS = [".ts", ".tsx", ".mts", ".cts"] as const;
 const SWAP_EXTS = new Set([".js", ".jsx", ".mjs", ".cjs", ...TS_EXTS]);
-
-export function rangeOf(node: Node): Range {
-  const sourceFile = node.getSourceFile();
-  const start = sourceFile.getLineAndColumnAtPos(node.getStart());
-  const end = sourceFile.getLineAndColumnAtPos(node.getEnd());
-  return {
-    start: { line: start.line, column: start.column },
-    end: { line: end.line, column: end.column },
-  };
-}
 
 export function objectInit(literal: ObjectLiteralExpression, name: string): Node | undefined {
   const prop = literal.getProperty(name);
@@ -68,15 +57,6 @@ export function unwrapRule(node: Node): ObjectLiteralExpression | undefined {
   return arg !== undefined && Node.isObjectLiteralExpression(arg) ? arg : undefined;
 }
 
-export function isFn(node: Node): boolean {
-  return (
-    Node.isFunctionDeclaration(node) ||
-    Node.isFunctionExpression(node) ||
-    Node.isArrowFunction(node) ||
-    Node.isMethodDeclaration(node)
-  );
-}
-
 export function entryValue(prop: Node): Node | undefined {
   if (Node.isPropertyAssignment(prop)) {
     return prop.getInitializer();
@@ -99,36 +79,6 @@ export function ruleCreate(rule: ObjectLiteralExpression): Node | undefined {
     return undefined;
   }
   return prop.getInitializer();
-}
-
-export function resolveRelative(
-  fromFile: string,
-  specifier: string,
-  sources: ReadonlyMap<string, unknown>,
-): string | undefined {
-  if (!specifier.startsWith(".")) {
-    return undefined;
-  }
-  const resolved = resolve(dirname(fromFile), specifier);
-  const ext = extname(resolved);
-  const stem = SWAP_EXTS.has(ext) ? resolved.slice(0, -ext.length) : resolved;
-  const hits = [resolved];
-  for (const tsExt of TS_EXTS) {
-    hits.push(stem + tsExt);
-  }
-  for (const tsExt of TS_EXTS) {
-    hits.push(join(resolved, `index${tsExt}`));
-  }
-  for (const hit of hits) {
-    if (sources.has(hit)) {
-      return hit;
-    }
-    const normalized = resolve(hit);
-    if (sources.has(normalized)) {
-      return normalized;
-    }
-  }
-  return undefined;
 }
 
 export function resolveBinding(
@@ -202,7 +152,28 @@ function exportFromSpecifier(
   exportName: string,
   sources: ReadonlyMap<string, unknown>,
 ): Node | undefined {
-  const target = resolveRelative(fromFile, specifier, sources);
+  const resolved = resolve(dirname(fromFile), specifier);
+  const ext = extname(resolved);
+  const stem = SWAP_EXTS.has(ext) ? resolved.slice(0, -ext.length) : resolved;
+  const hits = [resolved];
+  for (const tsExt of TS_EXTS) {
+    hits.push(stem + tsExt);
+  }
+  for (const tsExt of TS_EXTS) {
+    hits.push(join(resolved, `index${tsExt}`));
+  }
+  let target: string | undefined;
+  for (const hit of hits) {
+    if (sources.has(hit)) {
+      target = hit;
+      break;
+    }
+    const normalized = resolve(hit);
+    if (sources.has(normalized)) {
+      target = normalized;
+      break;
+    }
+  }
   if (target === undefined) {
     return undefined;
   }

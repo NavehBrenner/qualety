@@ -1,6 +1,6 @@
 import { defineRule, type RuleContext } from "qualety";
 import { Node, type ObjectLiteralExpression, SourceFile } from "ts-morph";
-import { entryValue, objectInit, pluginLiterals, rangeOf, resolveBinding } from "./ast.ts";
+import { entryValue, objectInit, pluginLiterals, resolveBinding } from "./ast.ts";
 
 const SUGGESTION = "Wrap this rule with defineRule and list artifact ids in meta.requires.";
 
@@ -81,7 +81,10 @@ function reportBare(context: Pick<RuleContext, "report">, file: string, node: No
   context.report({
     severity: "error",
     file,
-    range: rangeOf(node),
+    range: {
+      start: node.getSourceFile().getLineAndColumnAtPos(node.getStart()),
+      end: node.getSourceFile().getLineAndColumnAtPos(node.getEnd()),
+    },
     message: "Prefer defineRule over a bare Rule object on a plugin rules map.",
     suggestion: SUGGESTION,
   });

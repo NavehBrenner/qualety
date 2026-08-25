@@ -12,6 +12,13 @@ export function pred(n: Node) {
   return "";
 }
 
+export function compoundPred(n: Node | undefined) {
+  if (n !== undefined && isFunctionLike(n)) {
+    return n.name;
+  }
+  return "";
+}
+
 export function typeofUnknown(x: unknown) {
   if (typeof x === "string") {
     return x;

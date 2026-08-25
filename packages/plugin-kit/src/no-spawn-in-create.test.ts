@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import { check } from "../../qualety/src/engine.ts";
 import { NO_SUGGESTION } from "../../qualety/src/index.ts";
+import { noSpawnInCreate } from "./no-spawn-in-create.ts";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const fixtures = join(here, "../fixtures");
@@ -17,6 +18,10 @@ async function runFixture(name: string) {
   );
   return { code, out: lines.join("\n"), err: errors.join("\n") };
 }
+
+test("noSpawnInCreate is exported", () => {
+  expect(noSpawnInCreate).toBeDefined();
+});
 
 test("spawn in create exits 1 naming spawn/exec/execFile/fork", async () => {
   const result = await runFixture("spawn-in-create");

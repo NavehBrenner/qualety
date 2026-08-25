@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import { check } from "../../qualety/src/engine.ts";
 import { NO_SUGGESTION } from "../../qualety/src/index.ts";
+import { preferDefineRule } from "./prefer-define-rule.ts";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const fixtures = join(here, "../fixtures");
@@ -17,6 +18,10 @@ async function runFixture(name: string) {
   );
   return { code, out: lines.join("\n"), err: errors.join("\n") };
 }
+
+test("preferDefineRule is exported", () => {
+  expect(preferDefineRule).toBeDefined();
+});
 
 test("bare rule object on a plugin rules map exits 1", async () => {
   const result = await runFixture("bare-rule-object");

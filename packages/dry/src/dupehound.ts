@@ -215,11 +215,12 @@ function formatScanError(value: unknown, error: z.ZodError): string {
   }
   const issues = error.issues;
   const schemaIssue = issues.find((issue) => issue.path[0] === "schema_version");
-  if (schemaIssue !== undefined && isRecord(value)) {
-    return `unsupported schema_version ${JSON.stringify(value.schema_version)}; expected 1 or 2`;
+  if (schemaIssue !== undefined) {
+    const version = "schema_version" in value ? value.schema_version : undefined;
+    return `unsupported schema_version ${JSON.stringify(version)}; expected 1 or 2`;
   }
   const clustersIssue = issues.find((issue) => issue.path[0] === "clusters");
-  if (clustersIssue !== undefined && (!isRecord(value) || !Array.isArray(value.clusters))) {
+  if (clustersIssue !== undefined && !("clusters" in value && Array.isArray(value.clusters))) {
     return "missing clusters array";
   }
   const first = issues[0];
@@ -228,10 +229,6 @@ function formatScanError(value: unknown, error: z.ZodError): string {
   }
   const path = first.path.map(String).join(".");
   return path.length > 0 ? `${path}: ${first.message}` : first.message;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value !== null && typeof value === "object" && !Array.isArray(value);
 }
 
 export function filterClusters(

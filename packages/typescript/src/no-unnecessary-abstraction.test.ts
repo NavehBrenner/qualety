@@ -4,6 +4,7 @@ import { expect, test } from "vitest";
 import { check } from "../../qualety/src/engine.ts";
 import { NO_SUGGESTION } from "../../qualety/src/index.ts";
 import plugin from "./index.ts";
+import { noUnnecessaryAbstraction } from "./no-unnecessary-abstraction.ts";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const fixtures = join(here, "../fixtures");
@@ -20,6 +21,7 @@ async function runFixture(name: string) {
 }
 
 test("plugin exports no-unnecessary-abstraction and recommended includes it", () => {
+  expect(noUnnecessaryAbstraction).toBeDefined();
   expect(plugin.rules?.["no-unnecessary-abstraction"]).toBeDefined();
   expect(plugin.configs?.recommended?.rules?.["ts/no-unnecessary-abstraction"]).toBe("error");
 });

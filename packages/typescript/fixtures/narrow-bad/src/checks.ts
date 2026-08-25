@@ -45,3 +45,10 @@ export function aliased(x: string) {
   }
   return "";
 }
+
+export function compoundBare(x: string | undefined) {
+  if (x !== undefined && isFoo(x)) {
+    return x;
+  }
+  return "";
+}
