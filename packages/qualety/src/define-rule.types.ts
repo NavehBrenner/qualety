@@ -6,8 +6,8 @@ defineRule({
   create(context) {
     const project: ParsedProject = context.getArtifact("typescript");
     void project;
-    // @ts-expect-error dupehound is not in requires
-    context.getArtifact("dupehound");
+    // @ts-expect-error workspace-docs is not in requires
+    context.getArtifact("workspace-docs");
   },
 });
 

@@ -16,7 +16,7 @@ These decisions are considered stable unless a major new constraint appears:
     qualety check --diff --plugin react
     qualety check --diff-worktree
     ```
-    `--diff` is merge-base…HEAD plus dependency closure; `--diff-worktree` is the dirty tree vs HEAD plus the same closure. Recommended CI uses `--diff`.
+    `--diff` is merge-base…HEAD plus dependency closure; `--diff-worktree` is the dirty tree vs HEAD plus the same closure. Recommended CI uses `--diff`. This monorepo dual-runs full `qualety check` and `qualety check --diff` in CI while proving incremental; consumer guidance can still recommend `--diff` only.
     Exit codes 0/1/2. JSON/SARIF output. Optional MCP server as a thin wrapper around the same engine. Official GitHub Action + pre-commit examples.
 
 2. **Configuration**  
