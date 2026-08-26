@@ -3,6 +3,7 @@ import { basename, dirname, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { CONFIG_FILENAMES, ConfigError, loadConfig } from "./config.ts";
 import { DEFAULT_PROVIDERS } from "./default-providers.ts";
+import { listGitSeed } from "./git-seed.ts";
 import {
   type ArtifactMap,
   type ArtifactProvider,
@@ -15,10 +16,26 @@ import {
 } from "./index.ts";
 import { isRecord } from "./record.ts";
 import { pluginSchema } from "./schemas.ts";
+import { expandTypeScriptClosure } from "./typescript-frontend.ts";
 
 const NOTHING_TO_CHECK = "No rules configured — nothing to check.";
+const NO_RULES_MATCHED = "No rules matched filters.";
 const DEFAULT_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
 const DEFAULT_EXCLUDE = ["**/node_modules/**", "**/dist/**"];
+
+export type CheckFilters = {
+  plugins: string[];
+  excludePlugins: string[];
+  rules: string[];
+  diff: "off" | "upstream" | "worktree";
+};
+
+const EMPTY_FILTERS: CheckFilters = {
+  plugins: [],
+  excludePlugins: [],
+  rules: [],
+  diff: "off",
+};
 
 type Enabled = {
   id: string;
@@ -35,24 +52,31 @@ export async function check(
   cwd: string,
   out: (msg: string) => void,
   err: (msg: string) => void,
+  filters: CheckFilters = EMPTY_FILTERS,
 ): Promise<number> {
   try {
-    return await runCheck(cwd, out);
+    return await runCheck(cwd, out, filters);
   } catch (e) {
     err(e instanceof Error ? e.message : String(e));
     return 2;
   }
 }
 
-async function runCheck(cwd: string, out: (msg: string) => void): Promise<number> {
+async function runCheck(
+  cwd: string,
+  out: (msg: string) => void,
+  filters: CheckFilters,
+): Promise<number> {
   const loaded = await loadConfig(cwd);
   if (loaded === undefined) {
+    if (hasNameFilters(filters)) {
+      assertKnownFilters([], [], filters);
+    }
     out(NOTHING_TO_CHECK);
     return 0;
   }
   const { path: configPath, config } = loaded;
-  const ruleEntries = Object.entries(config.rules);
-  if (ruleEntries.length === 0) {
+  if (Object.keys(config.rules).length === 0 && !hasNameFilters(filters)) {
     out(NOTHING_TO_CHECK);
     return 0;
   }
@@ -62,26 +86,28 @@ async function runCheck(cwd: string, out: (msg: string) => void): Promise<number
     plugins.push(await loadPlugin(spec, dirname(configPath)));
   }
   const enabled = resolveEnabledRules(plugins, config.rules);
-  if (enabled.length === 0) {
-    out(NOTHING_TO_CHECK);
+  assertKnownFilters(plugins, enabled, filters);
+  const selected = selectRules(enabled, filters);
+  if (selected.length === 0) {
+    out(hasNameFilters(filters) ? NO_RULES_MATCHED : NOTHING_TO_CHECK);
     return 0;
   }
 
-  const files = await listWorkspaceFiles(cwd, config);
+  const files = await listCheckFiles(cwd, config, filters.diff);
   if (files.length === 0) {
     out("No files to check.");
     return 0;
   }
 
   const displayPaths = files.map((abs) => displayPath(cwd, abs));
-  const artifacts = await buildRequiredArtifacts(plugins, enabled, {
+  const artifacts = await buildRequiredArtifacts(plugins, selected, {
     cwd,
     files: displayPaths,
     exclude: mergedExclude(config),
   });
 
   const violations: Violation[] = [];
-  for (const item of enabled) {
+  for (const item of selected) {
     const allowed = new Set(requiresOf(item));
     function getArtifact<Id extends string>(
       id: Id,
@@ -171,6 +197,97 @@ function requirePlugin(
   const zodPath = first === undefined ? "" : first.path.map(String).join(".");
   const detail = first === undefined ? "invalid" : first.message;
   throw new ConfigError(`Plugin "${name}" is invalid (${zodPath}: ${detail}).`);
+}
+
+function hasNameFilters(filters: CheckFilters): boolean {
+  return (
+    filters.plugins.length > 0 || filters.excludePlugins.length > 0 || filters.rules.length > 0
+  );
+}
+
+function pluginNameOf(id: string): string {
+  const slash = id.indexOf("/");
+  return slash === -1 ? id : id.slice(0, slash);
+}
+
+function assertKnownFilters(
+  plugins: Plugin[],
+  enabled: readonly Enabled[],
+  filters: CheckFilters,
+): void {
+  const pluginNames = new Set(plugins.map((plugin) => plugin.name));
+  const catalog = new Set<string>();
+  for (const plugin of plugins) {
+    for (const name of Object.keys(plugin.rules ?? {})) {
+      catalog.add(`${plugin.name}/${name}`);
+    }
+  }
+  const asked = [...filters.plugins, ...filters.excludePlugins];
+  const unknownPlugins = [...new Set(asked.filter((name) => !pluginNames.has(name)))];
+  if (unknownPlugins.length > 0) {
+    throw new ConfigError(
+      unknownPlugins.length === 1
+        ? `Unknown plugin name: ${unknownPlugins[0]}.`
+        : `Unknown plugin names: ${unknownPlugins.join(", ")}.`,
+    );
+  }
+  const unknownRules = filters.rules.filter((id) => !catalog.has(id));
+  if (unknownRules.length > 0) {
+    throw new ConfigError(
+      unknownRules.length === 1
+        ? `Unknown rule id: ${unknownRules[0]}.`
+        : `Unknown rule ids: ${unknownRules.join(", ")}.`,
+    );
+  }
+  const enabledIds = new Set(enabled.map((item) => item.id));
+  const disabled = filters.rules.filter((id) => !enabledIds.has(id));
+  if (disabled.length > 0) {
+    throw new ConfigError(
+      disabled.length === 1
+        ? `Rule "${disabled[0]}" is not enabled.`
+        : `Rules not enabled: ${disabled.join(", ")}.`,
+    );
+  }
+}
+
+function selectRules(enabled: Enabled[], filters: CheckFilters): Enabled[] {
+  let selected = enabled;
+  if (filters.plugins.length > 0) {
+    const allow = new Set(filters.plugins);
+    selected = selected.filter((item) => allow.has(pluginNameOf(item.id)));
+  }
+  if (filters.excludePlugins.length > 0) {
+    const deny = new Set(filters.excludePlugins);
+    selected = selected.filter((item) => !deny.has(pluginNameOf(item.id)));
+  }
+  if (filters.rules.length > 0) {
+    const allow = new Set(filters.rules);
+    selected = selected.filter((item) => allow.has(item.id));
+  }
+  return selected;
+}
+
+async function listCheckFiles(
+  cwd: string,
+  config: UserConfig,
+  diff: CheckFilters["diff"],
+): Promise<string[]> {
+  const workspace = await listWorkspaceFiles(cwd, config);
+  if (diff === "off") {
+    return workspace;
+  }
+  const seed = await listGitSeed(cwd, diff);
+  const workspaceSet = new Set(workspace);
+  const matched = seed.filter((file) => workspaceSet.has(file));
+  if (matched.length === 0) {
+    return [];
+  }
+  try {
+    return expandTypeScriptClosure(cwd, workspace, matched);
+  } catch (e) {
+    const detail = e instanceof Error ? e.message : String(e);
+    throw new Error(`Failed to resolve dependency closure: ${detail}`);
+  }
 }
 
 function resolveEnabledRules(plugins: Plugin[], rules: Record<string, Severity>): Enabled[] {

@@ -1,8 +1,12 @@
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { promisify } from "node:util";
 import { expect, test } from "vitest";
 import { check } from "./engine.ts";
+import { listGitSeed } from "./git-seed.ts";
+import { expandTypeScriptClosure } from "./typescript-frontend.ts";
 
 const silent = () => {};
 
@@ -830,4 +834,299 @@ test("rule missing docs description exits 2", async () => {
   const errors: string[] = [];
   expect(await check(dir, silent, (m) => errors.push(String(m)))).toBe(2);
   expect(errors.join("\n")).toMatch(/Plugin "fixture" is invalid \(rules\.ping\.meta\.docs/);
+});
+
+const otherPlugin = `export default {
+  name: "other",
+  rules: {
+    pong: {
+      meta: { docs: { description: "always reports" } },
+      create(context) {
+        context.report({
+          severity: "error",
+          file: context.getFiles()[0] ?? ".",
+          range: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+          message: "pong",
+        });
+      },
+    },
+  },
+};
+`;
+
+const listPlugin = `export default {
+  name: "fixture",
+  rules: {
+    list: {
+      meta: { requires: ["typescript"], docs: { description: "lists files" } },
+      create(context) {
+        const parsed = context.getArtifact("typescript");
+        context.report({
+          severity: "error",
+          file: context.getFiles()[0] ?? ".",
+          range: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+          message: "listed:" + context.getFiles().join("|"),
+          suggestion: "sources:" + String(parsed.sources.size),
+        });
+      },
+    },
+  },
+};
+`;
+
+const noFilters = { plugins: [], excludePlugins: [], rules: [], diff: "off" } as const;
+
+const execFileAsync = promisify(execFile);
+
+async function git(cwd: string, args: string[]): Promise<void> {
+  await execFileAsync("git", args, { cwd });
+}
+
+async function initGit(cwd: string): Promise<void> {
+  await git(cwd, ["init", "-b", "main"]);
+  await git(cwd, ["config", "user.name", "qualety-test"]);
+  await git(cwd, ["config", "user.email", "qualety@test"]);
+  await git(cwd, ["config", "commit.gpgsign", "false"]);
+}
+
+async function commitAll(cwd: string, message: string): Promise<void> {
+  await git(cwd, ["add", "-A"]);
+  await git(cwd, ["commit", "-m", message]);
+}
+
+test("unknown --plugin exits 2 with the name", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": fixturePlugin,
+    "qualety.config.json": config({ "fixture/ping": "error" }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const errors: string[] = [];
+  expect(
+    await check(dir, silent, (m) => errors.push(String(m)), {
+      ...noFilters,
+      plugins: ["react"],
+    }),
+  ).toBe(2);
+  expect(errors.join("\n")).toMatch(/Unknown plugin name: react/);
+});
+
+test("unknown --rule exits 2 with the id", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": fixturePlugin,
+    "qualety.config.json": config({ "fixture/ping": "error" }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const errors: string[] = [];
+  expect(
+    await check(dir, silent, (m) => errors.push(String(m)), {
+      ...noFilters,
+      rules: ["fixture/missing"],
+    }),
+  ).toBe(2);
+  expect(errors.join("\n")).toMatch(/Unknown rule id: fixture\/missing/);
+});
+
+test("--rule on an off id exits 2 as not enabled", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": fixturePlugin,
+    "qualety.config.json": config({ "fixture/ping": "error", "fixture/quiet": "off" }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const errors: string[] = [];
+  expect(
+    await check(dir, silent, (m) => errors.push(String(m)), {
+      ...noFilters,
+      rules: ["fixture/quiet"],
+    }),
+  ).toBe(2);
+  expect(errors.join("\n")).toMatch(/Rule "fixture\/quiet" is not enabled/);
+});
+
+test("filters that match no rules exit 0 honestly", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": fixturePlugin,
+    "qualety.config.json": config({ "fixture/ping": "error" }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, {
+      ...noFilters,
+      plugins: ["fixture"],
+      excludePlugins: ["fixture"],
+    }),
+  ).toBe(0);
+  expect(lines.join("\n")).toMatch(/No rules matched filters/);
+});
+
+test("--plugin union keeps each named plugin", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": fixturePlugin,
+    "other.mjs": otherPlugin,
+    "qualety.config.json": JSON.stringify({
+      plugins: ["./plugin.mjs", "./other.mjs"],
+      rules: { "fixture/ping": "error", "other/pong": "error" },
+    }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, {
+      ...noFilters,
+      plugins: ["fixture", "other"],
+    }),
+  ).toBe(1);
+  expect(lines.join("\n")).toMatch(/fixture\/ping/);
+  expect(lines.join("\n")).toMatch(/other\/pong/);
+});
+
+test("--exclude-plugin applies after --plugin allow", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": fixturePlugin,
+    "other.mjs": otherPlugin,
+    "qualety.config.json": JSON.stringify({
+      plugins: ["./plugin.mjs", "./other.mjs"],
+      rules: { "fixture/ping": "error", "other/pong": "error" },
+    }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, {
+      ...noFilters,
+      plugins: ["fixture", "other"],
+      excludePlugins: ["other"],
+    }),
+  ).toBe(1);
+  expect(lines.join("\n")).toMatch(/fixture\/ping/);
+  expect(lines.join("\n")).not.toMatch(/other\/pong/);
+});
+
+test("--plugin and --rule intersect", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": fixturePlugin,
+    "other.mjs": otherPlugin,
+    "qualety.config.json": JSON.stringify({
+      plugins: ["./plugin.mjs", "./other.mjs"],
+      rules: { "fixture/ping": "error", "other/pong": "error" },
+    }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, {
+      ...noFilters,
+      plugins: ["other"],
+      rules: ["fixture/ping"],
+    }),
+  ).toBe(0);
+  expect(lines.join("\n")).toMatch(/No rules matched filters/);
+});
+
+test("expandTypeScriptClosure walks imports both ways", async () => {
+  const dir = await writeTree({
+    "src/a.ts": "export const x = 1;\n",
+    "src/b.ts": 'import { x } from "./a";\nexport const y = x;\n',
+    "src/c.ts": "export const z = 1;\n",
+  });
+  const a = join(dir, "src/a.ts");
+  const b = join(dir, "src/b.ts");
+  const c = join(dir, "src/c.ts");
+  expect(expandTypeScriptClosure(dir, [a, b, c], [a])).toEqual([a, b].sort());
+  expect(expandTypeScriptClosure(dir, [a, b, c], [b])).toEqual([a, b].sort());
+});
+
+test("--diff seeds branch files and pulls import closure", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": listPlugin,
+    "qualety.config.json": config({ "fixture/list": "error" }),
+    "src/a.ts": "export const x = 1;\n",
+    "src/b.ts": 'import { x } from "./a";\nexport const y = x;\n',
+    "src/c.ts": "export const z = 1;\n",
+  });
+  await initGit(dir);
+  await commitAll(dir, "base");
+  await git(dir, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+  await git(dir, ["checkout", "-b", "feature"]);
+  await writeFile(join(dir, "src/a.ts"), "export const x = 2;\n");
+  await git(dir, ["add", "src/a.ts"]);
+  await git(dir, ["commit", "-m", "change a"]);
+  const lines: string[] = [];
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, { ...noFilters, diff: "upstream" }),
+  ).toBe(1);
+  const out = lines.join("\n");
+  expect(out).toMatch(/listed:src\/a\.ts\|src\/b\.ts/);
+  expect(out).not.toMatch(/src\/c\.ts/);
+  expect(out).toMatch(/sources:2/);
+});
+
+test("--diff-worktree seeds dirty and untracked files plus closure", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": listPlugin,
+    "qualety.config.json": config({ "fixture/list": "error" }),
+    "src/a.ts": "export const x = 1;\n",
+    "src/b.ts": 'import { x } from "./a";\nexport const y = x;\n',
+    "src/c.ts": "export const z = 1;\n",
+  });
+  await initGit(dir);
+  await commitAll(dir, "base");
+  await writeFile(join(dir, "src/a.ts"), "export const x = 2;\n");
+  await writeFile(join(dir, "src/d.ts"), "export const w = 1;\n");
+  const lines: string[] = [];
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, { ...noFilters, diff: "worktree" }),
+  ).toBe(1);
+  const out = lines.join("\n");
+  expect(out).toMatch(/listed:src\/a\.ts\|src\/b\.ts\|src\/d\.ts/);
+  expect(out).not.toMatch(/src\/c\.ts/);
+  expect(out).toMatch(/sources:3/);
+});
+
+test("--diff outside git exits 2", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": listPlugin,
+    "qualety.config.json": config({ "fixture/list": "error" }),
+    "src/a.ts": "export const x = 1;\n",
+  });
+  const errors: string[] = [];
+  expect(
+    await check(dir, silent, (m) => errors.push(String(m)), { ...noFilters, diff: "upstream" }),
+  ).toBe(2);
+  expect(errors.join("\n")).toMatch(/git /);
+  await expect(listGitSeed(dir, "upstream")).rejects.toThrow(/git /);
+});
+
+test("empty --diff seed exits 0 and does not scan the tree", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": listPlugin,
+    "qualety.config.json": config({ "fixture/list": "error" }),
+    "src/a.ts": "export const x = 1;\n",
+    "src/c.ts": "export const z = 1;\n",
+  });
+  await initGit(dir);
+  await commitAll(dir, "base");
+  await git(dir, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+  const lines: string[] = [];
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, { ...noFilters, diff: "upstream" }),
+  ).toBe(0);
+  expect(lines.join("\n")).toMatch(/No files to check/);
+  expect(lines.join("\n")).not.toMatch(/listed:/);
+});
+
+test("empty --diff-worktree seed exits 0 and does not scan the tree", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": listPlugin,
+    "qualety.config.json": config({ "fixture/list": "error" }),
+    "src/a.ts": "export const x = 1;\n",
+  });
+  await initGit(dir);
+  await commitAll(dir, "base");
+  const lines: string[] = [];
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, { ...noFilters, diff: "worktree" }),
+  ).toBe(0);
+  expect(lines.join("\n")).toMatch(/No files to check/);
+  expect(lines.join("\n")).not.toMatch(/listed:/);
 });
