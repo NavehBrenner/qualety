@@ -1,6 +1,7 @@
 import { glob } from "node:fs/promises";
 import { basename, dirname, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
+import { expandCompanions } from "./companion-closure.ts";
 import { CONFIG_FILENAMES, ConfigError, loadConfig } from "./config.ts";
 import { DEFAULT_PROVIDERS } from "./default-providers.ts";
 import { listGitSeed } from "./git-seed.ts";
@@ -283,7 +284,8 @@ async function listCheckFiles(
     return [];
   }
   try {
-    return expandTypeScriptClosure(cwd, workspace, matched);
+    const closed = expandTypeScriptClosure(cwd, workspace, matched);
+    return expandCompanions(cwd, workspace, closed);
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);
     throw new Error(`Failed to resolve dependency closure: ${detail}`);

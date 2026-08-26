@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { expect, test } from "vitest";
+import { expandCompanions } from "./companion-closure.ts";
 import { check } from "./engine.ts";
 import { listGitSeed } from "./git-seed.ts";
 import { expandTypeScriptClosure } from "./typescript-frontend.ts";
@@ -1129,4 +1130,81 @@ test("empty --diff-worktree seed exits 0 and does not scan the tree", async () =
   ).toBe(0);
   expect(lines.join("\n")).toMatch(/No files to check/);
   expect(lines.join("\n")).not.toMatch(/listed:/);
+});
+
+test("expandCompanions adds the other side both ways", async () => {
+  const dir = await writeTree({
+    "docs/rulesets/dev.md": "",
+    "packages/dev/src/index.ts": "",
+    "docs/api.md": "",
+    "packages/qualety/src/index.ts": "",
+    "src/other.ts": "",
+  });
+  const catalog = join(dir, "docs/rulesets/dev.md");
+  const plugin = join(dir, "packages/dev/src/index.ts");
+  const api = join(dir, "docs/api.md");
+  const core = join(dir, "packages/qualety/src/index.ts");
+  const other = join(dir, "src/other.ts");
+  const workspace = [catalog, plugin, api, core, other];
+  expect(expandCompanions(dir, workspace, [catalog])).toEqual([catalog, plugin].sort());
+  expect(expandCompanions(dir, workspace, [plugin])).toEqual([catalog, plugin].sort());
+  expect(expandCompanions(dir, workspace, [api])).toEqual([api, core].sort());
+  expect(expandCompanions(dir, workspace, [core])).toEqual([api, core].sort());
+  expect(expandCompanions(dir, workspace, [other])).toEqual([other]);
+  expect(expandCompanions(dir, [plugin, other], [plugin])).toEqual([plugin]);
+});
+
+const companionInclude = { include: ["**/*.ts", "**/*.md"] };
+
+test("--diff expands catalog companion into plugin entry", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": listPlugin,
+    "qualety.config.json": config({ "fixture/list": "error" }, companionInclude),
+    "docs/rulesets/dev.md": "# dev\n",
+    "packages/dev/src/index.ts": "export default { name: 'dev', rules: {} };\n",
+    "src/unrelated.ts": "export const n = 1;\n",
+  });
+  await initGit(dir);
+  await commitAll(dir, "base");
+  await git(dir, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+  await git(dir, ["checkout", "-b", "feature"]);
+  await writeFile(join(dir, "docs/rulesets/dev.md"), "# dev\n\nchanged\n");
+  await git(dir, ["add", "docs/rulesets/dev.md"]);
+  await git(dir, ["commit", "-m", "change catalog"]);
+  const lines: string[] = [];
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, { ...noFilters, diff: "upstream" }),
+  ).toBe(1);
+  const out = lines.join("\n");
+  expect(out).toMatch(/listed:docs\/rulesets\/dev\.md\|packages\/dev\/src\/index\.ts/);
+  expect(out).not.toMatch(/src\/unrelated\.ts/);
+  expect(out).toMatch(/sources:1/);
+});
+
+test("--diff expands plugin entry companion into catalog", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": listPlugin,
+    "qualety.config.json": config({ "fixture/list": "error" }, companionInclude),
+    "docs/rulesets/dev.md": "# dev\n",
+    "packages/dev/src/index.ts": "export default { name: 'dev', rules: {} };\n",
+    "src/unrelated.ts": "export const n = 1;\n",
+  });
+  await initGit(dir);
+  await commitAll(dir, "base");
+  await git(dir, ["update-ref", "refs/remotes/origin/main", "HEAD"]);
+  await git(dir, ["checkout", "-b", "feature"]);
+  await writeFile(
+    join(dir, "packages/dev/src/index.ts"),
+    "export default { name: 'dev', rules: { ping: {} } };\n",
+  );
+  await git(dir, ["add", "packages/dev/src/index.ts"]);
+  await git(dir, ["commit", "-m", "change plugin"]);
+  const lines: string[] = [];
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, { ...noFilters, diff: "upstream" }),
+  ).toBe(1);
+  const out = lines.join("\n");
+  expect(out).toMatch(/listed:docs\/rulesets\/dev\.md\|packages\/dev\/src\/index\.ts/);
+  expect(out).not.toMatch(/src\/unrelated\.ts/);
+  expect(out).toMatch(/sources:1/);
 });
