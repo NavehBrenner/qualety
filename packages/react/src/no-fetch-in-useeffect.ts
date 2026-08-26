@@ -32,17 +32,16 @@ function scanFile(sf: SourceFile, file: string, context: Pick<RuleContext, "repo
   }
   const clients = collectHttpClientBindings(sf);
   const localFetch = fileDeclaresLocalFetch(sf);
-
-  sf.forEachDescendant((node) => {
+  for (const node of sf.getDescendants()) {
     if (!isEffectCall(node, effects, namespaces)) {
-      return;
+      continue;
     }
     const callback = inlineCallback(node);
     if (callback === undefined) {
-      return;
+      continue;
     }
     scanEffectCallback(callback, file, clients, localFetch, context);
-  });
+  }
 }
 
 function scanEffectCallback(

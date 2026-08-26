@@ -368,40 +368,39 @@ function mixedHitForCall(
 export function secondParseNodes(fn: FunctionLike): Node[] {
   const seen = new Set<string>();
   const extras: Node[] = [];
-  walkOwn(fn, (node) => {
+  for (const node of ownNodes(fn)) {
     if (!isSchemaParseCall(node)) {
-      return;
+      continue;
     }
     const name = firstArgIdentifier(node);
     if (name === undefined) {
-      return;
+      continue;
     }
     const names = aliasesOf(fn, name);
     const key = [...names].sort().join(",");
     if (seen.has(key) || [...names].some((alias) => seen.has(alias))) {
       extras.push(node);
-      return;
+      continue;
     }
     for (const alias of names) {
       seen.add(alias);
     }
-  });
+  }
   return extras;
 }
 
 export function hasPriorParse(fn: FunctionLike, subject: string, before: number): boolean {
   const names = aliasesOf(fn, subject);
-  let found = false;
-  walkOwn(fn, (node) => {
+  for (const node of ownNodes(fn)) {
     if (node.getStart() >= before || !isSchemaParseCall(node)) {
-      return;
+      continue;
     }
     const arg = firstArgIdentifier(node);
     if (arg !== undefined && names.has(arg)) {
-      found = true;
+      return true;
     }
-  });
-  return found;
+  }
+  return false;
 }
 
 export function isStrictRefinement(before: Type, after: Type): boolean {
@@ -415,30 +414,24 @@ export function subjectIdentIn(root: Node, name: string): Node | undefined {
   if (Node.isIdentifier(root) && root.getText() === name) {
     return root;
   }
-  let found: Node | undefined;
-  root.forEachDescendant((node) => {
-    if (found !== undefined) {
-      return;
+  for (const node of root.getDescendantsOfKind(SyntaxKind.Identifier)) {
+    if (node.getText() === name && !declaresName(node)) {
+      return node;
     }
-    if (Node.isIdentifier(node)) {
-      if (node.getText() === name && !declaresName(node)) {
-        found = node;
-      }
-    }
-  });
-  return found;
+  }
+  return undefined;
 }
 
 export function conditionNodes(fn: FunctionLike): Node[] {
   const nodes: Node[] = [];
-  walkOwn(fn, (node) => {
+  for (const node of ownNodes(fn)) {
     if (Node.isIfStatement(node)) {
       nodes.push(node.getExpression());
     }
     if (Node.isConditionalExpression(node)) {
       nodes.push(node.getCondition());
     }
-  });
+  }
   return nodes;
 }
 
@@ -641,14 +634,16 @@ function argImpliesGuard(call: CallExpression, paramIndex: number, cand: CheckCa
   return guardPolarity(argType, cand) === true;
 }
 
-function walkOwn(fn: FunctionLike, visit: (node: Node) => void): void {
-  fn.forEachDescendant((node, traversal) => {
-    if (node !== fn && isFunctionLike(node)) {
-      traversal.skip();
-      return;
+function ownNodes(fn: FunctionLike): Node[] {
+  const nested = fn.getDescendants().filter((node) => isFunctionLike(node));
+  const nodes: Node[] = [];
+  for (const node of fn.getDescendants()) {
+    if (nested.some((inner) => containsNode(inner, node))) {
+      continue;
     }
-    visit(node);
-  });
+    nodes.push(node);
+  }
+  return nodes;
 }
 
 function sameFileCalls(sourceFile: SourceFile, fn: FunctionLike): CallExpression[] {
@@ -663,32 +658,36 @@ function sameFileCalls(sourceFile: SourceFile, fn: FunctionLike): CallExpression
     return [];
   }
   const calls: CallExpression[] = [];
-  sourceFile.forEachDescendant((node) => {
-    if (!Node.isCallExpression(node)) {
-      return;
+  for (const node of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (callMatchesTarget(node, fn, target)) {
+      calls.push(node);
     }
-    const expr = node.getExpression();
-    if (!Node.isIdentifier(expr)) {
-      return;
-    }
-    const symbol = expr.getSymbol();
-    if (symbol === undefined) {
-      return;
-    }
-    const aliased = symbol.getAliasedSymbol() ?? symbol;
-    if (
-      symbol !== target &&
-      aliased !== target &&
-      aliased.getFullyQualifiedName() !== target.getFullyQualifiedName()
-    ) {
-      return;
-    }
-    if (node.getStart() >= fn.getStart() && node.getEnd() <= fn.getEnd()) {
-      return;
-    }
-    calls.push(node);
-  });
+  }
   return calls;
+}
+
+function callMatchesTarget(
+  node: CallExpression,
+  fn: FunctionLike,
+  target: NonNullable<ReturnType<FunctionLike["getSymbol"]>>,
+): boolean {
+  const expr = node.getExpression();
+  if (!Node.isIdentifier(expr)) {
+    return false;
+  }
+  const symbol = expr.getSymbol();
+  if (symbol === undefined) {
+    return false;
+  }
+  const aliased = symbol.getAliasedSymbol() ?? symbol;
+  if (
+    symbol !== target &&
+    aliased !== target &&
+    aliased.getFullyQualifiedName() !== target.getFullyQualifiedName()
+  ) {
+    return false;
+  }
+  return node.getStart() < fn.getStart() || node.getEnd() > fn.getEnd();
 }
 
 function wrappingGuard(
@@ -712,17 +711,16 @@ function wrappingGuard(
 }
 
 function bindingUsedElsewhere(fn: FunctionLike, name: string, ignored: Node[]): boolean {
-  let used = false;
-  fn.forEachDescendant((node) => {
-    if (!Node.isIdentifier(node) || node.getText() !== name || declaresName(node)) {
-      return;
+  for (const node of fn.getDescendantsOfKind(SyntaxKind.Identifier)) {
+    if (node.getText() !== name || declaresName(node)) {
+      continue;
     }
     if (ignored.some((item) => containsNode(item, node))) {
-      return;
+      continue;
     }
-    used = true;
-  });
-  return used;
+    return true;
+  }
+  return false;
 }
 
 function containsNode(outer: Node, inner: Node): boolean {

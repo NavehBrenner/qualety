@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { check } from "./engine.ts";
+import { type CheckFilters, check } from "./engine.ts";
 
 const USAGE = `qualety — executable code invariants
 
@@ -8,17 +8,18 @@ Usage:
   qualety check [options]
 
 Options:
-  -h, --help  Show this help
+  -h, --help              Show this help
+  --plugin <name>         Keep rules from this plugin (repeatable)
+  --exclude-plugin <name> Drop rules from this plugin (repeatable)
+  --rule <id>             Keep this rule id (repeatable)
+  --diff                  Changed files vs merge-base…HEAD, plus dependency closure
+  --diff-worktree         Dirty/untracked files vs HEAD, plus dependency closure
 
 Exit codes: 0 clean, 1 violations found, 2 usage or internal error.`;
 
 /**
  * Returns the process exit code. Kept pure (no `process.exit`) so it is
  * testable without spawning a subprocess.
- *
- * ponytail: only `check` exists so far. --plugin/--rule/--diff land with the
- * engine that actually honours them, so an accepted-but-ignored flag can never
- * make CI look green when it did nothing.
  */
 export async function run(
   argv: string[],
@@ -27,11 +28,25 @@ export async function run(
   cwd = process.cwd(),
 ): Promise<number> {
   let positionals: string[];
-  let values: { help?: boolean };
+  let values: {
+    help?: boolean;
+    plugin?: string[];
+    "exclude-plugin"?: string[];
+    rule?: string[];
+    diff?: boolean;
+    "diff-worktree"?: boolean;
+  };
   try {
     ({ positionals, values } = parseArgs({
       args: argv,
-      options: { help: { type: "boolean", short: "h" } },
+      options: {
+        help: { type: "boolean", short: "h" },
+        plugin: { type: "string", multiple: true },
+        "exclude-plugin": { type: "string", multiple: true },
+        rule: { type: "string", multiple: true },
+        diff: { type: "boolean" },
+        "diff-worktree": { type: "boolean" },
+      },
       allowPositionals: true,
     }));
   } catch (e) {
@@ -50,7 +65,36 @@ export async function run(
     return 2;
   }
 
-  return check(cwd, out, err);
+  const filters = filtersFromValues(values);
+  if (filters === undefined) {
+    err(`--diff and --diff-worktree cannot be used together.\n\n${USAGE}`);
+    return 2;
+  }
+  return check(cwd, out, err, filters);
+}
+
+function filtersFromValues(values: {
+  plugin?: string[];
+  "exclude-plugin"?: string[];
+  rule?: string[];
+  diff?: boolean;
+  "diff-worktree"?: boolean;
+}): CheckFilters | undefined {
+  if (values.diff === true && values["diff-worktree"] === true) {
+    return undefined;
+  }
+  let diff: CheckFilters["diff"] = "off";
+  if (values["diff-worktree"] === true) {
+    diff = "worktree";
+  } else if (values.diff === true) {
+    diff = "upstream";
+  }
+  return {
+    plugins: values.plugin ?? [],
+    excludePlugins: values["exclude-plugin"] ?? [],
+    rules: values.rule ?? [],
+    diff,
+  };
 }
 
 if (process.argv[1] && import.meta.filename === process.argv[1]) {

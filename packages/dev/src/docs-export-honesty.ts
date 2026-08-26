@@ -70,19 +70,20 @@ function checkCatalogs(
 ) {
   for (const item of PLUGIN_CATALOGS) {
     const pluginFile = findSource(sources, `/packages/${item.dir}/src/index.ts`);
-    const implemented = new Map<string, Node>();
-    if (pluginFile !== undefined) {
-      pluginFile.forEachDescendant((node) => {
-        addRulesFromLiteral(node, implemented);
-      });
+    if (pluginFile === undefined) {
+      continue;
     }
+    const implemented = new Map<string, Node>();
+    pluginFile.forEachDescendant((node) => {
+      addRulesFromLiteral(node, implemented);
+    });
     const documented = tableNames(files.get(item.catalog) ?? "", "Implemented", "ID");
     const catalogPath = join(context.getCwd(), item.catalog);
     for (const [id, node] of implemented) {
       if (!documented.has(id)) {
         context.report({
           severity: "error",
-          file: pluginFile?.getFilePath() ?? catalogPath,
+          file: pluginFile.getFilePath(),
           range: rangeOf(node),
           message: `Rule "${id}" is implemented but missing from ${item.catalog} Implemented table.`,
           suggestion: `Add a \`${id}\` row to the ## Implemented table in ${item.catalog}.`,

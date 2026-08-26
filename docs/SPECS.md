@@ -8,14 +8,16 @@ These decisions are considered stable unless a major new constraint appears:
 
 1. **Consumption model**  
    CLI-first (ESLint/Ruff-like). Selective execution is required:
-   ```bash
-   qualety check
-   qualety check --plugin react
-   qualety check --rule react/data-region-exhaustive
-   qualety check --exclude-plugin dry
-   qualety check --diff --plugin react
-   ```
-   Exit codes 0/1/2. JSON/SARIF output. Optional MCP server as a thin wrapper around the same engine. Official GitHub Action + pre-commit examples.
+    ```bash
+    qualety check
+    qualety check --plugin react
+    qualety check --rule react/data-region-exhaustive
+    qualety check --exclude-plugin dry
+    qualety check --diff --plugin react
+    qualety check --diff-worktree
+    ```
+    `--diff` is merge-base…HEAD plus dependency closure (TS graph + known doc/code companions); `--diff-worktree` is the dirty tree vs HEAD plus the same closure. Recommended CI uses `--diff`. This monorepo dual-runs full `qualety check` and `qualety check --diff` in CI while proving incremental; consumer guidance can still recommend `--diff` only.
+    Exit codes 0/1/2. JSON/SARIF output. Optional MCP server as a thin wrapper around the same engine. Official GitHub Action + pre-commit examples.
 
 2. **Configuration**  
    Primary path is a typed `defineConfig` function (TypeScript) that provides IntelliSense, autocomplete, and runtime validation of unknown keys / mismatched rule ids. On-disk load is JSON + TS/JS (`qualety.config.ts` / `.mts` / `.js` / `.mjs` / `.json`). Every rule is independently toggleable; installing a plugin does **not** force all of its rules on.
@@ -331,6 +333,7 @@ qualety check --plugin react
 qualety check --rule react/data-region-exhaustive
 qualety check --exclude-plugin dry
 qualety check --diff
+qualety check --diff-worktree
 qualety index
 qualety query --similar "..."
 qualety report

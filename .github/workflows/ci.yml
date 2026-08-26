@@ -13,6 +13,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - run: git fetch --no-tags origin main
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
@@ -22,3 +25,7 @@ jobs:
       - run: pnpm build
       - run: pnpm test
       - run: pnpm check
+      - run: ./scripts/install-dupehound.sh
+      - run: echo "$GITHUB_WORKSPACE/.tools" >> "$GITHUB_PATH"
+      - run: pnpm qualety
+      - run: pnpm qualety --diff
