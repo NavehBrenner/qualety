@@ -163,7 +163,7 @@ function collectReferences(
 ): void {
   for (const decl of sf.getImportDeclarations()) {
     const specifier = decl.getModuleSpecifierValue();
-    const target = resolveRelativeSpecifier(fromFile, specifier, sources);
+    const target = resolveImportTarget(fromFile, specifier, sources);
     if (target === undefined) {
       continue;
     }
@@ -176,7 +176,7 @@ function collectReferences(
   }
 }
 
-function resolveRelativeSpecifier(
+function resolveImportTarget(
   fromFile: string,
   specifier: string,
   sources: ReadonlyMap<string, unknown>,
@@ -187,23 +187,16 @@ function resolveRelativeSpecifier(
   const resolved = resolve(dirname(fromFile), specifier);
   const ext = extname(resolved);
   const stem = SWAP_EXTS.has(ext) ? resolved.slice(0, -ext.length) : resolved;
-  const hits = [resolved];
-  for (const tsExt of TS_EXTS) {
-    hits.push(stem + tsExt);
+  const paths = [resolved];
+  TS_EXTS.forEach((tsExt) => {
+    paths.push(stem + tsExt);
+    paths.push(join(resolved, `index${tsExt}`));
+  });
+  const found = paths.find((path) => sources.has(path) || sources.has(resolve(path)));
+  if (found === undefined) {
+    return undefined;
   }
-  for (const tsExt of TS_EXTS) {
-    hits.push(join(resolved, `index${tsExt}`));
-  }
-  for (const hit of hits) {
-    if (sources.has(hit)) {
-      return hit;
-    }
-    const normalized = resolve(hit);
-    if (sources.has(normalized)) {
-      return normalized;
-    }
-  }
-  return undefined;
+  return sources.has(found) ? found : resolve(found);
 }
 
 function defaultKeyword(node: Node): Node | undefined {

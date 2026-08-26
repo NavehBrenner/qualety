@@ -60,9 +60,9 @@ Full research notes and comparisons are in [docs/RESEARCH.md](docs/RESEARCH.md).
 
 ## Status
 
-The engine (`qualety check`) loads config, collects **one provider map** (plugin `provides`, then default-registry gap-fill), unions enabled rules’ `requires`, builds each artifact **once**, and runs every rule with the same context. Core has **no built-in rule bag** and **no dupehound (or other niche binary) host**. Default `"typescript"` → ts-morph `ParsedProject` (a plugin may provide the same id; default is skipped). `@qualety/dry` provides `"dupehound"`. Shared providers load as ruleless plugins via `plugins[]`. No `config.languages`. In-repo rules use `defineRule` so `getArtifact` is typed. Product plugins: [`@qualety/typescript`](packages/typescript) (`ts/public-exports-tested`), [`@qualety/react`](packages/react) (`react/no-fetch-in-useeffect`, `react/query-error-handled`), and [`@qualety/dry`](packages/dry) (`dry/no-duplicate-functions`). Multi-plugin configs load them together; catalog ids are namespaced (`ts/…` vs `react/…` vs `dry/…`). Every violation has a required `suggestion` (concrete text on product rules). With nothing configured, check reports that honestly and exits 0.
+The engine (`qualety check`) loads config, collects **one provider map** (plugin `provides`, then default-registry gap-fill), unions enabled rules’ `requires`, builds each artifact **once**, and runs every rule with the same context. Core has **no built-in rule bag** and **no dupehound (or other niche binary) host**. Default `"typescript"` → ts-morph `ParsedProject` (a plugin may provide the same id; default is skipped). `@qualety/dry` provides `"dupehound"`. Shared providers load as ruleless plugins via `plugins[]`. No `config.languages`. In-repo rules use `defineRule` so `getArtifact` is typed. Product plugins: [`@qualety/typescript`](packages/typescript) (`ts/public-exports-tested`), [`@qualety/react`](packages/react) (`react/no-fetch-in-useeffect`, `react/query-error-handled`), and [`@qualety/dry`](packages/dry) (`dry/no-duplicate-functions`). Portable authoring: [`@qualety/plugin-kit`](packages/plugin-kit) (`plugin-kit/no-spawn-in-create`, `plugin-kit/prefer-define-rule`). Multi-plugin configs load them together; catalog ids are namespaced (`ts/…` vs `react/…` vs `dry/…` vs `plugin-kit/…`). Every violation has a required `suggestion` (concrete text on product rules). With nothing configured, check reports that honestly and exits 0.
 
-**Core architectural decisions are locked** in [docs/SPECS.md](docs/SPECS.md) (CLI shape, `defineConfig`, plugin contract, TypeScript-first core, no wrapping of Biome/ESLint, default artifact providers, performance approach, etc.). Catalogs: [docs/rulesets/typescript.md](docs/rulesets/typescript.md), [docs/rulesets/react.md](docs/rulesets/react.md), [docs/rulesets/dry.md](docs/rulesets/dry.md). IDE resolve of bare package names needs `pnpm -r build` (dist `.d.ts`).
+**Core architectural decisions are locked** in [docs/SPECS.md](docs/SPECS.md) (CLI shape, `defineConfig`, plugin contract, TypeScript-first core, no wrapping of Biome/ESLint, default artifact providers, performance approach, etc.). Catalogs: [docs/rulesets/typescript.md](docs/rulesets/typescript.md), [docs/rulesets/react.md](docs/rulesets/react.md), [docs/rulesets/dry.md](docs/rulesets/dry.md), [docs/rulesets/plugin-kit.md](docs/rulesets/plugin-kit.md). IDE resolve of bare package names needs `pnpm -r build` (dist `.d.ts`).
 
 The original author has a working internal TypeScript/TSX prototype for several of the compositional rules. The goal of this public repo is to generalise it, add the missing pieces (semantic DRY, Python, agent integration, test-presence gates), and make it a proper open-source project that coding agents can build upon.
 
@@ -87,8 +87,9 @@ export QUALETY_DUPEHOUND="$PWD/.tools/dupehound"
 
 Layout: `packages/qualety` (engine, CLI, plugin contract),
 `packages/typescript` (`@qualety/typescript`),
-`packages/react` (`@qualety/react`), and
-`packages/dry` (`@qualety/dry`).
+`packages/react` (`@qualety/react`),
+`packages/dry` (`@qualety/dry`), and
+`packages/plugin-kit` (`@qualety/plugin-kit`).
 
 ## Roadmap (High Level)
 
@@ -106,7 +107,7 @@ This repository is intentionally structured so that a coding agent can pick it u
 
 Recommended first tasks for an agent:
 
-1. Read `docs/VISION.md`, `docs/SPECS.md`, `docs/RESEARCH.md`, `docs/rulesets/typescript.md`, `docs/rulesets/react.md`, and `docs/rulesets/dry.md`.
+1. Read `docs/VISION.md`, `docs/SPECS.md`, `docs/RESEARCH.md`, `docs/rulesets/typescript.md`, `docs/rulesets/react.md`, `docs/rulesets/dry.md`, and `docs/rulesets/plugin-kit.md`.
 2. Treat the **Locked decisions** section in `docs/SPECS.md` as binding.
 3. Add a rule to an existing plugin (or a new plugin via the create-plugin skill). Do **not** re-scaffold the engine, do **not** invent import-lint / cycle / path-ban rules (SPECS locked #7), and do **not** pad plugins with empty stub rules.
 4. Every rule needs valid + invalid fixtures and actionable messages.

@@ -1,6 +1,7 @@
 import { defineRule, type RuleContext } from "qualety";
-import { Node, SourceFile } from "ts-morph";
+import { Node, type SourceFile } from "ts-morph";
 import {
+  bindFileScan,
   collectHttpClientBindings,
   collectReactEffectBindings,
   fileDeclaresLocalFetch,
@@ -9,7 +10,6 @@ import {
   isEffectCall,
   isFunctionLike,
   isIifeCallee,
-  rangeOf,
 } from "./ast.ts";
 
 const SUGGESTION =
@@ -22,14 +22,7 @@ export const noFetchInUseEffect = defineRule({
       description: "Do not kick off HTTP data loading inside useEffect or useLayoutEffect.",
     },
   },
-  create(context) {
-    const parsed = context.getArtifact("typescript");
-    for (const [abs, unit] of parsed.sources) {
-      if (unit instanceof SourceFile) {
-        scanFile(unit, abs, context);
-      }
-    }
-  },
+  create: bindFileScan(scanFile),
 });
 
 function scanFile(sf: SourceFile, file: string, context: Pick<RuleContext, "report">): void {
@@ -87,7 +80,10 @@ function scanEffectCallback(
     context.report({
       severity: "error",
       file,
-      range: rangeOf(node),
+      range: {
+        start: node.getSourceFile().getLineAndColumnAtPos(node.getStart()),
+        end: node.getSourceFile().getLineAndColumnAtPos(node.getEnd()),
+      },
       message: `Do not call ${api} inside useEffect or useLayoutEffect.`,
       suggestion: SUGGESTION,
     });

@@ -1,4 +1,3 @@
-import type { Range } from "qualety";
 import {
   type ArrowFunction,
   type CallExpression,
@@ -19,16 +18,6 @@ export type FunctionLike =
 
 const BOUNDARY_NAMES = new Set(["validateConfig", "readConfigFile", "loadConfig", "loadPlugin"]);
 const BOUNDARY_PREFIX = /^(read|load|parse)/i;
-
-export function rangeOf(node: Node): Range {
-  const sourceFile = node.getSourceFile();
-  const start = sourceFile.getLineAndColumnAtPos(node.getStart());
-  const end = sourceFile.getLineAndColumnAtPos(node.getEnd());
-  return {
-    start: { line: start.line, column: start.column },
-    end: { line: end.line, column: end.column },
-  };
-}
 
 export function isFunctionLike(node: Node): node is FunctionLike {
   return (
@@ -106,9 +95,13 @@ export function firstArgIdentifier(node: Node): string | undefined {
 
 export function isArgToSchemaParse(node: Node): boolean {
   const parent = node.getParent();
-  return parent !== undefined && isSchemaParseCall(parent) && Node.isCallExpression(parent)
-    ? parent.getArguments().includes(node)
-    : false;
+  if (parent === undefined) {
+    return false;
+  }
+  if (!isSchemaParseCall(parent)) {
+    return false;
+  }
+  return parent.getArguments().includes(node);
 }
 
 export function aliasesOf(fn: FunctionLike, root: string): Set<string> {

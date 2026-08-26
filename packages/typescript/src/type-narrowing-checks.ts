@@ -1,18 +1,19 @@
 import { defineRule, type RuleContext } from "qualety";
-import { Node, SourceFile } from "ts-morph";
+import { Node, type SourceFile } from "ts-morph";
 import {
-  classifyCondition,
+  bindFunctionScan,
+  type CheckCandidate,
+  conditionLeaves,
   conditionNodes,
   diagnoseConstant,
   type FunctionLike,
   hasPriorParse,
-  isFunctionLike,
   isStrictRefinement,
   shouldReportUnchanged,
   subjectIdentIn,
   truePathRoot,
 } from "./narrowing.ts";
-import { firstArgIdentifier, isPropertyUse, isSchemaParseCall, rangeOf } from "./parse-flow.ts";
+import { firstArgIdentifier, isPropertyUse, isSchemaParseCall } from "./parse-flow.ts";
 
 const SUGGESTION =
   "Delete the check, or use a type predicate / asserts / non-empty predicate / schema .data / a narrowed binding.";
@@ -25,20 +26,7 @@ export const typeNarrowingChecks = defineRule({
         "A runtime check on a value is legitimate only if TypeScript sees a strict refinement on the true path.",
     },
   },
-  create(context) {
-    const sources = context.getArtifact("typescript").sources;
-    for (const [abs, unit] of sources) {
-      if (!(unit instanceof SourceFile)) {
-        continue;
-      }
-      const reported = new Set<string>();
-      unit.forEachDescendant((node) => {
-        if (isFunctionLike(node)) {
-          scanFunction(node, abs, unit, context, reported);
-        }
-      });
-    }
-  },
+  create: bindFunctionScan(scanFunction),
 });
 
 function scanFunction(
@@ -52,29 +40,41 @@ function scanFunction(
     if (diagnoseConstant(fn, cond, sourceFile) !== undefined) {
       continue;
     }
-    const cand = classifyCondition(fn, cond);
-    if (cand === undefined || cand.kind === "schema-parse") {
-      continue;
-    }
     const pathRoot = truePathRoot(cond);
     if (pathRoot === undefined) {
       continue;
     }
-    const beforeNode = subjectIdentIn(cond, cand.subject);
-    const afterNode = subjectIdentIn(pathRoot, cand.subject);
-    if (beforeNode === undefined || afterNode === undefined) {
-      continue;
+    for (const cand of conditionLeaves(fn, cond)) {
+      considerLeaf(cand, cond, pathRoot, file, context, reported);
     }
-    const before = beforeNode.getType();
-    const after = afterNode.getType();
-    if (isStrictRefinement(before, after) || !shouldReportUnchanged(cand, before, after)) {
-      continue;
-    }
-    emitA(context, file, cond, cand.subject, reported);
   }
   fn.forEachDescendant((node) => {
     considerRawAfterParse(fn, node, file, sourceFile, context, reported);
   });
+}
+
+function considerLeaf(
+  cand: CheckCandidate,
+  cond: Node,
+  pathRoot: Node,
+  file: string,
+  context: Pick<RuleContext, "report">,
+  reported: Set<string>,
+) {
+  if (cand.kind === "schema-parse") {
+    return;
+  }
+  const beforeNode = subjectIdentIn(cand.node, cand.subject);
+  const afterNode = subjectIdentIn(pathRoot, cand.subject);
+  if (beforeNode === undefined || afterNode === undefined) {
+    return;
+  }
+  const before = beforeNode.getType();
+  const after = afterNode.getType();
+  if (isStrictRefinement(before, after) || !shouldReportUnchanged(cand, before, after)) {
+    return;
+  }
+  emitA(context, file, cond, cand.subject, reported);
 }
 
 function considerRawAfterParse(
@@ -126,7 +126,11 @@ function emitA(
   subject: string,
   reported: Set<string>,
 ) {
-  const range = rangeOf(node);
+  const sourceFile = node.getSourceFile();
+  const range = {
+    start: sourceFile.getLineAndColumnAtPos(node.getStart()),
+    end: sourceFile.getLineAndColumnAtPos(node.getEnd()),
+  };
   const key = `${file}:${range.start.line}:${range.start.column}`;
   if (reported.has(key)) {
     return;

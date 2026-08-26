@@ -5,7 +5,26 @@ import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import { check } from "../../qualety/src/engine.ts";
 import { NO_SUGGESTION } from "../../qualety/src/index.ts";
-import plugin from "./index.ts";
+import {
+  bindFileScan,
+  collectHttpClientBindings,
+  collectQueryHookBindings,
+  collectReactEffectBindings,
+  enclosingFunction,
+  fileDeclaresLocalFetch,
+  forbiddenHttpApi,
+  inlineCallback,
+  isEffectCall,
+  isFunctionLike,
+  isHttpPackage,
+  isIifeCallee,
+  isReactSpecifier,
+  isTanstackQuerySpecifier,
+  queryHookName,
+} from "./ast.ts";
+import plugin, { plugin as namedPlugin } from "./index.ts";
+import { noFetchInUseEffect } from "./no-fetch-in-useeffect.ts";
+import { queryErrorHandled } from "./query-error-handled.ts";
 
 const silent = () => {};
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -35,11 +54,29 @@ async function writeTree(files: Record<string, string>): Promise<string> {
 }
 
 test("plugin exports name, rules, and recommended", () => {
+  expect(namedPlugin).toBe(plugin);
   expect(plugin.name).toBe("react");
+  expect(noFetchInUseEffect).toBeDefined();
+  expect(queryErrorHandled).toBeDefined();
   expect(plugin.rules?.["no-fetch-in-useeffect"]).toBeDefined();
   expect(plugin.rules?.["query-error-handled"]).toBeDefined();
   expect(plugin.configs?.recommended?.rules?.["react/no-fetch-in-useeffect"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["react/query-error-handled"]).toBe("error");
+  expect(bindFileScan).toEqual(expect.any(Function));
+  expect(collectHttpClientBindings).toEqual(expect.any(Function));
+  expect(collectQueryHookBindings).toEqual(expect.any(Function));
+  expect(collectReactEffectBindings).toEqual(expect.any(Function));
+  expect(enclosingFunction).toEqual(expect.any(Function));
+  expect(fileDeclaresLocalFetch).toEqual(expect.any(Function));
+  expect(forbiddenHttpApi).toEqual(expect.any(Function));
+  expect(inlineCallback).toEqual(expect.any(Function));
+  expect(isEffectCall).toEqual(expect.any(Function));
+  expect(isFunctionLike).toEqual(expect.any(Function));
+  expect(isHttpPackage).toEqual(expect.any(Function));
+  expect(isIifeCallee).toEqual(expect.any(Function));
+  expect(isReactSpecifier).toEqual(expect.any(Function));
+  expect(isTanstackQuerySpecifier).toEqual(expect.any(Function));
+  expect(queryHookName).toEqual(expect.any(Function));
 });
 
 test("multi-plugin run attributes ts/ and react/ violations with suggestions", async () => {

@@ -1,5 +1,6 @@
 import { defineRule, type RuleContext } from "qualety";
 import { Node, SourceFile } from "ts-morph";
+import { enclosingFunction } from "./narrowing.ts";
 import {
   aliasesOf,
   type FunctionLike,
@@ -11,7 +12,6 @@ import {
   isJsonParseCall,
   isPropertyUse,
   isSchemaParseCall,
-  rangeOf,
   unknownParamNames,
 } from "./parse-flow.ts";
 
@@ -62,7 +62,10 @@ function scanBoundary(fn: FunctionLike, file: string, context: Pick<RuleContext,
       context.report({
         severity: "error",
         file,
-        range: rangeOf(node),
+        range: {
+          start: node.getSourceFile().getLineAndColumnAtPos(node.getStart()),
+          end: node.getSourceFile().getLineAndColumnAtPos(node.getEnd()),
+        },
         message: `Load/parse function "${name}" uses untrusted parameter "${param}" before schema.parse/safeParse.`,
         suggestion: PARSE_SUGGESTION,
       });
@@ -82,7 +85,10 @@ function scanJsonParse(node: Node, file: string, context: Pick<RuleContext, "rep
     context.report({
       severity: "error",
       file,
-      range: rangeOf(parent),
+      range: {
+        start: parent.getSourceFile().getLineAndColumnAtPos(parent.getStart()),
+        end: parent.getSourceFile().getLineAndColumnAtPos(parent.getEnd()),
+      },
       message: "JSON.parse result is used before schema.parse/safeParse.",
       suggestion: PARSE_SUGGESTION,
     });
@@ -108,7 +114,10 @@ function scanJsonParse(node: Node, file: string, context: Pick<RuleContext, "rep
     context.report({
       severity: "error",
       file,
-      range: rangeOf(child),
+      range: {
+        start: child.getSourceFile().getLineAndColumnAtPos(child.getStart()),
+        end: child.getSourceFile().getLineAndColumnAtPos(child.getEnd()),
+      },
       message: "JSON.parse result is used before schema.parse/safeParse.",
       suggestion: PARSE_SUGGESTION,
     });
@@ -131,15 +140,4 @@ function firstParsePos(fn: Node, names: ReadonlySet<string>): number | undefined
     }
   });
   return pos;
-}
-
-function enclosingFunction(node: Node) {
-  let current: Node | undefined = node.getParent();
-  while (current !== undefined) {
-    if (isFunctionLike(current)) {
-      return current;
-    }
-    current = current.getParent();
-  }
-  return undefined;
 }

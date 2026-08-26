@@ -6,6 +6,7 @@ import { expect, test } from "vitest";
 import { check } from "../../qualety/src/engine.ts";
 import { NO_SUGGESTION } from "../../qualety/src/index.ts";
 import plugin from "./index.ts";
+import { publicExportsTested } from "./public-exports-tested.ts";
 
 const silent = () => {};
 const here = fileURLToPath(new URL(".", import.meta.url));
@@ -43,6 +44,7 @@ function enabledConfig(extra: Record<string, unknown> = {}) {
 
 test("plugin exports name, rule, and recommended", () => {
   expect(plugin.name).toBe("ts");
+  expect(publicExportsTested).toBeDefined();
   expect(plugin.rules?.["public-exports-tested"]).toBeDefined();
   expect(plugin.configs?.recommended?.rules?.["ts/public-exports-tested"]).toBe("error");
 });

@@ -4,6 +4,21 @@ import { expect, test } from "vitest";
 import { check } from "../../qualety/src/engine.ts";
 import { NO_SUGGESTION } from "../../qualety/src/index.ts";
 import plugin from "./index.ts";
+import {
+  aliasesOf,
+  firstArgIdentifier,
+  functionLikeName,
+  isArgToSchemaParse,
+  isBoundaryName,
+  isFunctionLike,
+  isHandGuardCall,
+  isJsonParseCall,
+  isPropertyUse,
+  isSchemaParseCall,
+  isTypeofObjectGuard,
+  unknownParamNames,
+} from "./parse-flow.ts";
+import { zodBoundary } from "./zod-boundary.ts";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const fixtures = join(here, "../fixtures");
@@ -20,6 +35,19 @@ async function runFixture(name: string) {
 }
 
 test("plugin exports zod-boundary and recommended includes it", () => {
+  expect(zodBoundary).toBeDefined();
+  expect(aliasesOf).toEqual(expect.any(Function));
+  expect(firstArgIdentifier).toEqual(expect.any(Function));
+  expect(functionLikeName).toEqual(expect.any(Function));
+  expect(isArgToSchemaParse).toEqual(expect.any(Function));
+  expect(isBoundaryName).toEqual(expect.any(Function));
+  expect(isFunctionLike).toEqual(expect.any(Function));
+  expect(isHandGuardCall).toEqual(expect.any(Function));
+  expect(isJsonParseCall).toEqual(expect.any(Function));
+  expect(isPropertyUse).toEqual(expect.any(Function));
+  expect(isSchemaParseCall).toEqual(expect.any(Function));
+  expect(isTypeofObjectGuard).toEqual(expect.any(Function));
+  expect(unknownParamNames).toEqual(expect.any(Function));
   expect(plugin.rules?.["zod-boundary"]).toBeDefined();
   expect(plugin.configs?.recommended?.rules?.["ts/zod-boundary"]).toBe("error");
 });

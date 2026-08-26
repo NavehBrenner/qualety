@@ -1,11 +1,11 @@
-import type { Range } from "qualety";
+import type { RuleContext } from "qualety";
 import {
   type ArrowFunction,
   type FunctionDeclaration,
   type FunctionExpression,
   type MethodDeclaration,
   Node,
-  type SourceFile,
+  SourceFile,
 } from "ts-morph";
 
 export type FunctionLike =
@@ -19,13 +19,16 @@ const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete"]);
 const EFFECT_HOOKS = new Set(["useEffect", "useLayoutEffect"]);
 const QUERY_HOOKS = new Set(["useQuery", "useInfiniteQuery"]);
 
-export function rangeOf(node: Node): Range {
-  const sf = node.getSourceFile();
-  const start = sf.getLineAndColumnAtPos(node.getStart());
-  const end = sf.getLineAndColumnAtPos(node.getEnd());
-  return {
-    start: { line: start.line, column: start.column },
-    end: { line: end.line, column: end.column },
+export function bindFileScan(
+  scan: (sf: SourceFile, file: string, context: Pick<RuleContext, "report">) => void,
+): (context: RuleContext) => void {
+  return (context) => {
+    const sources = context.getArtifact("typescript").sources;
+    for (const [abs, unit] of sources) {
+      if (unit instanceof SourceFile) {
+        scan(unit, abs, context);
+      }
+    }
   };
 }
 
@@ -54,25 +57,11 @@ export function collectReactEffectBindings(sf: SourceFile): {
   effects: Set<string>;
   namespaces: Set<string>;
 } {
+  const { named, namespaces } = collectMatchingImports(sf, isReactSpecifier);
   const effects = new Set<string>();
-  const namespaces = new Set<string>();
-  for (const decl of sf.getImportDeclarations()) {
-    const spec = decl.getModuleSpecifierValue();
-    if (spec !== "react" && !spec.startsWith("react/")) {
-      continue;
-    }
-    const def = decl.getDefaultImport();
-    if (def !== undefined) {
-      namespaces.add(def.getText());
-    }
-    const ns = decl.getNamespaceImport();
-    if (ns !== undefined) {
-      namespaces.add(ns.getText());
-    }
-    for (const named of decl.getNamedImports()) {
-      if (EFFECT_HOOKS.has(named.getName())) {
-        effects.add(named.getAliasNode()?.getText() ?? named.getName());
-      }
+  for (const item of named) {
+    if (EFFECT_HOOKS.has(item.imported)) {
+      effects.add(item.local);
     }
   }
   return { effects, namespaces };
@@ -120,11 +109,21 @@ export function collectQueryHookBindings(sf: SourceFile): {
   hooks: Map<string, string>;
   namespaces: Set<string>;
 } {
+  const { named, namespaces } = collectMatchingImports(sf, isTanstackQuerySpecifier);
   const hooks = new Map<string, string>();
+  for (const item of named) {
+    if (QUERY_HOOKS.has(item.imported)) {
+      hooks.set(item.local, item.imported);
+    }
+  }
+  return { hooks, namespaces };
+}
+
+function collectMatchingImports(sf: SourceFile, matchSpec: (spec: string) => boolean) {
+  const named: { local: string; imported: string }[] = [];
   const namespaces = new Set<string>();
   for (const decl of sf.getImportDeclarations()) {
-    const spec = decl.getModuleSpecifierValue();
-    if (spec !== "@tanstack/react-query" && !spec.startsWith("@tanstack/react-query/")) {
+    if (!matchSpec(decl.getModuleSpecifierValue())) {
       continue;
     }
     const def = decl.getDefaultImport();
@@ -135,13 +134,14 @@ export function collectQueryHookBindings(sf: SourceFile): {
     if (ns !== undefined) {
       namespaces.add(ns.getText());
     }
-    for (const named of decl.getNamedImports()) {
-      if (QUERY_HOOKS.has(named.getName())) {
-        hooks.set(named.getAliasNode()?.getText() ?? named.getName(), named.getName());
-      }
+    for (const item of decl.getNamedImports()) {
+      named.push({
+        local: item.getAliasNode()?.getText() ?? item.getName(),
+        imported: item.getName(),
+      });
     }
   }
-  return { hooks, namespaces };
+  return { named, namespaces };
 }
 
 export function isEffectCall(call: Node, effects: Set<string>, namespaces: Set<string>): boolean {

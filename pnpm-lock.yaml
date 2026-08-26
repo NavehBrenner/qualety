@@ -14,6 +14,12 @@ importers:
       '@qualety/dev':
         specifier: workspace:*
         version: link:packages/dev
+      '@qualety/dry':
+        specifier: workspace:*
+        version: link:packages/dry
+      '@qualety/plugin-kit':
+        specifier: workspace:*
+        version: link:packages/plugin-kit
       '@qualety/typescript':
         specifier: workspace:*
         version: link:packages/typescript
@@ -51,6 +57,19 @@ importers:
       zod:
         specifier: ^4.0.17
         version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+
+  packages/plugin-kit:
+    dependencies:
+      qualety:
+        specifier: workspace:*
+        version: link:../qualety
+      ts-morph:
+        specifier: ^28.0.0
+        version: 28.0.0
     devDependencies:
       '@types/node':
         specifier: ^26.2.0

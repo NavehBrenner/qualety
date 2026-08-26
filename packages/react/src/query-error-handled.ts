@@ -1,11 +1,11 @@
 import { defineRule, type RuleContext } from "qualety";
-import { Node, SourceFile } from "ts-morph";
+import { Node, type SourceFile } from "ts-morph";
 import {
+  bindFileScan,
   collectQueryHookBindings,
   enclosingFunction,
   isFunctionLike,
   queryHookName,
-  rangeOf,
 } from "./ast.ts";
 
 const SUGGESTION =
@@ -25,14 +25,7 @@ export const queryErrorHandled = defineRule({
       description: "Every TanStack useQuery / useInfiniteQuery usage must handle errors.",
     },
   },
-  create(context) {
-    const parsed = context.getArtifact("typescript");
-    for (const [abs, unit] of parsed.sources) {
-      if (unit instanceof SourceFile) {
-        scanFile(unit, abs, context);
-      }
-    }
-  },
+  create: bindFileScan(scanFile),
 });
 
 function scanFile(sf: SourceFile, file: string, context: Pick<RuleContext, "report">): void {
@@ -52,7 +45,10 @@ function scanFile(sf: SourceFile, file: string, context: Pick<RuleContext, "repo
     context.report({
       severity: "error",
       file,
-      range: rangeOf(node),
+      range: {
+        start: node.getSourceFile().getLineAndColumnAtPos(node.getStart()),
+        end: node.getSourceFile().getLineAndColumnAtPos(node.getEnd()),
+      },
       message: `${hook} error is unhandled.`,
       suggestion: SUGGESTION,
     });

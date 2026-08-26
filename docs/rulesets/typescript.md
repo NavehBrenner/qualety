@@ -38,7 +38,7 @@ High-signal only. Same function body; not a philosophy linter.
 
 A runtime check on a value is legitimate only if the TypeScript checker shows a **strict refinement** of that subject on the true / success path. Unchanged type is theater.
 
-Candidates (evaluated, not automatic fails): type predicate / `asserts` / `isX` / `assertX`; `typeof`; `instanceof`; nullish / presence on one binding or property; truthiness where TS can refine; non-empty array `length > 0` / `>= 1` / `!== 0`; schema `.safeParse` / `.parse` when the success path still uses the original binding.
+Candidates (evaluated, not automatic fails): type predicate / `asserts` / `isX` / `assertX`; `typeof`; `instanceof`; nullish / presence on one binding or property; truthiness where TS can refine; non-empty array `length > 0` / `>= 1` / `!== 0`; schema `.safeParse` / `.parse` when the success path still uses the original binding. Compound `&&` leaves are evaluated; `||` is left whole (underapprox). True path is the enclosing `if` / ternary.
 
 **Pass:** true-path type is a strict refinement (`T | undefined` → `T`, `Node` → `FunctionLike`, `T[]` → non-empty, predicate / `instanceof` / `typeof` refine, schema success uses `.data`).
 

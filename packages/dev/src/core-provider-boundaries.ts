@@ -52,11 +52,13 @@ function reportDupehoundCall(
   if (!Node.isCallExpression(node)) {
     return false;
   }
-  if (isRequireLike(node) && stringArg(node, 0)?.includes("dupehound") === true) {
-    reportDupe(context, file, node);
-    return true;
-  }
   const expr = node.getExpression();
+  if (Node.isIdentifier(expr)) {
+    if (expr.getText() === "require" && stringArg(node, 0)?.includes("dupehound") === true) {
+      reportDupe(context, file, node);
+      return true;
+    }
+  }
   const spawnLike =
     (Node.isIdentifier(expr) && SPAWN_CALLEES.has(expr.getText())) ||
     (Node.isPropertyAccessExpression(expr) && SPAWN_CALLEES.has(expr.getName()));
@@ -95,7 +97,11 @@ function scanTsMorph(sourceFile: SourceFile, file: string, context: Pick<RuleCon
     }
   }
   sourceFile.forEachDescendant((node) => {
-    if (!Node.isCallExpression(node) || !isRequireLike(node)) {
+    if (!Node.isCallExpression(node)) {
+      return;
+    }
+    const callee = node.getExpression();
+    if (!Node.isIdentifier(callee) || callee.getText() !== "require") {
       return;
     }
     const spec = stringArg(node, 0);
@@ -133,14 +139,6 @@ function exportsCreateTypeScriptProvider(sourceFile: SourceFile): boolean {
 
 function isTsMorphSpecifier(specifier: string): boolean {
   return specifier === "ts-morph" || specifier.startsWith("ts-morph/");
-}
-
-function isRequireLike(node: Node): boolean {
-  if (!Node.isCallExpression(node)) {
-    return false;
-  }
-  const expr = node.getExpression();
-  return Node.isIdentifier(expr) && expr.getText() === "require";
 }
 
 function callMentionsDupehound(node: Node): boolean {
