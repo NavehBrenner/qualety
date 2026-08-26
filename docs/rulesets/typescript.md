@@ -101,4 +101,4 @@ Use Biome, ESLint, or dependency-cruiser:
 
 ## Other first-class SPECS rules
 
-R1–R6 stay [SPECS](../SPECS.md) §3 pointers. React / compositional rules live in [`@qualety/react`](./react.md), not this plugin. Structural R4 (`dry/no-duplicate-functions`) lives in [`@qualety/dry`](./dry.md). R3 semantic tokens belong in a future `@qualety/tailwind` (or DS) plugin, not TypeScript, React, or dry. Stretch architecture fitness is not this plugin.
+R1–R6 stay [SPECS](../SPECS.md) §3 pointers. React / compositional rules live in [`@qualety/react`](./react.md), not this plugin. Structural R4 (`dry/no-duplicate-code`) lives in [`@qualety/dry`](./dry.md). R3 semantic tokens belong in a future `@qualety/tailwind` (or DS) plugin, not TypeScript, React, or dry. Stretch architecture fitness is not this plugin.

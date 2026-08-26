@@ -1,6 +1,6 @@
 import type { Plugin } from "qualety";
 import { buildDupehoundIndex } from "./dupehound.ts";
-import { noDuplicateFunctions } from "./no-duplicate-functions.ts";
+import { noDuplicateCode } from "./no-duplicate-code.ts";
 
 const plugin: Plugin = {
   name: "dry",
@@ -10,12 +10,12 @@ const plugin: Plugin = {
     },
   },
   rules: {
-    "no-duplicate-functions": noDuplicateFunctions,
+    "no-duplicate-code": noDuplicateCode,
   },
   configs: {
     recommended: {
       rules: {
-        "dry/no-duplicate-functions": "error",
+        "dry/no-duplicate-code": "error",
       },
     },
   },

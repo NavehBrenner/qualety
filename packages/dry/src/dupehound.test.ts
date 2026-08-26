@@ -83,7 +83,7 @@ function loadOpts(
     cwd: dir,
     files,
     exclude: [],
-    requiredBy: ["dry/no-duplicate-functions"],
+    requiredBy: ["dry/no-duplicate-code"],
     env: { [DUPEHOUND_ENV]: stub, PATH: "" },
   };
 }
@@ -180,7 +180,7 @@ test("dupehound constants and error type are exported", () => {
   expect(DUPEHOUND_PIN).toMatch(/^v/);
   expect(SCAN_TIMEOUT_MS).toBeGreaterThan(0);
   expect(new DupehoundError("x")).toBeInstanceOf(Error);
-  expect(missingBinaryMessage(["dry/no-duplicate-functions"])).toMatch(/dupehound/);
+  expect(missingBinaryMessage(["dry/no-duplicate-code"])).toMatch(/dupehound/);
 });
 
 test("resolveDupehoundBinary fails closed when missing", () => {
@@ -222,7 +222,7 @@ test("buildDupehoundIndex fails closed on bad JSON and tool errors", async () =>
 
   const fail = await writeStub(dir, "", 2, "dupehound-fail.mjs");
   await expect(buildDupehoundIndex(loadOpts(dir, fail, ["src/a.ts"]))).rejects.toThrow(
-    /dupehound failed|required by dry\/no-duplicate-functions/,
+    /dupehound failed|required by dry\/no-duplicate-code/,
   );
 });
 
@@ -253,7 +253,7 @@ setInterval(() => {}, 1 << 30);
   );
   await expect(
     buildDupehoundIndex({ ...loadOpts(dir, path, ["src/a.ts"]), timeoutMs: 200 }),
-  ).rejects.toThrow(/timed out|required by dry\/no-duplicate-functions/);
+  ).rejects.toThrow(/timed out|required by dry\/no-duplicate-code/);
 });
 
 test("buildDupehoundIndex fails closed when the binary is missing", async () => {
@@ -263,8 +263,8 @@ test("buildDupehoundIndex fails closed when the binary is missing", async () => 
       cwd: dir,
       files: ["src/a.ts"],
       exclude: [],
-      requiredBy: ["dry/no-duplicate-functions"],
+      requiredBy: ["dry/no-duplicate-code"],
       env: { PATH: "/nonexistent" },
     }),
-  ).rejects.toThrow(/dupehound is not installed|dry\/no-duplicate-functions/);
+  ).rejects.toThrow(/dupehound is not installed|dry\/no-duplicate-code/);
 });

@@ -8,6 +8,6 @@
     "ts/public-exports-tested": "error",
     "react/no-fetch-in-useeffect": "error",
     "react/query-error-handled": "error",
-    "dry/no-duplicate-functions": "error"
+    "dry/no-duplicate-code": "error"
   }
 }
