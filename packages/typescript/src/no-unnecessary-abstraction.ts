@@ -210,17 +210,17 @@ function sameFileCallCount(fn: FunctionLike): number {
     return 0;
   }
   let count = 0;
-  fn.getSourceFile().forEachDescendant((node) => {
-    if (!Node.isIdentifier(node) || node === nameNode || node.getText() !== nameNode.getText()) {
-      return;
+  for (const node of fn.getSourceFile().getDescendantsOfKind(SyntaxKind.Identifier)) {
+    if (node === nameNode || node.getText() !== nameNode.getText()) {
+      continue;
     }
     if (!sameSymbol(node.getSymbol(), symbol) || !isCalleeIdentifier(node)) {
-      return;
+      continue;
     }
     if (!fn.containsRange(node.getStart(), node.getEnd())) {
       count += 1;
     }
-  });
+  }
   return count;
 }
 
@@ -231,14 +231,14 @@ function sameFileTypeUses(decl: TypeAliasDeclaration | InterfaceDeclaration): nu
     return 0;
   }
   let count = 0;
-  decl.getSourceFile().forEachDescendant((node) => {
-    if (!Node.isIdentifier(node) || node === nameNode || node.getText() !== decl.getName()) {
-      return;
+  for (const node of decl.getSourceFile().getDescendantsOfKind(SyntaxKind.Identifier)) {
+    if (node === nameNode || node.getText() !== decl.getName()) {
+      continue;
     }
     if (sameSymbol(node.getSymbol(), symbol)) {
       count += 1;
     }
-  });
+  }
   return count;
 }
 

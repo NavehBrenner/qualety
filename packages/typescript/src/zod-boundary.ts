@@ -50,22 +50,13 @@ function scanBoundary(fn: FunctionLike, file: string, context: Pick<RuleContext,
     return;
   }
   for (const param of unknownParamNames(fn)) {
-    const names = aliasesOf(fn, param);
-    const parseAt = firstParsePos(fn, names);
-    fn.forEachDescendant((node) => {
-      if (!isPropertyUse(node, names)) {
-        return;
-      }
-      if (parseAt !== undefined && node.getStart() > parseAt) {
-        return;
-      }
-      reportParse(
-        node,
-        file,
-        context,
-        `Load/parse function "${name}" uses untrusted parameter "${param}" before schema.parse/safeParse.`,
-      );
-    });
+    reportUsesBeforeParse(
+      fn,
+      aliasesOf(fn, param),
+      file,
+      context,
+      `Load/parse function "${name}" uses untrusted parameter "${param}" before schema.parse/safeParse.`,
+    );
   }
 }
 
@@ -98,51 +89,57 @@ function scanJsonParse(node: Node, file: string, context: Pick<RuleContext, "rep
   if (fn === undefined) {
     return;
   }
-  const names = aliasesOf(fn, binding);
-  const parseAt = firstParsePos(fn, names);
-  fn.forEachDescendant((child) => {
-    if (!isPropertyUse(child, names)) {
-      return;
-    }
-    if (parseAt !== undefined && child.getStart() > parseAt) {
-      return;
-    }
-    reportParse(child, file, context, "JSON.parse result is used before schema.parse/safeParse.");
-  });
+  reportUsesBeforeParse(
+    fn,
+    aliasesOf(fn, binding),
+    file,
+    context,
+    "JSON.parse result is used before schema.parse/safeParse.",
+  );
 }
 
-function reportParse(
-  node: Node,
+function reportUsesBeforeParse(
+  fn: FunctionLike,
+  names: ReadonlySet<string>,
   file: string,
   context: Pick<RuleContext, "report">,
   message: string,
 ) {
-  context.report({
-    severity: "error",
-    file,
-    range: {
-      start: node.getSourceFile().getLineAndColumnAtPos(node.getStart()),
-      end: node.getSourceFile().getLineAndColumnAtPos(node.getEnd()),
-    },
-    message,
-    suggestion: PARSE_SUGGESTION,
-  });
+  const parseAt = firstParsePos(fn, names);
+  for (const node of fn.getDescendants()) {
+    if (!isPropertyUse(node, names)) {
+      continue;
+    }
+    if (parseAt !== undefined && node.getStart() > parseAt) {
+      continue;
+    }
+    context.report({
+      severity: "error",
+      file,
+      range: {
+        start: node.getSourceFile().getLineAndColumnAtPos(node.getStart()),
+        end: node.getSourceFile().getLineAndColumnAtPos(node.getEnd()),
+      },
+      message,
+      suggestion: PARSE_SUGGESTION,
+    });
+  }
 }
 
 function firstParsePos(fn: Node, names: ReadonlySet<string>): number | undefined {
   let pos: number | undefined;
-  fn.forEachDescendant((node) => {
+  for (const node of fn.getDescendants()) {
     if (!isSchemaParseCall(node)) {
-      return;
+      continue;
     }
     const arg = firstArgIdentifier(node);
     if (arg === undefined || !names.has(arg)) {
-      return;
+      continue;
     }
     const start = node.getStart();
     if (pos === undefined || start < pos) {
       pos = start;
     }
-  });
+  }
   return pos;
 }

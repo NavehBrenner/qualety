@@ -53,22 +53,31 @@ function collectGraphs(sources: ReadonlyMap<string, unknown>): {
     }
     const indexPath = index.getFilePath();
     ruleFiles.add(indexPath);
-    const localImports = localNameTargets(index, sources);
-    index.forEachDescendant((node) => {
-      if (!Node.isPropertyAssignment(node)) {
-        return;
-      }
-      const name = node.getName();
-      const init = node.getInitializer();
-      if (name === "rules" && init !== undefined && Node.isObjectLiteralExpression(init)) {
-        collectIdentifierTargets(init, localImports, ruleFiles);
-      }
-      if (name === "provides" && init !== undefined && Node.isObjectLiteralExpression(init)) {
-        collectIdentifierTargets(init, localImports, providerFiles);
-      }
-    });
+    ingestIndex(index, sources, ruleFiles, providerFiles);
   }
   return { ruleFiles, providerFiles };
+}
+
+function ingestIndex(
+  index: SourceFile,
+  sources: ReadonlyMap<string, unknown>,
+  ruleFiles: Set<string>,
+  providerFiles: Set<string>,
+) {
+  const localImports = localNameTargets(index, sources);
+  for (const node of index.getDescendants()) {
+    if (!Node.isPropertyAssignment(node)) {
+      continue;
+    }
+    const name = node.getName();
+    const init = node.getInitializer();
+    if (name === "rules" && init !== undefined && Node.isObjectLiteralExpression(init)) {
+      collectIdentifierTargets(init, localImports, ruleFiles);
+    }
+    if (name === "provides" && init !== undefined && Node.isObjectLiteralExpression(init)) {
+      collectIdentifierTargets(init, localImports, providerFiles);
+    }
+  }
 }
 
 function localNameTargets(
