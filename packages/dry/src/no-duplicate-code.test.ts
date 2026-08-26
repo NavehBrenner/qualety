@@ -572,6 +572,26 @@ test("fragment renamed locals still cluster", async () => {
   expect(result.out).not.toMatch(NO_SUGGESTION);
 });
 
+test("fragment nested stop clusters same outer with different nested bodies", async () => {
+  const result = await runFixture("fragment-nested-stop", emptyReport);
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/dry\/no-duplicate-code/);
+  expect(result.out).toMatch(/contains duplicate logical code of "processAlpha"/);
+  expect(result.out).toMatch(/suggestion: Extract a shared helper/);
+  expect(result.out).not.toMatch(NO_SUGGESTION);
+});
+
+test("fragment nested inner still clusters nested bodies", async () => {
+  const result = await runFixture("fragment-nested-inner", emptyReport);
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/dry\/no-duplicate-code/);
+  expect(result.out).toMatch(/contains duplicate logical code of "sharedInner"/);
+  expect(result.out).toMatch(/suggestion: Extract a shared helper/);
+  expect(result.out).not.toMatch(NO_SUGGESTION);
+});
+
 test("fragment quiet paths and type-only shapes exit 0", async () => {
   const result = await runFixture("fragment-quiet", emptyReport);
   expect(result.err).toBe("");

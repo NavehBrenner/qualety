@@ -136,7 +136,7 @@ function addWindowsFrom(
     const count = end - start + 1;
     if (
       loc < MIN_WINDOW_LINES ||
-      (count === 1 && CONTROL_KINDS.has(first.getKind())) ||
+      (count === 1 && (CONTROL_KINDS.has(first.getKind()) || hasNestedFunctionLike(first))) ||
       (count === 2 && loc < 10)
     ) {
       continue;
@@ -168,6 +168,9 @@ function addWindowsFrom(
 
 function hashNode(node: Node, parts: string[]) {
   parts.push(`K${node.getKind()}`);
+  if (hashNestedFunctionLike(node, parts)) {
+    return;
+  }
   if (Node.isIdentifier(node)) {
     parts.push(keptNameText(node));
     return;
@@ -210,6 +213,37 @@ function hashNode(node: Node, parts: string[]) {
   }
 }
 
+function hashNestedFunctionLike(node: Node, parts: string[]): boolean {
+  if (!NESTED_FN_KINDS.has(node.getKind())) {
+    return false;
+  }
+  if (
+    Node.isFunctionDeclaration(node) ||
+    Node.isFunctionExpression(node) ||
+    Node.isMethodDeclaration(node) ||
+    Node.isGetAccessorDeclaration(node) ||
+    Node.isSetAccessorDeclaration(node)
+  ) {
+    const nameNode = node.getNameNode();
+    if (nameNode !== undefined) {
+      parts.push(keptNameText(nameNode));
+    }
+  }
+  return true;
+}
+
+function hasNestedFunctionLike(node: Node): boolean {
+  if (NESTED_FN_KINDS.has(node.getKind())) {
+    return true;
+  }
+  for (const child of node.getChildren()) {
+    if (hasNestedFunctionLike(child)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function keptNameText(node: Node): string {
   const parent = node.getParent();
   if (parent === undefined) {
@@ -238,6 +272,16 @@ function keptNameText(node: Node): string {
   }
   return "#";
 }
+
+const NESTED_FN_KINDS = new Set<SyntaxKind>([
+  SyntaxKind.FunctionDeclaration,
+  SyntaxKind.FunctionExpression,
+  SyntaxKind.ArrowFunction,
+  SyntaxKind.MethodDeclaration,
+  SyntaxKind.Constructor,
+  SyntaxKind.GetAccessor,
+  SyntaxKind.SetAccessor,
+]);
 
 const CONTROL_KINDS = new Set<SyntaxKind>([
   SyntaxKind.IfStatement,
