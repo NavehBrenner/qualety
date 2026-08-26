@@ -59,16 +59,12 @@ function scanBoundary(fn: FunctionLike, file: string, context: Pick<RuleContext,
       if (parseAt !== undefined && node.getStart() > parseAt) {
         return;
       }
-      context.report({
-        severity: "error",
+      reportParse(
+        node,
         file,
-        range: {
-          start: node.getSourceFile().getLineAndColumnAtPos(node.getStart()),
-          end: node.getSourceFile().getLineAndColumnAtPos(node.getEnd()),
-        },
-        message: `Load/parse function "${name}" uses untrusted parameter "${param}" before schema.parse/safeParse.`,
-        suggestion: PARSE_SUGGESTION,
-      });
+        context,
+        `Load/parse function "${name}" uses untrusted parameter "${param}" before schema.parse/safeParse.`,
+      );
     });
   }
 }
@@ -111,16 +107,25 @@ function scanJsonParse(node: Node, file: string, context: Pick<RuleContext, "rep
     if (parseAt !== undefined && child.getStart() > parseAt) {
       return;
     }
-    context.report({
-      severity: "error",
-      file,
-      range: {
-        start: child.getSourceFile().getLineAndColumnAtPos(child.getStart()),
-        end: child.getSourceFile().getLineAndColumnAtPos(child.getEnd()),
-      },
-      message: "JSON.parse result is used before schema.parse/safeParse.",
-      suggestion: PARSE_SUGGESTION,
-    });
+    reportParse(child, file, context, "JSON.parse result is used before schema.parse/safeParse.");
+  });
+}
+
+function reportParse(
+  node: Node,
+  file: string,
+  context: Pick<RuleContext, "report">,
+  message: string,
+) {
+  context.report({
+    severity: "error",
+    file,
+    range: {
+      start: node.getSourceFile().getLineAndColumnAtPos(node.getStart()),
+      end: node.getSourceFile().getLineAndColumnAtPos(node.getEnd()),
+    },
+    message,
+    suggestion: PARSE_SUGGESTION,
   });
 }
 

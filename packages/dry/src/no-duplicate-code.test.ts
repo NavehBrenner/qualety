@@ -6,10 +6,11 @@ import { expect, test } from "vitest";
 import { check } from "../../qualety/src/engine.ts";
 import { NO_SUGGESTION } from "../../qualety/src/index.ts";
 import { resolveDupehoundBinary } from "./dupehound.ts";
-import { reportsFromIndex } from "./no-duplicate-functions.ts";
+import { reportsFromIndex } from "./no-duplicate-code.ts";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const fixtures = join(here, "../fixtures");
+const emptyReport = { schema_version: 2, clusters: [] };
 
 const canned = {
   clusters: [
@@ -116,13 +117,13 @@ function hasRealDupehound(): boolean {
 test("reportsFromIndex maps a cluster to a concrete suggestion", () => {
   const reports = reportsFromIndex(canned);
   expect(reports).toHaveLength(1);
-  expect(reports[0]?.file).toBe("src/billing.ts");
+  expect(reports[0]?.file).toBe("src/invoice.ts");
   expect(reports[0]?.message).toMatch(
-    /"calculateBillingTotal" is a structural duplicate of "computeOrderTotal"/,
+    /"computeOrderTotal" is duplicate logical code of "calculateBillingTotal"/,
   );
-  expect(reports[0]?.suggestion).toMatch(/Reuse "computeOrderTotal" from src\/invoice\.ts:1/);
+  expect(reports[0]?.suggestion).toMatch(/Reuse "calculateBillingTotal" from src\/billing\.ts:3/);
   expect(reports[0]?.suggestion).not.toBe(NO_SUGGESTION);
-  expect(reports[0]?.range.start).toEqual({ line: 3, column: 1 });
+  expect(reports[0]?.range.start).toEqual({ line: 1, column: 1 });
 });
 
 test("reportsFromIndex maps class methods", () => {
@@ -154,8 +155,8 @@ test("reportsFromIndex maps class methods", () => {
     ],
   });
   expect(reports).toHaveLength(1);
-  expect(reports[0]?.message).toMatch(/"Billing.calculateBillingTotal"/);
-  expect(reports[0]?.suggestion).toMatch(/Reuse "Invoice.computeOrderTotal"/);
+  expect(reports[0]?.message).toMatch(/"Invoice.computeOrderTotal"/);
+  expect(reports[0]?.suggestion).toMatch(/Reuse "Billing.calculateBillingTotal"/);
 });
 
 test("reportsFromIndex maps arrow / const function-likes", () => {
@@ -187,7 +188,7 @@ test("reportsFromIndex maps arrow / const function-likes", () => {
     ],
   });
   expect(reports).toHaveLength(1);
-  expect(reports[0]?.file).toBe("src/billing.ts");
+  expect(reports[0]?.file).toBe("src/invoice.ts");
   expect(reports[0]?.range.start.line).toBe(1);
 });
 
@@ -203,7 +204,7 @@ test("reportsFromIndex flags only non-representatives in a multi-member cluster"
             file: "src/invoice.ts",
             name: "alpha",
             startLine: 1,
-            endLine: 10,
+            endLine: 20,
             representative: true,
             test: false,
           },
@@ -211,7 +212,7 @@ test("reportsFromIndex flags only non-representatives in a multi-member cluster"
             file: "src/billing.ts",
             name: "beta",
             startLine: 1,
-            endLine: 10,
+            endLine: 20,
             representative: false,
             test: false,
           },
@@ -219,7 +220,7 @@ test("reportsFromIndex flags only non-representatives in a multi-member cluster"
             file: "src/ledger.ts",
             name: "gamma",
             startLine: 4,
-            endLine: 14,
+            endLine: 24,
             representative: false,
             test: false,
           },
@@ -227,8 +228,118 @@ test("reportsFromIndex flags only non-representatives in a multi-member cluster"
       },
     ],
   });
-  expect(reports.map((item) => item.file)).toEqual(["src/billing.ts", "src/ledger.ts"]);
-  expect(reports.every((item) => item.message.includes('"alpha"'))).toBe(true);
+  expect(reports.map((item) => item.file)).toEqual(["src/invoice.ts", "src/ledger.ts"]);
+  expect(reports.every((item) => item.message.includes('"beta"'))).toBe(true);
+});
+
+test("reportsFromIndex span 9 × 2 is quiet", () => {
+  const reports = reportsFromIndex({
+    clusters: [
+      {
+        id: 10,
+        similarity: 1,
+        testOnly: false,
+        members: [
+          {
+            file: "a.ts",
+            name: "a",
+            startLine: 1,
+            endLine: 9,
+            representative: true,
+            test: false,
+          },
+          {
+            file: "b.ts",
+            name: "b",
+            startLine: 1,
+            endLine: 9,
+            representative: false,
+            test: false,
+          },
+        ],
+      },
+    ],
+  });
+  expect(reports).toHaveLength(0);
+});
+
+test("reportsFromIndex span 10 × 2 reports", () => {
+  const reports = reportsFromIndex({
+    clusters: [
+      {
+        id: 11,
+        similarity: 1,
+        testOnly: false,
+        members: [
+          {
+            file: "a.ts",
+            name: "a",
+            startLine: 1,
+            endLine: 10,
+            representative: true,
+            test: false,
+          },
+          {
+            file: "b.ts",
+            name: "b",
+            startLine: 1,
+            endLine: 10,
+            representative: false,
+            test: false,
+          },
+        ],
+      },
+    ],
+  });
+  expect(reports).toHaveLength(1);
+  expect(reports[0]?.file).toBe("b.ts");
+});
+
+test("reportsFromIndex 4 tiny spans reports", () => {
+  const reports = reportsFromIndex({
+    clusters: [
+      {
+        id: 12,
+        similarity: 1,
+        testOnly: false,
+        members: [
+          {
+            file: "a.ts",
+            name: "a",
+            startLine: 1,
+            endLine: 2,
+            representative: true,
+            test: false,
+          },
+          {
+            file: "b.ts",
+            name: "b",
+            startLine: 1,
+            endLine: 2,
+            representative: false,
+            test: false,
+          },
+          {
+            file: "c.ts",
+            name: "c",
+            startLine: 1,
+            endLine: 2,
+            representative: false,
+            test: false,
+          },
+          {
+            file: "d.ts",
+            name: "d",
+            startLine: 1,
+            endLine: 2,
+            representative: false,
+            test: false,
+          },
+        ],
+      },
+    ],
+  });
+  expect(reports.map((item) => item.file)).toEqual(["b.ts", "c.ts", "d.ts"]);
 });
 
 test("duplicate pair exits 1 with concrete suggestion", async () => {
@@ -236,9 +347,9 @@ test("duplicate pair exits 1 with concrete suggestion", async () => {
   expect(result.err).toBe("");
   expect(result.code).toBe(1);
   expect(result.out).toMatch(
-    /src\/billing\.ts:3:1\s+error\s+dry\/no-duplicate-functions\s+"calculateBillingTotal" is a structural duplicate/,
+    /src\/invoice\.ts:1:1\s+error\s+dry\/no-duplicate-code\s+"computeOrderTotal" is duplicate logical code/,
   );
-  expect(result.out).toMatch(/suggestion: Reuse "computeOrderTotal"/);
+  expect(result.out).toMatch(/suggestion: Reuse "calculateBillingTotal"/);
   expect(result.out).not.toMatch(NO_SUGGESTION);
 });
 
@@ -273,8 +384,8 @@ test("method pair exits 1", async () => {
   });
   expect(result.err).toBe("");
   expect(result.code).toBe(1);
-  expect(result.out).toMatch(/Billing.calculateBillingTotal/);
-  expect(result.out).toMatch(/suggestion: Reuse "Invoice.computeOrderTotal"/);
+  expect(result.out).toMatch(/Invoice.computeOrderTotal/);
+  expect(result.out).toMatch(/suggestion: Reuse "Billing.calculateBillingTotal"/);
 });
 
 test("arrow / const function-like pair exits 1", async () => {
@@ -308,14 +419,14 @@ test("arrow / const function-like pair exits 1", async () => {
   });
   expect(result.err).toBe("");
   expect(result.code).toBe(1);
-  expect(result.out).toMatch(/src\/billing\.ts:1:1\s+error\s+dry\/no-duplicate-functions/);
+  expect(result.out).toMatch(/src\/invoice\.ts:1:1\s+error\s+dry\/no-duplicate-code/);
 });
 
 test("unique functions exit 0", async () => {
-  const result = await runFixture("unique", { schema_version: 2, clusters: [] });
+  const result = await runFixture("unique", emptyReport);
   expect(result.err).toBe("");
   expect(result.code).toBe(0);
-  expect(result.out).not.toMatch(/dry\/no-duplicate-functions/);
+  expect(result.out).not.toMatch(/dry\/no-duplicate-code/);
 });
 
 test("tests are excluded", async () => {
@@ -335,22 +446,22 @@ test("tests are excluded", async () => {
   });
   expect(result.err).toBe("");
   expect(result.code).toBe(0);
-  expect(result.out).not.toMatch(/dry\/no-duplicate-functions/);
+  expect(result.out).not.toMatch(/dry\/no-duplicate-code/);
 });
 
 test("generated files are excluded", async () => {
-  const result = await runFixture("generated-excluded", { schema_version: 2, clusters: [] });
+  const result = await runFixture("generated-excluded", emptyReport);
   expect(result.err).toBe("");
   expect(result.code).toBe(0);
-  expect(result.out).not.toMatch(/dry\/no-duplicate-functions/);
+  expect(result.out).not.toMatch(/dry\/no-duplicate-code/);
 });
 
 test("warn severity prints warn and still exits 1", async () => {
   const result = await runFixture("warn-severity", cannedReport);
   expect(result.err).toBe("");
   expect(result.code).toBe(1);
-  expect(result.out).toMatch(/\swarn\s+dry\/no-duplicate-functions\s+/);
-  expect(result.out).not.toMatch(/\serror\s+dry\/no-duplicate-functions\s+/);
+  expect(result.out).toMatch(/\swarn\s+dry\/no-duplicate-code\s+/);
+  expect(result.out).not.toMatch(/\serror\s+dry\/no-duplicate-code\s+/);
 });
 
 test("missing dupehound binary exits 2 and names the rule", async () => {
@@ -375,7 +486,7 @@ test("missing dupehound binary exits 2 and names the rule", async () => {
     }
   }
   expect(errors.join("\n")).toMatch(/dupehound/i);
-  expect(errors.join("\n")).toMatch(/dry\/no-duplicate-functions/);
+  expect(errors.join("\n")).toMatch(/dry\/no-duplicate-code/);
 });
 
 test("bad dupehound JSON exits 2 and names the rule", async () => {
@@ -406,7 +517,7 @@ process.stdout.write("not-json");
     }
   }
   expect(errors.join("\n")).toMatch(/dupehound/i);
-  expect(errors.join("\n")).toMatch(/dry\/no-duplicate-functions/);
+  expect(errors.join("\n")).toMatch(/dry\/no-duplicate-code/);
 });
 
 test("multi-plugin run attributes ts/, react/, and dry/ without cross-talk", async () => {
@@ -416,8 +527,76 @@ test("multi-plugin run attributes ts/, react/, and dry/ without cross-talk", asy
   expect(result.out).toMatch(/react\/no-fetch-in-useeffect/);
   expect(result.out).toMatch(/react\/query-error-handled/);
   expect(result.out).toMatch(/ts\/public-exports-tested/);
-  expect(result.out).toMatch(/dry\/no-duplicate-functions/);
+  expect(result.out).toMatch(/dry\/no-duplicate-code/);
   expect(result.out).not.toMatch(NO_SUGGESTION);
+});
+
+test("fragment 3-line × 3 is quiet under the report gate", async () => {
+  const result = await runFixture("fragment-3x3", emptyReport);
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+  expect(result.out).not.toMatch(/dry\/no-duplicate-code/);
+});
+
+test("fragment 3-line × 4 exits 1 with concrete suggestion", async () => {
+  const result = await runFixture("fragment-3x4", emptyReport);
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/dry\/no-duplicate-code/);
+  expect(result.out).toMatch(/contains duplicate logical code of "alpha" in src\/hosts\.ts:\d+/);
+  expect(result.out).toMatch(/src\/hosts\.ts:\d+:[2-9]\s+error\s+dry\/no-duplicate-code/);
+  expect(result.out).toMatch(/suggestion: Extract a shared helper from src\/hosts\.ts:\d+/);
+  expect(result.out).not.toMatch(NO_SUGGESTION);
+});
+
+test("fragment ~13-line × 2 exits 1 (joint ≥ 20)", async () => {
+  const result = await runFixture("fragment-13x2", emptyReport);
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/dry\/no-duplicate-code/);
+  expect(result.out).toMatch(
+    /contains duplicate logical code of "processLeft" in src\/left\.ts:\d+/,
+  );
+  expect(result.out).toMatch(/src\/right\.ts:\d+:[2-9]\s+error\s+dry\/no-duplicate-code/);
+  expect(result.out).toMatch(/suggestion: Extract a shared helper from src\/left\.ts:\d+/);
+  expect(result.out).not.toMatch(NO_SUGGESTION);
+});
+
+test("fragment renamed locals still cluster", async () => {
+  const result = await runFixture("fragment-renamed", emptyReport);
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/dry\/no-duplicate-code/);
+  expect(result.out).toMatch(/contains duplicate logical code of "processAlpha"/);
+  expect(result.out).toMatch(/suggestion: Extract a shared helper/);
+  expect(result.out).not.toMatch(NO_SUGGESTION);
+});
+
+test("fragment nested stop clusters same outer with different nested bodies", async () => {
+  const result = await runFixture("fragment-nested-stop", emptyReport);
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/dry\/no-duplicate-code/);
+  expect(result.out).toMatch(/contains duplicate logical code of "processAlpha"/);
+  expect(result.out).toMatch(/suggestion: Extract a shared helper/);
+  expect(result.out).not.toMatch(NO_SUGGESTION);
+});
+
+test("fragment nested inner still clusters nested bodies", async () => {
+  const result = await runFixture("fragment-nested-inner", emptyReport);
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/dry\/no-duplicate-code/);
+  expect(result.out).toMatch(/contains duplicate logical code of "sharedInner"/);
+  expect(result.out).toMatch(/suggestion: Extract a shared helper/);
+  expect(result.out).not.toMatch(NO_SUGGESTION);
+});
+
+test("fragment quiet paths and type-only shapes exit 0", async () => {
+  const result = await runFixture("fragment-quiet", emptyReport);
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+  expect(result.out).not.toMatch(/dry\/no-duplicate-code/);
 });
 
 test.skipIf(!hasRealDupehound())(
@@ -435,7 +614,7 @@ test.skipIf(!hasRealDupehound())(
       );
       expect(dupErr.join("\n")).toBe("");
       expect(dup).toBe(1);
-      expect(dupLines.join("\n")).toMatch(/dry\/no-duplicate-functions/);
+      expect(dupLines.join("\n")).toMatch(/dry\/no-duplicate-code/);
       expect(dupLines.join("\n")).toMatch(/suggestion: Reuse/);
 
       const uniqLines: string[] = [];
@@ -447,7 +626,7 @@ test.skipIf(!hasRealDupehound())(
       );
       expect(uniqErr.join("\n")).toBe("");
       expect(uniq).toBe(0);
-      expect(uniqLines.join("\n")).not.toMatch(/dry\/no-duplicate-functions/);
+      expect(uniqLines.join("\n")).not.toMatch(/dry\/no-duplicate-code/);
     } finally {
       if (prevBin === undefined) {
         delete process.env.QUALETY_DUPEHOUND;

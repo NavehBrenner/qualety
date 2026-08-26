@@ -12,7 +12,7 @@ export default defineConfig({
     "ts/type-narrowing-checks": "error",
     "ts/no-constant-condition": "error",
     "ts/no-unnecessary-abstraction": "error",
-    "dry/no-duplicate-functions": "error",
+    "dry/no-duplicate-code": "error",
     "plugin-kit/no-spawn-in-create": "error",
     "plugin-kit/prefer-define-rule": "error",
   },

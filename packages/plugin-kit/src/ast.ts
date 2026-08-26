@@ -155,13 +155,11 @@ function exportFromSpecifier(
   const resolved = resolve(dirname(fromFile), specifier);
   const ext = extname(resolved);
   const stem = SWAP_EXTS.has(ext) ? resolved.slice(0, -ext.length) : resolved;
-  const hits = [resolved];
-  for (const tsExt of TS_EXTS) {
-    hits.push(stem + tsExt);
-  }
-  for (const tsExt of TS_EXTS) {
-    hits.push(join(resolved, `index${tsExt}`));
-  }
+  const hits = [
+    resolved,
+    ...TS_EXTS.map((tsExt) => stem + tsExt),
+    ...TS_EXTS.map((tsExt) => join(resolved, `index${tsExt}`)),
+  ];
   let target: string | undefined;
   for (const hit of hits) {
     if (sources.has(hit)) {

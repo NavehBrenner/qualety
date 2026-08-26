@@ -148,11 +148,11 @@ function addExportFromStatement(stmt: Node, push: (name: string, node: Node) => 
 }
 
 function addNamedExportable(stmt: Node, push: (name: string, node: Node) => void): boolean {
-  if (
-    !Node.isFunctionDeclaration(stmt) &&
-    !Node.isClassDeclaration(stmt) &&
-    !Node.isEnumDeclaration(stmt)
-  ) {
+  const named =
+    Node.isFunctionDeclaration(stmt) ||
+    Node.isClassDeclaration(stmt) ||
+    Node.isEnumDeclaration(stmt);
+  if (!named) {
     return false;
   }
   if (!stmt.hasExportKeyword()) {
@@ -162,10 +162,12 @@ function addNamedExportable(stmt: Node, push: (name: string, node: Node) => void
     push("default", stmt.getNameNode() ?? stmt);
     return true;
   }
-  const name = stmt.getName();
   const nameNode = stmt.getNameNode();
-  if (name !== undefined && nameNode !== undefined) {
-    push(name, nameNode);
+  if (nameNode !== undefined) {
+    const name = stmt.getName();
+    if (name !== undefined) {
+      push(name, nameNode);
+    }
   }
   return true;
 }

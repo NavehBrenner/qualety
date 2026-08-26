@@ -41,7 +41,7 @@ These decisions are considered stable unless a major new constraint appears:
 
     **React plugin — what we own:** `react/no-fetch-in-useeffect` and `react/query-error-handled` (R1-lite). TanStack stays inside `@qualety/react` (detectors only). **R3 semantic tokens → future `@qualety/tailwind` (or DS), not react.**
 
-    **DRY plugin — what we own:** `dry/no-duplicate-functions` (structural R4 via dupehound). We wrap the dupehound CLI for agent-facing violations and plugin config; we do not re-own its fingerprinting algorithm. Embeddings / Slopo-style semantic near-dupes remain later. Architecture fitness only if we add something ArchUnit / dependency-cruiser do not already cover.
+    **DRY plugin — what we own:** `dry/no-duplicate-code` (structural R4: dupehound whole-function path plus ts-morph fragment windows). We wrap the dupehound CLI for whole-function fingerprints and plugin config; we do not re-own its winnowing / Jaccard. Fragment clones are exact structural hashes on statement windows. Embeddings / Slopo-style semantic near-dupes remain later. Architecture fitness only if we add something ArchUnit / dependency-cruiser do not already cover.
 
    **What we do not own** (use Biome, ESLint, or dependency-cruiser): circular imports; max relative import depth; simple path bans (`dist/`, `generated/`, …); deep-import / internal-module bans; generic layer charts those tools already do well.
 
@@ -104,7 +104,7 @@ These decisions are considered stable unless a major new constraint appears:
 
   `NO_SUGGESTION = "No suggestion available for this rule."`
 
-   Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-functions`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
+    Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-code`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
 - **Plugin**: A package that exports `name` plus optional `rules` and/or `provides`. Ruleless plugins (`name` + `provides` only) are shared providers.
 - **Artifact**: Opaque value built once per check when an enabled rule `requires` its id. One provider map: plugin `provides` first, then default registry gap-fill (`"typescript"` → `ParsedProject`; `"dupehound"` in `@qualety/dry`). Vector / embedding index is still future.
 
@@ -230,27 +230,30 @@ Implemented in `@qualety/react`.
 
 **Not the React plugin.** Future `@qualety/tailwind` (or DS). Do not add token/class allowlists to `@qualety/react`.
 
-### R4 — Structural DRY (`dry/no-duplicate-functions`)
+### R4 — Structural DRY (`dry/no-duplicate-code`)
 
-Implemented in `@qualety/dry` as **`dry/no-duplicate-functions`**.  
-`defineRule` with `requires: ["dupehound"]`; `getArtifact("dupehound")` is `DupehoundIndex` via `ArtifactMap` merge (no cast). Uses `getCwd`, `getFiles`, `getArtifact`, `report`. The **dry plugin** wraps [dupehound](https://github.com/Rafaelpta/dupehound) `scan --json` in `provides.dupehound.build`; core does not spawn it. We do not reimplement fingerprints.
+Implemented in `@qualety/dry` as **`dry/no-duplicate-code`** (renamed from `dry/no-duplicate-functions`; no dual-id window).  
+`defineRule` with `requires: ["dupehound", "typescript"]`; `getArtifact` is typed via `ArtifactMap` (no cast). Uses `getCwd`, `getFiles`, `getArtifact`, `report`. Dry still `provides.dupehound` only; default `"typescript"` fills the gap. The **rule** does not spawn CLIs. We do not re-own dupehound winnowing / Jaccard / pin.
 
-**Intent:** No structurally duplicate functions/methods in included non-test, non-generated sources.
+**Intent:** No duplicate logical code — whole function-likes **and** repeated intra-body fragments — in included non-test sources.
 
 | Topic | Decision |
 |--------|----------|
-| Engine | dupehound structural fingerprints (tree-sitter + winnowing — **not** embeddings). Dry provides artifact `"dupehound"`; the engine builds it once when any enabled rule `requires: ["dupehound"]` and exposes `getArtifact("dupehound")`. |
-| Out | Embeddings, Slopo, `query --similar`, auto-merge / codemods, TypeScript interface/type-alias / whole-class clone detection (needs another provider, e.g. similarity-ts or the checker — not more dupehound flags). Incremental `dupehound check --diff` is later (`--diff` / WP-015). |
-| Unit | All function-likes dupehound extracts (top-level, methods, arrow/`const` function-likes, `<anonymous>`). |
-| Skip | Tests (`--exclude-tests` + path rules), generated (dupehound defaults + our exclude), files outside include (post-filter). |
-| Threshold | dupehound scan default (0.80). Not configurable in v1. |
-| `min_tokens` | 40 (dupehound default). Short functions are a known miss. |
-| Violation | Copy (non-representative) location; `Omit<Violation, "ruleId">` only (engine stamps severity from config). Message names both functions and similarity; concrete reuse suggestion pointing at the original. Never `NO_SUGGESTION`. Range is best-effort (lines only, column 1). |
+| Engine | **Hybrid, one `ruleId`.** **Arm F** = dupehound whole-function path (`provides.dupehound`, pin **v0.1.2**, `min_tokens`, `--exclude-tests`). **Arm W** = ts-morph consecutive-statement windows. Merged reporting under `dry/no-duplicate-code`. |
+| Out | Embeddings, Slopo, `query --similar`, auto-merge / codemods, type/interface/type-alias clone detection, near-miss fragment reorder, options / `meta.schema`, a second rule id. Incremental `dupehound check --diff` is later (`--diff` / WP-015). |
+| Arm W unit | Consecutive statements in the same block (function body or nested `if`/`else`/`try`/`catch`/`for`/`while`/`switch` clause). Do not flatten nested function-likes. Module-level type/interface/alias clones are never windows. |
+| Arm W eligible | ≥ 3 non-blank lines of the span’s text (`split(/\n/)`, trim, drop empty). A single multi-line statement can qualify. |
+| Arm W hash | Exact structural: emit `SyntaxKind`; **hole** local binding identifiers; **keep** property names and literals; stop at nested function-likes. Type-2 on bindings only. No Jaccard / near-miss. |
+| Skip | `.d.ts`, `*.test.*` / `*.spec.*`, path segment `__tests__` or `fixtures`; honor exclude via `sources`. Do not add test globs to the global default exclude. Arm F also keeps dupehound `--exclude-tests` + generated defaults. |
+| Report gate | Detect at eligible sizes. **Report** a cluster only if `joint_loc >= 20` **OR** `repetitions >= 4`. `repetitions` = member count. `joint_loc` = `window_non_blank_lines * repetitions`. Arm F uses `endLine − startLine + 1` (min member span). Examples: 3×3 quiet; 3×4 report; 13×2 report. Do not change dupehound `min_tokens` as a substitute. |
+| Clustering | ≥ 2 members. Gate first, then longest window wins among *reported* spans. Overlap both arms → one violation (longer line span, then Arm F, then `(file, startLine)`). Representative = first by `(file, startLine)`. Report non-reps only. |
+| Violation | `Omit<Violation, "ruleId">` (engine stamps severity). Message names hosts / locations / that it is duplicate logical code. Arm F: reuse the representative. Arm W: extract or reuse it. Never `NO_SUGGESTION`. Arm W uses real ts-morph columns; Arm F keeps best-effort lines, column 1. |
 | Severity | `"error"` in recommended; config may set `"warn"`. No extra soft-gate product mode. |
-| Capability | `requires: ["dupehound"]`. Fail closed (exit 2, clear message naming the rule) if the provider is missing, dupehound is missing / unrunnable, times out, or returns invalid JSON. Empty clusters after test/generated skip is success, not an error. |
+| Capability | `requires: ["dupehound", "typescript"]`. Fail closed (exit 2, clear message naming the rule) if a provider is missing, dupehound is missing / unrunnable, times out, or returns invalid JSON. Empty clusters after skips is success, not an error. |
 | Install | Binary on `PATH` or `QUALETY_DUPEHOUND`. Pin **v0.1.2**. No network in default `check`. Optional `scripts/install-dupehound.sh` for local/CI. |
+| Peace with abstraction | No code special-case of `ts/no-unnecessary-abstraction`. Multiplicity ≥ 2 is required before DRY can fire; the report gate may require 4 for tiny fragments. |
 
-**Recommended:** `configs.recommended.rules["dry/no-duplicate-functions"] = "error"`. Install does **not** apply recommended (locked #2 / #4).
+**Recommended:** `configs.recommended.rules["dry/no-duplicate-code"] = "error"`. Install does **not** apply recommended (locked #2 / #4).
 
 See [docs/rulesets/dry.md](./rulesets/dry.md).
 
@@ -315,7 +318,7 @@ Do **not** own classic eslint-plugin-react / react-hooks / jsx-a11y, TanStack es
 
 | Rule | Status |
 |------|--------|
-| `dry/no-duplicate-functions` | Implemented (this section; structural R4) |
+| `dry/no-duplicate-code` | Implemented (this section; structural R4, hybrid + report gate) |
 
 Embeddings / semantic near-dupes are **not** this plugin.
 
@@ -349,7 +352,7 @@ export default defineConfig({
     "ts/public-exports-tested": "error",
     "react/no-fetch-in-useeffect": "error",
     "react/query-error-handled": "error",
-    // "dry/no-duplicate-functions": "error",
+    // "dry/no-duplicate-code": "error",
   },
   include: ["src/**/*.{ts,tsx}"],
   exclude: ["**/generated/**"],

@@ -16,7 +16,7 @@ It sits **above** formatters and classic linters: plugin rules (compositional AS
 3. [docs/RESEARCH.md](docs/RESEARCH.md) — competitive context (Semgrep, dupehound, etc.).
 4. [docs/rulesets/typescript.md](docs/rulesets/typescript.md) — honest TypeScript plugin catalog (implemented vs not planned).
 5. [docs/rulesets/react.md](docs/rulesets/react.md) — React plugin catalog (implemented vs backlog).
-6. [docs/rulesets/dry.md](docs/rulesets/dry.md) — DRY plugin catalog (`dry/no-duplicate-functions`).
+6. [docs/rulesets/dry.md](docs/rulesets/dry.md) — DRY plugin catalog (`dry/no-duplicate-code`).
 7. [docs/rulesets/plugin-kit.md](docs/rulesets/plugin-kit.md) — portable authoring (`plugin-kit/…`); not a product app catalog.
 8. [docs/rulesets/](docs/rulesets/) — research inventories are **not** an implementation backlog.
 
