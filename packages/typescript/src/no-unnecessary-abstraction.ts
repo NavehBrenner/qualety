@@ -14,7 +14,10 @@ import { type FunctionLike, functionLikeName, isFunctionLike } from "./parse-flo
 
 const FUNCTION_SUGGESTION =
   "Inline at its only call site, or keep only if the name still hides real complexity; wait for a second real call site before keeping a pass-through.";
+const UNUSED_FN_HINT =
+  "Remove this helper, or wait for a second real call site before keeping the indirection.";
 const TYPE_SUGGESTION = "Inline the type at its only use.";
+const UNUSED_TYPE_HINT = "Remove this type, or wait for a second real use.";
 const MAX_NONBLANK_LINES = 10;
 const INDEX_NAMES = new Set(["index.ts", "index.tsx", "index.mts", "index.cts"]);
 const REACT_PACKAGES = new Set(["react", "react-dom", "preact"]);
@@ -25,6 +28,15 @@ type PackageInfo = {
   exportTargets: ReadonlySet<string>;
   react: boolean;
 };
+
+type ScannedFile = {
+  sourceFile: SourceFile;
+  file: string;
+  quiet: boolean;
+  react: boolean;
+};
+
+type TypeDecl = TypeAliasDeclaration | InterfaceDeclaration;
 
 export const noUnnecessaryAbstraction = defineRule({
   meta: {
@@ -42,24 +54,51 @@ export const noUnnecessaryAbstraction = defineRule({
     const fileSystem = artifact.project.getFileSystem();
     const packages = new Map<string, PackageInfo | undefined>();
     const workspace = readPackageJson(fileSystem, join(context.getCwd(), "package.json"), packages);
+    const scannedByPackage = new Map<string, ScannedFile[]>();
     for (const [abs, unit] of artifact.sources) {
-      if (unit instanceof SourceFile) {
-        scanSourceFile(unit, abs, context, fileSystem, packages, workspace);
+      if (!(unit instanceof SourceFile) || isSkippedSource(abs, context.getCwd())) {
+        continue;
       }
+      const owning = findOwningPackage(fileSystem, dirname(abs), packages);
+      const quiet =
+        INDEX_NAMES.has(basename(abs)) || owning?.exportTargets.has(resolve(abs)) === true;
+      const react = (owning?.react ?? false) || (workspace?.react ?? false);
+      const key = owning?.dir ?? abs;
+      const group = scannedByPackage.get(key) ?? [];
+      if (group.length === 0) {
+        scannedByPackage.set(key, group);
+      }
+      group.push({ sourceFile: unit, file: abs, quiet, react });
+    }
+    for (const group of scannedByPackage.values()) {
+      scanPackageGroup(group, context);
     }
   },
 });
 
-function scanSourceFile(
-  sourceFile: SourceFile,
-  file: string,
-  context: Pick<RuleContext, "getCwd" | "report">,
-  fileSystem: FileSystemHost,
-  packages: Map<string, PackageInfo | undefined>,
-  workspace: PackageInfo | undefined,
-) {
+function scanPackageGroup(group: readonly ScannedFile[], context: Pick<RuleContext, "report">) {
+  const callCounts = new Map<string, number>();
+  const typeCounts = new Map<string, number>();
+  countPackageUses(
+    group.map((item) => item.sourceFile),
+    callCounts,
+    typeCounts,
+  );
+  for (const item of group) {
+    item.sourceFile.forEachDescendant((node) => {
+      if (isFunctionLike(node)) {
+        considerFunction(node, item.file, context, item.quiet, item.react, callCounts);
+      }
+      if (Node.isTypeAliasDeclaration(node) || Node.isInterfaceDeclaration(node)) {
+        considerType(node, item.file, context, item.quiet, typeCounts);
+      }
+    });
+  }
+}
+
+function isSkippedSource(file: string, cwd: string): boolean {
   const normalizedAbs = file.split("\\").join("/");
-  const normalizedCwd = context.getCwd().split("\\").join("/");
+  const normalizedCwd = cwd.split("\\").join("/");
   const relative =
     normalizedAbs === normalizedCwd
       ? basename(normalizedAbs)
@@ -68,26 +107,72 @@ function scanSourceFile(
         : normalizedAbs;
   const base = basename(relative);
   const parts = relative.split("/");
-  if (
+  return (
     /\.d\.(?:ts|mts|cts)$/.test(base) ||
     /\.(?:test|spec)\./.test(base) ||
     parts.includes("__tests__") ||
     parts.includes("fixtures")
+  );
+}
+
+function countPackageUses(
+  files: readonly SourceFile[],
+  callCounts: Map<string, number>,
+  typeCounts: Map<string, number>,
+) {
+  for (const sourceFile of files) {
+    for (const ident of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
+      tallyCall(ident, callCounts);
+      tallyType(ident, typeCounts);
+    }
+  }
+}
+
+function tallyCall(ident: Node, counts: Map<string, number>) {
+  if (!isCalleeIdentifier(ident)) {
+    return;
+  }
+  const symbol = unwrapSymbol(ident.getSymbol());
+  if (
+    symbol === undefined ||
+    symbol.getDeclarations().some((decl) => {
+      const fn = functionLikeOf(decl);
+      return (
+        fn !== undefined &&
+        fn.getSourceFile().getFilePath() === ident.getSourceFile().getFilePath() &&
+        fn.containsRange(ident.getStart(), ident.getEnd())
+      );
+    })
   ) {
     return;
   }
-  const owning = findOwningPackage(fileSystem, dirname(file), packages);
-  const quiet =
-    INDEX_NAMES.has(basename(file)) || owning?.exportTargets.has(resolve(file)) === true;
-  const react = (owning?.react ?? false) || (workspace?.react ?? false);
-  sourceFile.forEachDescendant((node) => {
-    if (isFunctionLike(node)) {
-      considerFunction(node, file, context, quiet, react);
-    }
-    if (Node.isTypeAliasDeclaration(node) || Node.isInterfaceDeclaration(node)) {
-      considerType(node, file, context, quiet);
-    }
-  });
+  const key = symbolKey(symbol);
+  if (key !== undefined) {
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+}
+
+function tallyType(ident: Node, counts: Map<string, number>) {
+  if (isImportOrExportName(ident)) {
+    return;
+  }
+  const symbol = unwrapSymbol(ident.getSymbol());
+  if (symbol === undefined) {
+    return;
+  }
+  const key = symbolKey(symbol);
+  const decl = symbol.getDeclarations()[0];
+  if (
+    key === undefined ||
+    decl === undefined ||
+    !(Node.isTypeAliasDeclaration(decl) || Node.isInterfaceDeclaration(decl))
+  ) {
+    return;
+  }
+  if (decl.getNameNode() === ident || decl === ident.getParent()) {
+    return;
+  }
+  counts.set(key, (counts.get(key) ?? 0) + 1);
 }
 
 function considerFunction(
@@ -96,6 +181,7 @@ function considerFunction(
   context: Pick<RuleContext, "report">,
   quiet: boolean,
   react: boolean,
+  callCounts: ReadonlyMap<string, number>,
 ) {
   if (quiet || shouldSkipFunction(fn)) {
     return;
@@ -104,13 +190,13 @@ function considerFunction(
   if (name === undefined) {
     return;
   }
-  if (react && /^use[A-Z]/.test(name)) {
+  if (skipReactFunction(name, fn, react)) {
     return;
   }
-  if (react && /^[A-Z]/.test(name) && isComponentShaped(fn)) {
-    return;
-  }
-  if (sameFileCallCount(fn) !== 1 || (!isPassThrough(fn) && !isSmallAndFlat(fn))) {
+  const symbol = unwrapSymbol(nameNodeOf(fn)?.getSymbol() ?? fn.getSymbol());
+  const key = symbol === undefined ? undefined : symbolKey(symbol);
+  const uses = key === undefined ? 0 : (callCounts.get(key) ?? 0);
+  if (uses > 1 || (!isPassThrough(fn) && !isSmallAndFlat(fn))) {
     return;
   }
   const fnAt = nameNodeOf(fn) ?? fn;
@@ -122,38 +208,30 @@ function considerFunction(
       start: fnFile.getLineAndColumnAtPos(fnAt.getStart()),
       end: fnFile.getLineAndColumnAtPos(fnAt.getEnd()),
     },
-    message: `"${name}" is only called once in this file and does not pay for the indirection.`,
-    suggestion: FUNCTION_SUGGESTION,
+    message:
+      uses === 0
+        ? `"${name}" is not called and does not pay for the indirection.`
+        : `"${name}" is only called once and does not pay for the indirection.`,
+    suggestion: uses === 0 ? UNUSED_FN_HINT : FUNCTION_SUGGESTION,
   });
 }
 
 function considerType(
-  decl: TypeAliasDeclaration | InterfaceDeclaration,
+  decl: TypeDecl,
   file: string,
   context: Pick<RuleContext, "report">,
   quiet: boolean,
+  typeCounts: ReadonlyMap<string, number>,
 ) {
-  if (quiet || decl.hasDeclareKeyword()) {
+  if (quiet || shouldSkipType(decl)) {
     return;
-  }
-  if (Node.isInterfaceDeclaration(decl) && decl.getExtends().length > 0) {
-    return;
-  }
-  if (Node.isTypeAliasDeclaration(decl)) {
-    const typeNode = decl.getTypeNode();
-    if (
-      typeNode === undefined ||
-      Node.isIntersectionTypeNode(typeNode) ||
-      typeNode.getDescendantsOfKind(SyntaxKind.UniqueKeyword).length > 0
-    ) {
-      return;
-    }
   }
   const symbol = decl.getNameNode().getSymbol() ?? decl.getSymbol();
   if (symbol === undefined || symbol.getDeclarations().length !== 1) {
     return;
   }
-  if (sameFileTypeUses(decl) !== 1) {
+  const uses = typeCounts.get(symbolKey(symbol) ?? "") ?? 0;
+  if (uses > 1) {
     return;
   }
   const typeAt = decl.getNameNode();
@@ -165,9 +243,49 @@ function considerType(
       start: typeFile.getLineAndColumnAtPos(typeAt.getStart()),
       end: typeFile.getLineAndColumnAtPos(typeAt.getEnd()),
     },
-    message: `"${decl.getName()}" is only referenced once in this file.`,
-    suggestion: TYPE_SUGGESTION,
+    message:
+      uses === 0
+        ? `"${decl.getName()}" is not referenced.`
+        : `"${decl.getName()}" is only referenced once.`,
+    suggestion: uses === 0 ? UNUSED_TYPE_HINT : TYPE_SUGGESTION,
   });
+}
+
+function shouldSkipType(decl: TypeDecl): boolean {
+  if (decl.hasDeclareKeyword()) {
+    return true;
+  }
+  if (Node.isInterfaceDeclaration(decl)) {
+    if (decl.getExtends().length > 0) {
+      return true;
+    }
+  }
+  if (Node.isTypeAliasDeclaration(decl)) {
+    const typeNode = decl.getTypeNode();
+    if (
+      typeNode === undefined ||
+      Node.isIntersectionTypeNode(typeNode) ||
+      typeNode.getDescendantsOfKind(SyntaxKind.UniqueKeyword).length > 0
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function skipReactFunction(name: string, fn: FunctionLike, react: boolean): boolean {
+  if (!react) {
+    return false;
+  }
+  if (/^use[A-Z]/.test(name)) {
+    return true;
+  }
+  if (/^[A-Z]/.test(name)) {
+    if (isComponentShaped(fn)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function shouldSkipFunction(fn: FunctionLike): boolean {
@@ -201,45 +319,6 @@ function isComponentShaped(fn: FunctionLike): boolean {
     (node) =>
       Node.isJsxElement(node) || Node.isJsxSelfClosingElement(node) || Node.isJsxFragment(node),
   );
-}
-
-function sameFileCallCount(fn: FunctionLike): number {
-  const nameNode = nameNodeOf(fn);
-  const symbol = nameNode?.getSymbol();
-  if (nameNode === undefined || symbol === undefined) {
-    return 0;
-  }
-  let count = 0;
-  for (const node of fn.getSourceFile().getDescendantsOfKind(SyntaxKind.Identifier)) {
-    if (node === nameNode || node.getText() !== nameNode.getText()) {
-      continue;
-    }
-    if (!sameSymbol(node.getSymbol(), symbol) || !isCalleeIdentifier(node)) {
-      continue;
-    }
-    if (!fn.containsRange(node.getStart(), node.getEnd())) {
-      count += 1;
-    }
-  }
-  return count;
-}
-
-function sameFileTypeUses(decl: TypeAliasDeclaration | InterfaceDeclaration): number {
-  const nameNode = decl.getNameNode();
-  const symbol = nameNode.getSymbol() ?? decl.getSymbol();
-  if (symbol === undefined) {
-    return 0;
-  }
-  let count = 0;
-  for (const node of decl.getSourceFile().getDescendantsOfKind(SyntaxKind.Identifier)) {
-    if (node === nameNode || node.getText() !== decl.getName()) {
-      continue;
-    }
-    if (sameSymbol(node.getSymbol(), symbol)) {
-      count += 1;
-    }
-  }
-  return count;
 }
 
 function isPassThrough(fn: FunctionLike): boolean {
@@ -343,11 +422,43 @@ function nameNodeOf(fn: FunctionLike) {
   return Node.isVariableDeclaration(parent) ? parent.getNameNode() : undefined;
 }
 
-function sameSymbol(left: MorphSymbol | undefined, right: MorphSymbol): boolean {
-  if (left === undefined) {
+function symbolKey(symbol: MorphSymbol): string | undefined {
+  const decl = symbol.getDeclarations()[0];
+  if (decl === undefined) {
+    return undefined;
+  }
+  return `${decl.getSourceFile().getFilePath()}:${decl.getStart()}`;
+}
+
+function functionLikeOf(decl: Node): FunctionLike | undefined {
+  if (isFunctionLike(decl)) {
+    return decl;
+  }
+  if (Node.isVariableDeclaration(decl)) {
+    const init = decl.getInitializer();
+    if (init !== undefined && isFunctionLike(init)) {
+      return init;
+    }
+  }
+  return undefined;
+}
+
+function unwrapSymbol(symbol: MorphSymbol | undefined): MorphSymbol | undefined {
+  return symbol === undefined ? undefined : (symbol.getAliasedSymbol() ?? symbol);
+}
+
+function isImportOrExportName(ident: Node): boolean {
+  const parent = ident.getParent();
+  if (parent === undefined) {
     return false;
   }
-  return left === right || left.getDeclarations()[0] === right.getDeclarations()[0];
+  return (
+    Node.isImportSpecifier(parent) ||
+    Node.isExportSpecifier(parent) ||
+    Node.isImportClause(parent) ||
+    Node.isNamespaceImport(parent) ||
+    Node.isNamespaceExport(parent)
+  );
 }
 
 function findOwningPackage(

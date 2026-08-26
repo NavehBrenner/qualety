@@ -56,57 +56,60 @@ export async function check(
   filters: CheckFilters = EMPTY_FILTERS,
 ): Promise<number> {
   try {
-    return await runCheck(cwd, out, filters);
+    const loaded = await loadConfig(cwd);
+    if (loaded === undefined) {
+      if (hasNameFilters(filters)) {
+        assertKnownFilters([], [], filters);
+      }
+      out(NOTHING_TO_CHECK);
+      return 0;
+    }
+    const { path: configPath, config } = loaded;
+    if (Object.keys(config.rules).length === 0 && !hasNameFilters(filters)) {
+      out(NOTHING_TO_CHECK);
+      return 0;
+    }
+
+    const plugins: Plugin[] = [];
+    for (const spec of config.plugins) {
+      plugins.push(await loadPlugin(spec, dirname(configPath)));
+    }
+    const enabled = resolveEnabledRules(plugins, config.rules);
+    assertKnownFilters(plugins, enabled, filters);
+    const selected = selectRules(enabled, filters);
+    if (selected.length === 0) {
+      out(hasNameFilters(filters) ? NO_RULES_MATCHED : NOTHING_TO_CHECK);
+      return 0;
+    }
+
+    const files = await listCheckFiles(cwd, config, filters.diff);
+    if (files.length === 0) {
+      out("No files to check.");
+      return 0;
+    }
+
+    const displayPaths = files.map((abs) => displayPath(cwd, abs));
+    const artifacts = await buildRequiredArtifacts(plugins, selected, {
+      cwd,
+      files: displayPaths,
+      exclude: mergedExclude(config),
+    });
+
+    const violations = collectViolations(selected, cwd, displayPaths, artifacts);
+    printViolations(violations, out);
+    return violations.length > 0 ? 1 : 0;
   } catch (e) {
     err(e instanceof Error ? e.message : String(e));
     return 2;
   }
 }
 
-async function runCheck(
+function collectViolations(
+  selected: readonly Enabled[],
   cwd: string,
-  out: (msg: string) => void,
-  filters: CheckFilters,
-): Promise<number> {
-  const loaded = await loadConfig(cwd);
-  if (loaded === undefined) {
-    if (hasNameFilters(filters)) {
-      assertKnownFilters([], [], filters);
-    }
-    out(NOTHING_TO_CHECK);
-    return 0;
-  }
-  const { path: configPath, config } = loaded;
-  if (Object.keys(config.rules).length === 0 && !hasNameFilters(filters)) {
-    out(NOTHING_TO_CHECK);
-    return 0;
-  }
-
-  const plugins: Plugin[] = [];
-  for (const spec of config.plugins) {
-    plugins.push(await loadPlugin(spec, dirname(configPath)));
-  }
-  const enabled = resolveEnabledRules(plugins, config.rules);
-  assertKnownFilters(plugins, enabled, filters);
-  const selected = selectRules(enabled, filters);
-  if (selected.length === 0) {
-    out(hasNameFilters(filters) ? NO_RULES_MATCHED : NOTHING_TO_CHECK);
-    return 0;
-  }
-
-  const files = await listCheckFiles(cwd, config, filters.diff);
-  if (files.length === 0) {
-    out("No files to check.");
-    return 0;
-  }
-
-  const displayPaths = files.map((abs) => displayPath(cwd, abs));
-  const artifacts = await buildRequiredArtifacts(plugins, selected, {
-    cwd,
-    files: displayPaths,
-    exclude: mergedExclude(config),
-  });
-
+  displayPaths: readonly string[],
+  artifacts: Map<string, unknown>,
+): Violation[] {
   const violations: Violation[] = [];
   for (const item of selected) {
     const allowed = new Set(requiresOf(item));
@@ -114,7 +117,15 @@ async function runCheck(
       id: Id,
     ): Id extends keyof ArtifactMap ? ArtifactMap[Id] : unknown;
     function getArtifact(id: string): unknown {
-      return readArtifact(id, allowed, artifacts);
+      if (!allowed.has(id)) {
+        throw new ConfigError(
+          `getArtifact(${JSON.stringify(id)}) requires meta.requires to include ${JSON.stringify(id)}`,
+        );
+      }
+      if (!artifacts.has(id)) {
+        throw new ConfigError(`Artifact ${JSON.stringify(id)} is not available.`);
+      }
+      return artifacts.get(id);
     }
     item.rule.create({
       id: item.id,
@@ -122,7 +133,7 @@ async function runCheck(
       getCwd: () => cwd,
       getFiles: () => displayPaths,
       getArtifact,
-      report(violation) {
+      report: (violation) => {
         violations.push({
           ...violation,
           ruleId: item.id,
@@ -133,15 +144,27 @@ async function runCheck(
       },
     });
   }
+  violations.sort(
+    (a, b) =>
+      a.file.localeCompare(b.file) ||
+      a.range.start.line - b.range.start.line ||
+      a.range.start.column - b.range.start.column ||
+      a.ruleId.localeCompare(b.ruleId),
+  );
+  return violations;
+}
 
-  violations.sort(compareViolations);
+function printViolations(violations: readonly Violation[], out: (msg: string) => void) {
   for (const violation of violations) {
     const loc = `${violation.file}:${violation.range.start.line}:${violation.range.start.column}`;
-    const extra =
-      violation.suggestion === NO_SUGGESTION ? "" : `\n  suggestion: ${violation.suggestion}`;
-    out(`${loc}  ${violation.severity}  ${violation.ruleId}  ${violation.message}${extra}`);
+    if (violation.suggestion === NO_SUGGESTION) {
+      out(`${loc}  ${violation.severity}  ${violation.ruleId}  ${violation.message}`);
+    } else {
+      out(
+        `${loc}  ${violation.severity}  ${violation.ruleId}  ${violation.message}\n  suggestion: ${violation.suggestion}`,
+      );
+    }
   }
-  return violations.length > 0 ? 1 : 0;
 }
 
 async function loadPlugin(spec: string, fromDir: string): Promise<Plugin> {
@@ -402,22 +425,6 @@ function registerPluginProvides(plugin: Plugin, providers: Map<string, ProviderE
   }
 }
 
-function readArtifact(
-  id: string,
-  allowed: ReadonlySet<string>,
-  artifacts: ReadonlyMap<string, unknown>,
-): unknown {
-  if (!allowed.has(id)) {
-    throw new ConfigError(
-      `getArtifact(${JSON.stringify(id)}) requires meta.requires to include ${JSON.stringify(id)}`,
-    );
-  }
-  if (!artifacts.has(id)) {
-    throw new ConfigError(`Artifact ${JSON.stringify(id)} is not available.`);
-  }
-  return artifacts.get(id);
-}
-
 function mergedExclude(config: UserConfig): string[] {
   return [...new Set([...(config.exclude ?? DEFAULT_EXCLUDE), ...DEFAULT_EXCLUDE])];
 }
@@ -442,13 +449,4 @@ function displayPath(cwd: string, file: string): string {
   const abs = resolve(cwd, file);
   const rel = relative(cwd, abs);
   return (rel === "" ? file : rel).split(sep).join("/");
-}
-
-function compareViolations(a: Violation, b: Violation): number {
-  return (
-    a.file.localeCompare(b.file) ||
-    a.range.start.line - b.range.start.line ||
-    a.range.start.column - b.range.start.column ||
-    a.ruleId.localeCompare(b.ruleId)
-  );
 }

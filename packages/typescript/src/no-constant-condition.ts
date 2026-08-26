@@ -6,7 +6,7 @@ import {
   conditionNodes,
   diagnoseConstant,
   type FunctionLike,
-  mixedCallerHits,
+  mixedHitsForCondition,
   secondParseNodes,
 } from "./narrowing.ts";
 
@@ -55,8 +55,10 @@ function scanFunction(
       reported,
     );
   }
-  for (const hit of mixedCallerHits(fn, sourceFile)) {
-    emit(context, file, hit, reported);
+  for (const cond of conditionNodes(fn)) {
+    for (const hit of mixedHitsForCondition(fn, cond, sourceFile)) {
+      emit(context, file, hit, reported);
+    }
   }
 }
 

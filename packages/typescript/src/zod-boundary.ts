@@ -3,11 +3,11 @@ import { Node, SourceFile } from "ts-morph";
 import { enclosingFunction } from "./narrowing.ts";
 import {
   aliasesOf,
+  BOUNDARY_NAMES,
+  BOUNDARY_PREFIX,
   type FunctionLike,
   firstArgIdentifier,
   functionLikeName,
-  isArgToSchemaParse,
-  isBoundaryName,
   isFunctionLike,
   isJsonParseCall,
   isPropertyUse,
@@ -46,7 +46,7 @@ export const zodBoundary = defineRule({
 
 function scanBoundary(fn: FunctionLike, file: string, context: Pick<RuleContext, "report">) {
   const name = functionLikeName(fn);
-  if (name === undefined || !isBoundaryName(name)) {
+  if (name === undefined || !(BOUNDARY_NAMES.has(name) || BOUNDARY_PREFIX.test(name))) {
     return;
   }
   for (const param of unknownParamNames(fn)) {
@@ -61,7 +61,12 @@ function scanBoundary(fn: FunctionLike, file: string, context: Pick<RuleContext,
 }
 
 function scanJsonParse(node: Node, file: string, context: Pick<RuleContext, "report">) {
-  if (isArgToSchemaParse(node)) {
+  const parseParent = node.getParent();
+  if (
+    parseParent !== undefined &&
+    isSchemaParseCall(parseParent) &&
+    parseParent.getArguments().includes(node)
+  ) {
     return;
   }
   const parent = node.getParent();

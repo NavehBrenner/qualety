@@ -16,9 +16,7 @@ export const afterHook = useFoo(2);
 
 type Id = string;
 
-export function label(id: Id): string {
-  return id;
-}
+export const tag: Id = "x";
 
 function smallFlat(n: number): number {
   const next = n + 1;

@@ -42,20 +42,18 @@ export class DupehoundError extends Error {
   }
 }
 
-export type DupehoundMember = {
-  file: string;
-  name: string;
-  startLine: number;
-  endLine: number;
-  representative: boolean;
-  test: boolean;
-};
-
 export type DupehoundCluster = {
   id: number;
   similarity: number;
   testOnly: boolean;
-  members: DupehoundMember[];
+  members: {
+    file: string;
+    name: string;
+    startLine: number;
+    endLine: number;
+    representative: boolean;
+    test: boolean;
+  }[];
 };
 
 export type DupehoundIndex = {
@@ -73,22 +71,20 @@ export type BuildDupehoundOptions = ArtifactBuildContext & {
   timeoutMs?: number;
 };
 
-type RawMember = {
-  file: string;
-  name: string;
-  startLine: number;
-  endLine: number;
-  similarity: number;
-  representative: boolean;
-  test: boolean;
-};
-
 type RawCluster = {
   id: number;
   similarity: number;
   testOnly: boolean;
   traitImplOnly: boolean;
-  members: RawMember[];
+  members: {
+    file: string;
+    name: string;
+    startLine: number;
+    endLine: number;
+    similarity: number;
+    representative: boolean;
+    test: boolean;
+  }[];
 };
 
 export type ParsedScanReport = {
@@ -243,7 +239,14 @@ export function filterClusters(
     }
     const members = cluster.members
       .filter((member) => !member.test && include.has(normalizeDisplay(member.file)))
-      .map(toMember);
+      .map((member) => ({
+        file: normalizeDisplay(member.file),
+        name: member.name,
+        startLine: member.startLine,
+        endLine: member.endLine,
+        representative: member.representative,
+        test: member.test,
+      }));
     if (members.length < 2) {
       continue;
     }
@@ -261,17 +264,6 @@ export function filterClusters(
     });
   }
   return out;
-}
-
-function toMember(member: RawMember): DupehoundMember {
-  return {
-    file: normalizeDisplay(member.file),
-    name: member.name,
-    startLine: member.startLine,
-    endLine: member.endLine,
-    representative: member.representative,
-    test: member.test,
-  };
 }
 
 function normalizeDisplay(file: string): string {

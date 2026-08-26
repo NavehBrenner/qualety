@@ -293,7 +293,7 @@ See [docs/rulesets/typescript.md](./rulesets/typescript.md).
 | `ts/zod-boundary` | Implemented (Z1 load/parse + Z2 `JSON.parse`; see [typescript.md](./rulesets/typescript.md)) |
 | `ts/type-narrowing-checks` | Implemented (checker-visible narrowing; see [typescript.md](./rulesets/typescript.md)) |
 | `ts/no-constant-condition` | Implemented (constant conditions + same-file call-site facts; see [typescript.md](./rulesets/typescript.md)) |
-| `ts/no-unnecessary-abstraction` | Implemented (same-file single-use helpers and types; see [typescript.md](./rulesets/typescript.md)) |
+| `ts/no-unnecessary-abstraction` | Implemented (package-local ≤1-use helpers and types; see [typescript.md](./rulesets/typescript.md)) |
 
 **Not catalogued** (do not implement in this plugin): circular imports, max relative import depth, simple path bans, deep-import / internal-module bans, generic layer charts. Use Biome / ESLint / dependency-cruiser.
 

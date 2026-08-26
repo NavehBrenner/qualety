@@ -1,6 +1,6 @@
 import { defineRule, type RuleContext } from "qualety";
 import { Node, type SourceFile } from "ts-morph";
-import { isCorePackagePath, isSourceFile, rangeOf } from "./ast.ts";
+import { isSourceFile, posix, rangeOf } from "./ast.ts";
 
 const DUPE_SUGGESTION =
   "Keep dupehound, QUALETY_DUPEHOUND, and its install/path logic in @qualety/dry (provides.dupehound).";
@@ -19,7 +19,7 @@ export const coreProviderBoundaries = defineRule({
   create(context) {
     const sources = context.getArtifact("typescript").sources;
     for (const [abs, unit] of sources) {
-      if (!isCorePackagePath(abs) || !isSourceFile(unit)) {
+      if (!posix(abs).includes("/packages/qualety/") || !isSourceFile(unit)) {
         continue;
       }
       scanDupehound(unit, abs, context);

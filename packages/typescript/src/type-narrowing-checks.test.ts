@@ -14,7 +14,7 @@ import {
   hasPriorParse,
   isFunctionLike,
   isStrictRefinement,
-  mixedCallerHits,
+  mixedHitsForCondition,
   secondParseNodes,
   shouldReportUnchanged,
   splitNegation,
@@ -60,7 +60,7 @@ test("narrowing helpers are exported", () => {
   expect(hasPriorParse).toEqual(expect.any(Function));
   expect(isFunctionLike).toEqual(expect.any(Function));
   expect(isStrictRefinement).toEqual(expect.any(Function));
-  expect(mixedCallerHits).toEqual(expect.any(Function));
+  expect(mixedHitsForCondition).toEqual(expect.any(Function));
   expect(secondParseNodes).toEqual(expect.any(Function));
   expect(shouldReportUnchanged).toEqual(expect.any(Function));
   expect(splitNegation).toEqual(expect.any(Function));
