@@ -49,10 +49,10 @@ export interface RuleMeta {
    * Artifact ids this rule needs (e.g. `"typescript"`, `"dupehound"`).
    * Engine builds each id once from the single provider map.
    */
-  requires?: string[];
+  requires?: readonly string[];
 }
 
-export interface RuleContext {
+export interface RuleContext<Requires extends readonly string[] = readonly string[]> {
   id: string;
   /** Not applied until an options WP; `meta.schema` is stored only. */
   options: unknown;
@@ -64,7 +64,9 @@ export interface RuleContext {
    * Artifact built for this run. Only ids listed in `meta.requires`
    * may be requested; others get an exit-2 error.
    */
-  getArtifact<Id extends string>(id: Id): Id extends keyof ArtifactMap ? ArtifactMap[Id] : unknown;
+  getArtifact<Id extends Requires[number]>(
+    id: Id,
+  ): Id extends keyof ArtifactMap ? ArtifactMap[Id] : unknown;
 }
 
 /** Input to a plugin `provides` build. Built once per required id per check. */

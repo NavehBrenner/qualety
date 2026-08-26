@@ -48,7 +48,7 @@ These decisions are considered stable unless a major new constraint appears:
    **Overlap family:** `import-boundary` / layers / no-import-from / no-deep-import / max-relative-depth are one policy family. The v1 TypeScript plugin catalogs **none** of them unless a future WP proves a unique agent-facing gap. Prefer configuring Biome + dependency-cruiser over reimplementation.
 
 8. **One provider map / one engine loop**  
-    No unified cross-language AST. Same product idea on two languages ⇒ **two rules** (convention, not `meta.kind`), each `requires` that artifact id. There is a single `Rule` / `RuleContext`. Optional `meta.requires: string[]` names artifacts. In-repo / TypeScript plugin authors use `defineRule` (identity) so `getArtifact(id)` is typed from `ArtifactMap` (no `as ParsedProject` / `as DupehoundIndex`). Runtime engine `getArtifact` stays untyped at the `Map<string, unknown>` boundary. Load path is Zod (`pluginSchema` / `ruleSchema` / `artifactProviderSchema`), not hand guards.
+    No unified cross-language AST. Same product idea on two languages ⇒ **two rules** (convention, not `meta.kind`), each `requires` that artifact id. There is a single `Rule` / `RuleContext`. Optional `meta.requires: string[]` names artifacts. In-repo / TypeScript plugin authors use `defineRule` (identity) so `getArtifact(id)` is typed from `ArtifactMap` (no `as ParsedProject` / `as DupehoundIndex`). `defineRule` types accepted `getArtifact` ids from that rule’s `requires` tuple (omitted ⇒ uncallable). Runtime engine `getArtifact` stays untyped at the `Map<string, unknown>` boundary. Load path is Zod (`pluginSchema` / `ruleSchema` / `artifactProviderSchema`), not hand guards.
 
    **Who provides:** one map. Start empty → register every `provides` entry from loaded **plugin modules** (collision → exit 2, names **both owners**) → for each id in the **default registry** still missing, fill with `owner: "default"`. Defaults only fill gaps; they never replace a plugin-provided id. A plugin `provides.typescript` **wins** (default skipped for that id). v1 default registry is `as const` with `"typescript"` → today’s `ParsedProject`. Default providers are compiled-in trusted factories (`DEFAULT_PROVIDERS` / `createTypeScriptProvider`), gap-filled after plugin `provides`, and are **not** loaded through `pluginSchema`. `dupehound` stays in `@qualety/dry`. Multi-team shared providers load as **ruleless plugins** via `plugins[]`. There is **no** `config.languages` and **no** reserved-id category.
 
@@ -144,13 +144,13 @@ export interface Rule {
   create(context: RuleContext): void | RuleListener;
 }
 
-export interface RuleContext {
+export interface RuleContext<Requires extends readonly string[] = readonly string[]> {
   id: string;
   options: unknown;             // not applied until an options WP; schema stored only
   report(violation: Omit<Violation, "ruleId">): void;
   getCwd(): string;
   getFiles(): readonly string[]; // one include/exclude pass, display paths
-  getArtifact<Id extends string>(id: Id): Id extends keyof ArtifactMap ? ArtifactMap[Id] : unknown;
+  getArtifact<Id extends Requires[number]>(id: Id): Id extends keyof ArtifactMap ? ArtifactMap[Id] : unknown;
 }
 
 /** Opaque to core; default TypeScript provider uses ts-morph Project + SourceFiles. */
@@ -164,7 +164,10 @@ export interface ArtifactMap {
   typescript: ParsedProject;
 }
 
-export function defineRule<T extends Rule>(rule: T): T;
+export function defineRule<const Requires extends readonly string[] = []>(rule: {
+  meta: RuleMeta & { requires?: Requires };
+  create(context: RuleContext<Requires>): void | RuleListener;
+}): typeof rule;
 ```
 
 Runtime schemas (engine `safeParse` at load; do **not** replace the TypeScript interfaces above): `requiresSchema`, `ruleMetaSchema`, `functionSchema`, `ruleSchema`, `artifactProviderSchema`, `pluginProvidesSchema`, `pluginSchema`. Those schemas (and siblings) re-exported from core `index` are supported surface for authors who want to parse; `userConfigSchema` stays on the config module (already exported). `defineRule` is a typed identity and does **not** parse — JS / fixture plugins skip it, so the engine must validate the advertised catalog anyway (malformed rule → exit 2 even if that rule is `"off"`). `meta.schema` is stored only; it is not applied until an options WP. Parsed output is not substituted for the original object (`create` / `build` identity stays).

@@ -200,7 +200,7 @@ function resolveEnabledRules(plugins: Plugin[], rules: Record<string, Severity>)
   return enabled;
 }
 
-function requiresOf(item: Enabled): string[] {
+function requiresOf(item: Enabled): readonly string[] {
   return item.rule.meta.requires ?? [];
 }
 

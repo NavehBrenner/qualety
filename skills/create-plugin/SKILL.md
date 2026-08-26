@@ -27,7 +27,7 @@ Scaffold a **new** plugin (e.g. `@qualety/foo` or a user-local plugin) that expo
 
 ## Steps
 
-1. Read [docs/SPECS.md](../../docs/SPECS.md) §2 (plugin contract) and locked #2 / #4 / #8. Do **not** invent a parallel API. Engine validates `pluginSchema` / `ruleSchema` at load; `defineRule` is a typed identity and does not parse.
+1. Read [docs/SPECS.md](../../docs/SPECS.md) §2 (plugin contract) and locked #2 / #4 / #8. Do **not** invent a parallel API. Engine validates `pluginSchema` / `ruleSchema` at load; `defineRule` is a typed identity and does not parse. `defineRule` rejects ids not in `requires` at `tsc`.
 2. Copy the shape of a real package — do **not** re-scaffold those packages or the engine:
    - **Rules plugin** — `packages/typescript` / `packages/react`: `name`, `rules`, optional `configs.recommended`.
    - **Ruleless provider** — `name` + `provides` only (no `rules`). Spawn-allowed pattern: dry’s `provides.dupehound` (`packages/dry/src/dupehound.ts`).
