@@ -23,6 +23,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - run: |
+          for pkg in qualety @qualety/typescript @qualety/react @qualety/dry @qualety/plugin-kit; do
+            out=$(pnpm --filter "$pkg" pack --dry-run)
+            echo "$out"
+            echo "$out" | grep -q LICENSE
+            echo "$out" | grep -q dist/
+          done
       - run: pnpm test
       - run: pnpm check
       - run: ./scripts/install-dupehound.sh

@@ -3,6 +3,18 @@
   "version": "0.0.0",
   "description": "React compositional rules for qualety.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NavehBrenner/qualety.git",
+    "directory": "packages/react"
+  },
+  "bugs": {
+    "url": "https://github.com/NavehBrenner/qualety/issues"
+  },
+  "homepage": "https://github.com/NavehBrenner/qualety",
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "exports": {
     ".": {
