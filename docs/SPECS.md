@@ -71,6 +71,35 @@ These decisions are considered stable unless a major new constraint appears:
    - Only if measured numbers are unacceptable: extract hot paths (parsing, simple structural walks) into a native (Rust/oxc) addon while keeping the rule-authoring surface in TypeScript.  
    A full rewrite of the core in Rust (or making Rust the first supported language for self-hosting) is explicitly **out of scope** for v1.
 
+10. **Distribution surfaces**  
+    One engine, three install surfaces. Plugins stay runtime JS modules (locked #4). A static binary cannot load arbitrary user plugins without embedding a JS runtime or an RPC plugin protocol. This train **accepts that**.
+
+    | Surface | Role | Custom JS plugins |
+    |---|---|---|
+    | **npm** | Primary for the TypeScript ecosystem and **dynamic** user plugins (`import` of package names / local paths, as today) | **yes** |
+    | **Standalone binary** | **Batteries-included:** TypeScript engine + **official plugins** compiled/bundled in. Compile of the existing engine (locked #3 / #9) — **not** a second implementation | **no** |
+    | **pip** | Thin wrapper around **that same binary** — not a Python engine, not a second rule runtime | **no** (same as binary) |
+
+    **Official plugins** (binary bundle) are product app catalogs, not authoring or dogfood:
+
+    | Package | npm | Binary / pip |
+    |---|---|---|
+    | `qualety` (engine) | yes | the binary *is* the engine |
+    | `@qualety/typescript` | yes | bundled |
+    | `@qualety/react` | yes | bundled |
+    | `@qualety/dry` | yes | bundled |
+    | `@qualety/plugin-kit` | yes (plugin authors) | **not** bundled |
+    | `@qualety/dev` | no (`private`) | **not** bundled |
+    | Future product plugin (e.g. Python when named) | yes when it ships | bundled when it ships |
+
+    Bundling is not a core rule bag. Locked **#4** stands: core has no built-in rules; the binary statically includes the **same plugin modules**. Locked **#2** stands: listing or bundling a plugin does not enable its rules.
+
+    **Config contract unchanged:** `plugins[]` + per-rule toggles. Binary/pip resolve **known official specs** from the bundle. Unknown / path / third-party specs **fail closed (exit 2)** with copy that says custom plugins need npm. Do not auto-register a silent extra catalog.
+
+    **This train does not:** ship binary / pip / npm publish; pick a compile tool; lock binary config to JSON-only; embed a JS runtime; add a WASM/RPC plugin protocol; author plugins in Python; bundle the dupehound sidecar (PATH / `QUALETY_DUPEHOUND` stands). Custom plugins stay Node/npm.
+
+    This lock precedes the release train. Python analysis (locked #6) is parallel and does not change it. Surfaces are locked, not shipped.
+
 ---
 
 ## 1. High-level architecture
@@ -180,7 +209,7 @@ A malformed plugin / rule / provider, invalid `requires`, a missing provider, a 
 
 A custom plugin is simply an npm package (or local folder) that exports a `Plugin`. The core discovers it from the `plugins` array in the user’s config. Core never ships a default rule table; a rule exists only if a loaded plugin lists it. Installing `@qualety/typescript` (or any plugin) does not enable rules until they appear in `config.rules`. `configs.recommended` is an optional preset the user copies in — the engine does not apply it on install.
 
-**v1 constraint**: plugins are authored in TypeScript/JavaScript only.
+**v1 constraint**: plugins are authored in TypeScript/JavaScript only. Custom plugins load only on npm/Node this train (locked #10).
 
 ## 3. First-class rules (v1 targets)
 
