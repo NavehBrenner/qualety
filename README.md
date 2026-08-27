@@ -90,6 +90,7 @@ Layout: `packages/qualety` (engine, CLI, plugin contract),
 `packages/react` (`@qualety/react`),
 `packages/dry` (`@qualety/dry`), and
 `packages/plugin-kit` (`@qualety/plugin-kit`).
+Registry publish is **not** live yet (tag publish is #50); install-from-workspace remains the path until then.
 
 ## Roadmap (High Level)
 
