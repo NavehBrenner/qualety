@@ -218,6 +218,27 @@ function config(rules: Record<string, string>, extra: Record<string, unknown> = 
   });
 }
 
+test("official package spec loads typescript plugin", async () => {
+  const dir = await writeTree({
+    "qualety.config.json": JSON.stringify({
+      plugins: ["@qualety/typescript"],
+      rules: { "ts/no-constant-condition": "error" },
+    }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  const errors: string[] = [];
+  expect(
+    await check(
+      dir,
+      (m) => lines.push(String(m)),
+      (m) => errors.push(String(m)),
+    ),
+  ).toBe(0);
+  expect(errors.join("\n")).toBe("");
+  expect(lines.join("\n")).not.toMatch(/nothing to check/);
+});
+
 test("unknown rule id exits 2", async () => {
   const dir = await writeTree({
     "qualety.config.json": JSON.stringify({
