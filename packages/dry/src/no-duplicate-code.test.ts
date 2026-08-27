@@ -592,6 +592,42 @@ test("fragment nested inner still clusters nested bodies", async () => {
   expect(result.out).not.toMatch(NO_SUGGESTION);
 });
 
+test("Arm F never reports Python under dry/no-duplicate-code", async () => {
+  const result = await runFixture("mixed-lang", {
+    schema_version: 2,
+    clusters: [
+      {
+        id: 1,
+        similarity: 0.94,
+        test_only: false,
+        members: [
+          {
+            file: "src/invoice.py",
+            name: "tokenize_words",
+            start_line: 1,
+            end_line: 20,
+            representative: true,
+            test: false,
+          },
+          {
+            file: "src/billing.py",
+            name: "walk_depth_sum",
+            start_line: 1,
+            end_line: 20,
+            representative: false,
+            test: false,
+          },
+        ],
+      },
+    ],
+  });
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/dry\/no-duplicate-python/);
+  expect(result.out).not.toMatch(/dry\/no-duplicate-code/);
+  expect(result.out).not.toMatch(/\.py:\d+:\d+\s+\w+\s+dry\/no-duplicate-code/);
+});
+
 test("fragment quiet paths and type-only shapes exit 0", async () => {
   const result = await runFixture("fragment-quiet", emptyReport);
   expect(result.err).toBe("");

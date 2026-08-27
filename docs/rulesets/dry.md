@@ -1,7 +1,7 @@
 # DRY plugin catalog
 
 Honest catalog for **`@qualety/dry`** (`Plugin.name: "dry"`).  
-This is the implementation list for this plugin. Installing the plugin does **not** enable its rules. `configs.recommended` sets `dry/no-duplicate-code` to `"error"` for users who opt into that preset.
+This is the implementation list for this plugin. Installing the plugin does **not** enable its rules. `configs.recommended` sets `dry/no-duplicate-code` and `dry/no-duplicate-python` to `"error"` for users who opt into that preset.
 
 The plugin **provides** artifact `"dupehound"` (structural fingerprints via [dupehound](https://github.com/Rafaelpta/dupehound)) on the same provider map as the default registry and other plugins. Core only orchestrates `requires` → build once → `getArtifact`. We do **not** re-own dupehound’s whole-function winnowing / Jaccard. Fragment clones are a ts-morph window hash on this plugin, not a second catalog id. Embeddings / Slopo-style semantic near-dupes and TypeScript interface/type-shape matching are **not** this plugin.
 
@@ -9,7 +9,8 @@ The plugin **provides** artifact `"dupehound"` (structural fingerprints via [dup
 
 | ID | Intent | Default in recommended |
 |----|--------|------------------------|
-| `dry/no-duplicate-code` | No duplicate logical code (whole functions or repeated fragments) in included non-test sources | `error` |
+| `dry/no-duplicate-code` | No duplicate logical code (whole functions or repeated fragments) in included non-test TypeScript sources | `error` |
+| `dry/no-duplicate-python` | No duplicate logical functions in included non-test Python sources (whole-function only) | `error` |
 
 Behavior is locked in [SPECS.md](../SPECS.md) §3 R4. Summary:
 
@@ -21,6 +22,7 @@ Behavior is locked in [SPECS.md](../SPECS.md) §3 R4. Summary:
 - **Severity:** `"error"` when enabled via recommended; config may set `"warn"` (label only; violations still fail the run).
 - **Fail closed:** missing provider / missing or unrunnable dupehound, timeout, or invalid JSON → exit 2 with a message that names the rule and how to install. Empty clusters after skips → exit 0.
 - **Install:** put `dupehound` on `PATH`, or set `QUALETY_DUPEHOUND`. No network inside `qualety check`. Optional repo helper: `scripts/install-dupehound.sh` (writes `.tools/dupehound`).
+- **Python twin:** `dry/no-duplicate-python` is Arm F only (same dupehound pin, gate, and suggestion shape). It does not `requires` `python`. Members must be `.py` (not `.pyi`). Skip `test_*.py` / `*_test.py` / `*.test.py` / `*.spec.py` and path segments `tests` / `__tests__` / `fixtures` / `__pycache__`. Fragment windows are TypeScript-only; they are **not** this plugin’s Python surface yet. Arm F of `dry/no-duplicate-code` keeps only `.ts` / `.tsx` / `.mts` / `.cts` so Python never reports under the TS id.
 
 ## Not planned in this plugin
 

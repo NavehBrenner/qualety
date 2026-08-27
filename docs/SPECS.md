@@ -43,7 +43,7 @@ These decisions are considered stable unless a major new constraint appears:
 
     **React plugin — what we own:** `react/no-fetch-in-useeffect` and `react/query-error-handled` (R1-lite). TanStack stays inside `@qualety/react` (detectors only). **R3 semantic tokens → future `@qualety/tailwind` (or DS), not react.**
 
-    **DRY plugin — what we own:** `dry/no-duplicate-code` (structural R4: dupehound whole-function path plus ts-morph fragment windows). We wrap the dupehound CLI for whole-function fingerprints and plugin config; we do not re-own its winnowing / Jaccard. Fragment clones are exact structural hashes on statement windows. Embeddings / Slopo-style semantic near-dupes remain later. Architecture fitness only if we add something ArchUnit / dependency-cruiser do not already cover.
+    **DRY plugin — what we own:** `dry/no-duplicate-code` (structural R4: dupehound whole-function path plus ts-morph fragment windows) and `dry/no-duplicate-python` (Arm F whole-function twin). We wrap the dupehound CLI for whole-function fingerprints and plugin config; we do not re-own its winnowing / Jaccard. Fragment clones are exact structural hashes on statement windows (TypeScript only). Embeddings / Slopo-style semantic near-dupes remain later. Architecture fitness only if we add something ArchUnit / dependency-cruiser do not already cover.
 
     **Python plugin — what we own:** `python/no-unnecessary-def` (package-local ≤1-use pass-through / small-flat defs). Not a Ruff clone.
 
@@ -139,7 +139,7 @@ These decisions are considered stable unless a major new constraint appears:
 
   `NO_SUGGESTION = "No suggestion available for this rule."`
 
-    Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-code`, `python/no-unnecessary-def`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
+    Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-code`, `dry/no-duplicate-python`, `python/no-unnecessary-def`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
 - **Plugin**: A package that exports `name` plus optional `rules` and/or `provides`. Ruleless plugins (`name` + `provides` only) are shared providers.
 - **Artifact**: Opaque value built once per check when an enabled rule `requires` its id. One provider map: plugin `provides` first, then default registry gap-fill (`"typescript"` → `ParsedProject`; `"dupehound"` in `@qualety/dry`; `"python"` in `@qualety/python`). Vector / embedding index is still future.
 
@@ -290,6 +290,8 @@ Implemented in `@qualety/dry` as **`dry/no-duplicate-code`** (renamed from `dry/
 
 **Recommended:** `configs.recommended.rules["dry/no-duplicate-code"] = "error"`. Install does **not** apply recommended (locked #2 / #4).
 
+**Python twin (`dry/no-duplicate-python`):** same plugin, separate id (locked #8). Arm F only (`requires: ["dupehound"]`, pin **v0.1.2**). Does **not** `requires` `python` and does **not** copy Arm W. Keep `.py` members (drop `.pyi`); drop the cluster if fewer than 2 remain. Same Arm F report gate, message, and suggestion. Skip `test_*.py` / `*_test.py` / `*.test.py` / `*.spec.py` and path segments `tests` / `__tests__` / `fixtures` / `__pycache__`. Fail closed (exit 2) naming this rule. Mixed TS+Python clusters are quiet after each rule keeps only its language. Arm F of `dry/no-duplicate-code` keeps only `.ts` / `.tsx` / `.mts` / `.cts` members so Python never reports under the TS id. `configs.recommended.rules["dry/no-duplicate-python"] = "error"`.
+
 See [docs/rulesets/dry.md](./rulesets/dry.md).
 
 ### R5 — Test presence (static)
@@ -354,6 +356,7 @@ Do **not** own classic eslint-plugin-react / react-hooks / jsx-a11y, TanStack es
 | Rule | Status |
 |------|--------|
 | `dry/no-duplicate-code` | Implemented (this section; structural R4, hybrid + report gate) |
+| `dry/no-duplicate-python` | Implemented (R4 twin; Arm F whole-function only) |
 
 Embeddings / semantic near-dupes are **not** this plugin.
 

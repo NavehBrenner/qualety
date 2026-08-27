@@ -1,0 +1,8 @@
+{
+  "plugins": ["../../dist/index.js"],
+  "include": ["**/*.ts", "**/*.py"],
+  "rules": {
+    "dry/no-duplicate-code": "error",
+    "dry/no-duplicate-python": "error"
+  }
+}
