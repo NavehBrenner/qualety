@@ -1,0 +1,84 @@
+name: Standalone
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  compile:
+    name: ${{ matrix.artifact }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.best_effort }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: linux-x64
+            best_effort: false
+          - os: macos-latest
+            artifact: darwin-arm64
+            best_effort: false
+          - os: macos-13
+            artifact: darwin-x64
+            best_effort: false
+          - os: windows-latest
+            artifact: windows-x64
+            best_effort: true
+          - os: ubuntu-24.04-arm
+            artifact: linux-arm64
+            best_effort: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - uses: oven-sh/setup-bun@v2
+      - run: ./scripts/compile-standalone.sh "$PWD/qualety"
+      - name: Smoke
+        run: |
+          set -euo pipefail
+          bin="$PWD/qualety"
+          if [[ -f "$PWD/qualety.exe" ]]; then
+            bin="$PWD/qualety.exe"
+          fi
+          help=$("$bin" --help)
+          echo "$help" | grep -F 'Usage:'
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          printf '%s\n' '{"plugins":["@qualety/typescript"],"rules":{"ts/no-constant-condition":"error"}}' > "$tmp/qualety.config.json"
+          mkdir -p "$tmp/src"
+          printf '%s\n' 'export const n = 1;' > "$tmp/src/hello.ts"
+          (cd "$tmp" && "$bin" check)
+          printf '%s\n' '{"plugins":["./nope.mjs"],"rules":{"ts/no-constant-condition":"error"}}' > "$tmp/qualety.config.json"
+          set +e
+          err=$(cd "$tmp" && "$bin" check 2>&1)
+          code=$?
+          set -e
+          if [[ "$code" -ne 2 ]]; then
+            echo "expected exit 2 for relative plugin, got $code" >&2
+            echo "$err" >&2
+            exit 1
+          fi
+          echo "$err" | grep -F './nope.mjs'
+          echo "$err" | grep -F 'npm i qualety'
+          if command -v python3 >/dev/null 2>&1; then
+            printf '%s\n' '{"plugins":["@qualety/python"],"rules":{"python/no-unnecessary-def":"error"}}' > "$tmp/qualety.config.json"
+            printf '%s\n' 'x = 1' > "$tmp/src/hello.py"
+            (cd "$tmp" && "$bin" check)
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qualety-${{ matrix.artifact }}
+          path: |
+            qualety
+            qualety.exe
+          if-no-files-found: error

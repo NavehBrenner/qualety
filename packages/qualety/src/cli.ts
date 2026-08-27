@@ -97,6 +97,11 @@ function filtersFromValues(values: {
   };
 }
 
-if (process.argv[1] && import.meta.filename === process.argv[1]) {
+declare const STANDALONE: boolean;
+
+if (
+  (typeof STANDALONE !== "undefined" && STANDALONE) ||
+  (process.argv[1] && import.meta.filename === process.argv[1])
+) {
   process.exitCode = await run(process.argv.slice(2));
 }

@@ -19,10 +19,26 @@ import { isRecord } from "./record.ts";
 import { pluginSchema } from "./schemas.ts";
 import { expandTypeScriptClosure } from "./typescript-frontend.ts";
 
+declare const STANDALONE: boolean;
+
 const NOTHING_TO_CHECK = "No rules configured — nothing to check.";
 const NO_RULES_MATCHED = "No rules matched filters.";
 const DEFAULT_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.py"];
 const DEFAULT_EXCLUDE = ["**/node_modules/**", "**/dist/**"];
+const officialLoaders: Record<string, () => Promise<unknown>> = {
+  "@qualety/typescript": () =>
+    // @ts-expect-error official plugin; not a qualety dependency
+    import("@qualety/typescript"),
+  "@qualety/react": () =>
+    // @ts-expect-error official plugin; not a qualety dependency
+    import("@qualety/react"),
+  "@qualety/dry": () =>
+    // @ts-expect-error official plugin; not a qualety dependency
+    import("@qualety/dry"),
+  "@qualety/python": () =>
+    // @ts-expect-error official plugin; not a qualety dependency
+    import("@qualety/python"),
+};
 
 export type CheckFilters = {
   plugins: string[];
@@ -168,14 +184,13 @@ function printViolations(violations: readonly Violation[], out: (msg: string) =>
 }
 
 async function loadPlugin(spec: string, fromDir: string): Promise<Plugin> {
-  const target =
-    spec.startsWith(".") || spec.startsWith("/")
-      ? pathToFileURL(resolve(fromDir, spec)).href
-      : spec;
   let loaded: unknown;
   try {
-    loaded = await import(target);
+    loaded = await loadPluginModule(spec, fromDir);
   } catch (e) {
+    if (e instanceof ConfigError) {
+      throw e;
+    }
     throw new ConfigError(
       `Failed to load plugin "${spec}": ${e instanceof Error ? e.message : String(e)}`,
     );
@@ -184,6 +199,23 @@ async function loadPlugin(spec: string, fromDir: string): Promise<Plugin> {
   const parsed = pluginSchema.safeParse(candidate);
   requirePlugin(spec, candidate, parsed);
   return candidate;
+}
+
+async function loadPluginModule(spec: string, fromDir: string): Promise<unknown> {
+  const loadOfficial = officialLoaders[spec];
+  if (loadOfficial !== undefined) {
+    return loadOfficial();
+  }
+  if (typeof STANDALONE !== "undefined" && STANDALONE) {
+    throw new ConfigError(
+      `Standalone binary cannot load plugin "${spec}". Custom plugins need npm: npm i qualety`,
+    );
+  }
+  const target =
+    spec.startsWith(".") || spec.startsWith("/")
+      ? pathToFileURL(resolve(fromDir, spec)).href
+      : spec;
+  return import(target);
 }
 
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: assertion plus Zod path dispatch
