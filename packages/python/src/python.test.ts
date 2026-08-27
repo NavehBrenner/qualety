@@ -20,6 +20,7 @@ test("empty py set does not spawn", async () => {
     files: ["src/foo.ts"],
     exclude: [],
     requiredBy: ["python/no-unnecessary-def"],
+    getArtifact: () => undefined,
     env: { ...process.env, PATH: "" },
   });
   expect(result.sources.size).toBe(0);
@@ -33,6 +34,7 @@ test("missing python3 with a py file throws naming the rule", async () => {
       files: ["a.py"],
       exclude: [],
       requiredBy: ["python/no-unnecessary-def"],
+      getArtifact: () => undefined,
       env: { ...process.env, PATH: "" },
     }),
   ).rejects.toThrow(/python\/no-unnecessary-def/);
@@ -48,6 +50,7 @@ test("syntax error file is omitted", async () => {
     files: ["ok.py", "bad.py"],
     exclude: [],
     requiredBy: ["python/no-unnecessary-def"],
+    getArtifact: () => undefined,
   });
   expect(result.sources.size).toBe(1);
   expect([...result.sources.keys()].some((path) => path.endsWith("ok.py"))).toBe(true);
@@ -60,6 +63,7 @@ test("pyi files are skipped", async () => {
     files: ["a.pyi"],
     exclude: [],
     requiredBy: ["python/no-unnecessary-def"],
+    getArtifact: () => undefined,
     env: { ...process.env, PATH: "" },
   });
   expect(result.sources.size).toBe(0);

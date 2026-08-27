@@ -1,7 +1,7 @@
 {
   "name": "@qualety/dry",
   "version": "0.0.0",
-  "description": "Structural DRY rules for qualety.",
+  "description": "Structural and semantic DRY rules for qualety.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -33,6 +33,7 @@
     "build": "tsc -b"
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
     "qualety": "workspace:*",
     "ts-morph": "^28.0.0",
     "zod": "^4.0.17"

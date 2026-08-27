@@ -488,6 +488,55 @@ export default {
 };
 `;
 
+test("build context getArtifact sees typescript and missing ids are undefined", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": `export default {
+  name: "fixture",
+  provides: {
+    graph: {
+      build(context) {
+        const parsed = context.getArtifact("typescript");
+        const missing = context.getArtifact("not-built");
+        const hasTs = parsed != null && parsed.sources instanceof Map;
+        return { hasTs, missing, files: context.files };
+      },
+    },
+  },
+  rules: {
+    ping: {
+      meta: { requires: ["graph", "typescript"], docs: { description: "graph after ts" } },
+      create(context) {
+        const graph = context.getArtifact("graph");
+        if (graph.hasTs !== true || graph.missing !== undefined) {
+          context.report({
+            severity: "error",
+            file: context.getFiles()[0],
+            range: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+            message: \`hasTs=\${graph.hasTs} missing=\${graph.missing}\`,
+            suggestion: "n/a",
+          });
+        }
+      },
+    },
+  },
+};
+`,
+    "qualety.config.json": config({ "fixture/ping": "error" }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  const errors: string[] = [];
+  expect(
+    await check(
+      dir,
+      (m) => lines.push(String(m)),
+      (m) => errors.push(String(m)),
+    ),
+  ).toBe(0);
+  expect(lines.join("\n")).not.toMatch(/hasTs=/);
+  expect(errors.join("\n")).toBe("");
+});
+
 test("artifact provider builds once and exposes getArtifact", async () => {
   const dir = await writeTree({
     "plugin.mjs": fakeProviderPlugin,

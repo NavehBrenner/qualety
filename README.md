@@ -60,7 +60,7 @@ Full research notes and comparisons are in [docs/RESEARCH.md](docs/RESEARCH.md).
 
 ## Status
 
-The engine (`qualety check`) loads config, collects **one provider map** (plugin `provides`, then default-registry gap-fill), unions enabled rules’ `requires`, builds each artifact **once**, and runs every rule with the same context. Core has **no built-in rule bag** and **no dupehound (or other niche binary) host**. Default `"typescript"` → ts-morph `ParsedProject` (a plugin may provide the same id; default is skipped). `@qualety/dry` provides `"dupehound"`. `@qualety/python` provides `"python"`. Shared providers load as ruleless plugins via `plugins[]`. No `config.languages`. In-repo rules use `defineRule` so `getArtifact` is typed. Product plugins: [`@qualety/typescript`](packages/typescript) (`ts/public-exports-tested`), [`@qualety/react`](packages/react) (`react/no-fetch-in-useeffect`, `react/query-error-handled`), [`@qualety/dry`](packages/dry) (`dry/no-duplicate-code`), and [`@qualety/python`](packages/python) (`python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`). Portable authoring: [`@qualety/plugin-kit`](packages/plugin-kit) (`plugin-kit/no-spawn-in-create`, `plugin-kit/prefer-define-rule`). Multi-plugin configs load them together; catalog ids are namespaced (`ts/…` vs `react/…` vs `dry/…` vs `python/…` vs `plugin-kit/…`). Every violation has a required `suggestion` (concrete text on product rules). With nothing configured, check reports that honestly and exits 0.
+The engine (`qualety check`) loads config, collects **one provider map** (plugin `provides`, then default-registry gap-fill), unions enabled rules’ `requires`, builds each artifact **once**, and runs every rule with the same context. Core has **no built-in rule bag** and **no dupehound (or other niche binary) host**. Default `"typescript"` → ts-morph `ParsedProject` (a plugin may provide the same id; default is skipped). `@qualety/dry` provides `"dupehound"` and `"code-embeddings"`. `@qualety/python` provides `"python"`. Shared providers load as ruleless plugins via `plugins[]`. No `config.languages`. In-repo rules use `defineRule` so `getArtifact` is typed. Product plugins: [`@qualety/typescript`](packages/typescript) (`ts/public-exports-tested`), [`@qualety/react`](packages/react) (`react/no-fetch-in-useeffect`, `react/query-error-handled`), [`@qualety/dry`](packages/dry) (`dry/no-duplicate-code`, `dry/no-semantic-duplicate`), and [`@qualety/python`](packages/python) (`python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`). Portable authoring: [`@qualety/plugin-kit`](packages/plugin-kit) (`plugin-kit/no-spawn-in-create`, `plugin-kit/prefer-define-rule`). Multi-plugin configs load them together; catalog ids are namespaced (`ts/…` vs `react/…` vs `dry/…` vs `python/…` vs `plugin-kit/…`). Every violation has a required `suggestion` (concrete text on product rules). With nothing configured, check reports that honestly and exits 0.
 
 **Core architectural decisions are locked** in [docs/SPECS.md](docs/SPECS.md) (CLI shape, `defineConfig`, plugin contract, TypeScript-first core, no wrapping of Biome/ESLint, default artifact providers, performance approach, etc.). Catalogs: [docs/rulesets/typescript.md](docs/rulesets/typescript.md), [docs/rulesets/react.md](docs/rulesets/react.md), [docs/rulesets/dry.md](docs/rulesets/dry.md), [docs/rulesets/python.md](docs/rulesets/python.md), [docs/rulesets/plugin-kit.md](docs/rulesets/plugin-kit.md). IDE resolve of bare package names needs `pnpm -r build` (dist `.d.ts`). Install surfaces (npm, standalone binary, pip) are locked in SPECS #10.
 
@@ -78,7 +78,7 @@ One engine, three surfaces (SPECS #10). **Public npm and PyPI packages are not p
 
 GitHub Release / pip Mac artifacts are **darwin-arm64** (Apple Silicon) only; Intel Mac → npm.
 
-Custom or relative plugins on the binary/pip exit 2 — use `npm i qualety`. Python rules need **`python3` on PATH** (CPython is not bundled). DRY still needs `dupehound` on `PATH` or `QUALETY_DUPEHOUND`.
+Custom or relative plugins on the binary/pip exit 2 — use `npm i qualety`. Python rules need **`python3` on PATH** (CPython is not bundled). DRY still needs `dupehound` on `PATH` or `QUALETY_DUPEHOUND`. Semantic DRY needs local MiniLM weights (`scripts/install-minilm.sh` or `QUALETY_EMBEDDINGS_MODEL`).
 
 ```bash
 # npm (when published)
@@ -109,6 +109,8 @@ Optional live DRY coverage (not used by default `check` or `pnpm test`):
 ```bash
 ./scripts/install-dupehound.sh
 export QUALETY_DUPEHOUND="$PWD/.tools/dupehound"
+./scripts/install-minilm.sh
+export QUALETY_EMBEDDINGS_MODEL="$PWD/.tools/minilm-l6"
 ```
 
 Layout: `packages/qualety` (engine, CLI, plugin contract),
@@ -124,7 +126,7 @@ Public registry publish is **not** live yet (first cut is #59); install-from-wor
 1. **Phase 0** — Documentation & design ✅
 2. **Phase 1** — Core TypeScript engine ✅. Product rules: `@qualety/typescript` (`ts/public-exports-tested`) and `@qualety/react` (effect-fetch ban + R1-lite query error handling). R3 semantic tokens → future tailwind/DS plugin.
 3. **Phase 2** — CI integration, CLI, and basic MCP server so agents can query/check
-4. **Phase 3** — Structural DRY ✅ (`dry/no-duplicate-code` via plugin-owned dupehound fingerprints plus ts-morph fragment windows). Semantic DRY (vector index + similarity gate) remains later.
+4. **Phase 3** — Structural DRY ✅ (`dry/no-duplicate-code` via plugin-owned dupehound fingerprints plus ts-morph fragment windows). Semantic DRY ✅ (`dry/no-semantic-duplicate` via check-time `code-embeddings`; not `qualety index`).
 5. **Phase 4** — Python first slice ✅ (`@qualety/python` provider + `python/no-unnecessary-def`). Four more rules shipped: `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`. DRY Python twin is `dry/no-duplicate-python`.
 6. **Phase 5** — Test-presence static checks + richer architecture fitness rules
 7. **Phase 6** — Polish, documentation, example monorepos, community rules registry

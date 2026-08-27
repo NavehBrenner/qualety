@@ -77,6 +77,11 @@ export interface ArtifactBuildContext {
   exclude: readonly string[];
   /** Enabled rule ids that listed this artifact in `meta.requires`. */
   requiredBy: readonly string[];
+  /**
+   * Artifacts already built in this check. Missing id → `undefined` (no throw).
+   * Language artifacts (`python`, `typescript`) are built before other ids.
+   */
+  getArtifact(id: string): unknown;
 }
 
 export interface ArtifactProvider {

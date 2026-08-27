@@ -7,7 +7,7 @@
 
 `qualety` turns high-level engineering standards into **executable CI checks** so AI coding agents (and humans) get structural quality without relying on prose instructions or manual review of large diffs.
 
-It sits **above** formatters and classic linters: plugin rules (compositional AST, test-presence, structural DRY). Not a SAST product; not a reimplementation of Biome/ESLint. Core has **no built-in rule bag** — every check is a plugin rule. Baseline TypeScript lives in `@qualety/typescript`. React compositional rules live in `@qualety/react`. Structural DRY lives in `@qualety/dry`. Python baseline lives in `@qualety/python`. Portable plugin-authoring rules live in `@qualety/plugin-kit` (not a product app catalog).
+It sits **above** formatters and classic linters: plugin rules (compositional AST, test-presence, structural DRY). Not a SAST product; not a reimplementation of Biome/ESLint. Core has **no built-in rule bag** — every check is a plugin rule. Baseline TypeScript lives in `@qualety/typescript`. React compositional rules live in `@qualety/react`. Structural and semantic DRY live in `@qualety/dry`. Python baseline lives in `@qualety/python`. Portable plugin-authoring rules live in `@qualety/plugin-kit` (not a product app catalog).
 
 ## What to read before coding
 
@@ -16,7 +16,7 @@ It sits **above** formatters and classic linters: plugin rules (compositional AS
 3. [docs/RESEARCH.md](docs/RESEARCH.md) — competitive context (Semgrep, dupehound, etc.).
 4. [docs/rulesets/typescript.md](docs/rulesets/typescript.md) — honest TypeScript plugin catalog (implemented vs not planned).
 5. [docs/rulesets/react.md](docs/rulesets/react.md) — React plugin catalog (implemented vs backlog).
-6. [docs/rulesets/dry.md](docs/rulesets/dry.md) — DRY plugin catalog (`dry/no-duplicate-code`).
+6. [docs/rulesets/dry.md](docs/rulesets/dry.md) — DRY plugin catalog (`dry/no-duplicate-code`, `dry/no-semantic-duplicate`).
 7. [docs/rulesets/python.md](docs/rulesets/python.md) — Python plugin catalog (`python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`).
 8. [docs/rulesets/plugin-kit.md](docs/rulesets/plugin-kit.md) — portable authoring (`plugin-kit/…`); not a product app catalog.
 9. [docs/rulesets/](docs/rulesets/) — research inventories are **not** an implementation backlog.

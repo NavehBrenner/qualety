@@ -14,7 +14,7 @@ export const preferDefineRule = defineRule({
   create(context) {
     const sources = context.getArtifact("typescript").sources;
     for (const [abs, unit] of sources) {
-      if (unit instanceof SourceFile) {
+      if (unit instanceof SourceFile && !abs.endsWith(".d.ts")) {
         scanFile(unit, abs, sources, context);
       }
     }
