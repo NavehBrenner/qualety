@@ -24,12 +24,21 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - run: |
-          for pkg in qualety @qualety/typescript @qualety/react @qualety/dry @qualety/plugin-kit; do
+          for pkg in qualety @qualety/typescript @qualety/react @qualety/dry @qualety/plugin-kit @qualety/python; do
             out=$(pnpm --filter "$pkg" pack --dry-run)
             echo "$out"
             echo "$out" | grep -q LICENSE
             echo "$out" | grep -q dist/
           done
+      - name: Pip wrapper smoke
+        run: |
+          set -euo pipefail
+          stub=packaging/pip/src/qualety/qualety
+          printf '%s\n' '#!/bin/sh' 'echo Usage:' > "$stub"
+          chmod +x "$stub"
+          trap 'rm -f "$stub"' EXIT
+          out=$(PYTHONPATH=packaging/pip/src python3 -m qualety --help)
+          echo "$out" | grep -F 'Usage:'
       - run: pnpm test
       - run: pnpm check
       - run: ./scripts/install-dupehound.sh

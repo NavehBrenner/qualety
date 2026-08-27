@@ -1,0 +1,235 @@
+name: Release
+
+on:
+  push:
+    tags: [v*]
+
+jobs:
+  compile:
+    name: ${{ matrix.artifact }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.best_effort }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: linux-x64
+            best_effort: false
+          - os: macos-latest
+            artifact: darwin-arm64
+            best_effort: false
+          - os: macos-13
+            artifact: darwin-x64
+            best_effort: true
+          - os: windows-latest
+            artifact: windows-x64
+            best_effort: true
+          - os: ubuntu-24.04-arm
+            artifact: linux-arm64
+            best_effort: true
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guard tag
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "tag must be vX.Y.Z, got $tag" >&2
+            exit 1
+          fi
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - uses: oven-sh/setup-bun@v2
+      - run: ./scripts/compile-standalone.sh "$PWD/qualety"
+      - name: Smoke
+        run: |
+          set -euo pipefail
+          bin="$PWD/qualety"
+          if [[ -f "$PWD/qualety.exe" ]]; then
+            bin="$PWD/qualety.exe"
+          fi
+          help=$("$bin" --help)
+          echo "$help" | grep -F 'Usage:'
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          printf '%s\n' '{"plugins":["@qualety/typescript"],"rules":{"ts/no-constant-condition":"error"}}' > "$tmp/qualety.config.json"
+          mkdir -p "$tmp/src"
+          printf '%s\n' 'export const n = 1;' > "$tmp/src/hello.ts"
+          (cd "$tmp" && "$bin" check)
+          printf '%s\n' '{"plugins":["./nope.mjs"],"rules":{"ts/no-constant-condition":"error"}}' > "$tmp/qualety.config.json"
+          set +e
+          err=$(cd "$tmp" && "$bin" check 2>&1)
+          code=$?
+          set -e
+          if [[ "$code" -ne 2 ]]; then
+            echo "expected exit 2 for relative plugin, got $code" >&2
+            echo "$err" >&2
+            exit 1
+          fi
+          echo "$err" | grep -F './nope.mjs'
+          echo "$err" | grep -F 'npm i qualety'
+          if command -v python3 >/dev/null 2>&1; then
+            printf '%s\n' '{"plugins":["@qualety/python"],"rules":{"python/no-unnecessary-def":"error"}}' > "$tmp/qualety.config.json"
+            printf '%s\n' 'x = 1' > "$tmp/src/hello.py"
+            (cd "$tmp" && "$bin" check)
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: qualety-${{ matrix.artifact }}
+          path: |
+            qualety
+            qualety.exe
+          if-no-files-found: error
+
+  github-release:
+    needs: compile
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: qualety-*
+          path: artifacts
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          files=()
+          map_one() {
+            local dir=$1
+            local out=$2
+            local src
+            if [[ -f "$dir/qualety.exe" ]]; then
+              src="$dir/qualety.exe"
+            elif [[ -f "$dir/qualety" ]]; then
+              src="$dir/qualety"
+            else
+              return 0
+            fi
+            mv "$src" "$out"
+            files+=("$out")
+          }
+          map_one artifacts/qualety-linux-x64 qualety-linux-x64
+          map_one artifacts/qualety-darwin-arm64 qualety-darwin-arm64
+          map_one artifacts/qualety-darwin-x64 qualety-darwin-x64
+          map_one artifacts/qualety-linux-arm64 qualety-linux-arm64
+          map_one artifacts/qualety-windows-x64 qualety-windows-x64.exe
+          if [[ ! -f qualety-linux-x64 || ! -f qualety-darwin-arm64 ]]; then
+            echo "required binaries missing (linux-x64, darwin-arm64)" >&2
+            exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --generate-notes "${files[@]}"
+
+  npm:
+    needs: compile
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guard tag
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "tag must be vX.Y.Z, got $tag" >&2
+            exit 1
+          fi
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Set package versions
+        run: |
+          node <<'NODE'
+          const fs = require("node:fs");
+          const version = process.env.GITHUB_REF_NAME.slice(1);
+          const pkgs = [
+            "packages/qualety/package.json",
+            "packages/typescript/package.json",
+            "packages/react/package.json",
+            "packages/dry/package.json",
+            "packages/plugin-kit/package.json",
+            "packages/python/package.json",
+          ];
+          for (const file of pkgs) {
+            const json = JSON.parse(fs.readFileSync(file, "utf8"));
+            json.version = version;
+            fs.writeFileSync(file, `${JSON.stringify(json, null, 2)}\n`);
+          }
+          NODE
+      - name: Publish npm
+        run: |
+          set -euo pipefail
+          pnpm --filter qualety publish --access public --provenance --no-git-checks
+          pnpm --filter @qualety/typescript publish --access public --provenance --no-git-checks
+          pnpm --filter @qualety/react publish --access public --provenance --no-git-checks
+          pnpm --filter @qualety/dry publish --access public --provenance --no-git-checks
+          pnpm --filter @qualety/plugin-kit publish --access public --provenance --no-git-checks
+          pnpm --filter @qualety/python publish --access public --provenance --no-git-checks
+
+  pypi:
+    needs: compile
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Guard tag
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "tag must be vX.Y.Z, got $tag" >&2
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: qualety-*
+          path: artifacts
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python3 -m pip install build wheel
+      - name: Pack platform wheels
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          need() {
+            if [[ ! -f "$1" ]]; then
+              echo "required binary missing: $1" >&2
+              exit 1
+            fi
+          }
+          need artifacts/qualety-linux-x64/qualety
+          need artifacts/qualety-darwin-arm64/qualety
+          mkdir -p dist
+          pack() {
+            local binary=$1 plat=$2
+            if [[ -f "$binary" ]]; then
+              ./packaging/pip/pack.sh "$version" "$binary" "$plat" dist
+            fi
+          }
+          pack artifacts/qualety-linux-x64/qualety manylinux_2_17_x86_64
+          pack artifacts/qualety-darwin-arm64/qualety macosx_11_0_arm64
+          pack artifacts/qualety-darwin-x64/qualety macosx_10_13_x86_64
+          pack artifacts/qualety-windows-x64/qualety.exe win_amd64
+          pack artifacts/qualety-linux-arm64/qualety manylinux_2_17_aarch64
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

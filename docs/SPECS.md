@@ -90,7 +90,7 @@ These decisions are considered stable unless a major new constraint appears:
     | `@qualety/typescript` | yes | bundled |
     | `@qualety/react` | yes | bundled |
     | `@qualety/dry` | yes | bundled |
-    | `@qualety/python` | yes | bundled when it ships |
+     | `@qualety/python` | yes | bundled |
     | `@qualety/plugin-kit` | yes (plugin authors) | **not** bundled |
     | `@qualety/dev` | no (`private`) | **not** bundled |
     | Future product plugin | yes when it ships | bundled when it ships |
@@ -99,9 +99,11 @@ These decisions are considered stable unless a major new constraint appears:
 
     **Config contract unchanged:** `plugins[]` + per-rule toggles. Binary/pip resolve **known official specs** from the bundle. Unknown / path / third-party specs **fail closed (exit 2)** with copy that says custom plugins need npm. Do not auto-register a silent extra catalog.
 
-    **This train does not:** ship binary / pip / npm publish; pick a compile tool; lock binary config to JSON-only; embed a JS runtime; add a WASM/RPC plugin protocol; author plugins in Python; bundle the dupehound sidecar (PATH / `QUALETY_DUPEHOUND` stands). Custom plugins stay Node/npm.
+     **Compile:** `bun build --compile` (CI). Local dev stays pnpm/Node. Binary/pip config path is `qualety.config.json`; `defineConfig` / TS/JS config remain npm.
 
-    This lock precedes the release train. Python analysis (locked #6) is parallel and does not change it. Surfaces are locked, not shipped.
+     **Surfaces ship on tag `v*`** (GitHub Release binaries + npm provenance + PyPI trusted publish). Merging to main does not publish.
+
+     **This train does not:** embed a JS runtime; add a WASM/RPC plugin protocol; author plugins in Python; vendor dupehound or CPython (PATH / `QUALETY_DUPEHOUND`; `python3` on PATH for Python rules). Custom plugins stay Node/npm.
 
 ---
 
