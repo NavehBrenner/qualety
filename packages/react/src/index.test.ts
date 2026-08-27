@@ -16,10 +16,7 @@ import {
   inlineCallback,
   isEffectCall,
   isFunctionLike,
-  isHttpPackage,
   isIifeCallee,
-  isReactSpecifier,
-  isTanstackQuerySpecifier,
   queryHookName,
 } from "./ast.ts";
 import plugin, { plugin as namedPlugin } from "./index.ts";
@@ -72,10 +69,7 @@ test("plugin exports name, rules, and recommended", () => {
   expect(inlineCallback).toEqual(expect.any(Function));
   expect(isEffectCall).toEqual(expect.any(Function));
   expect(isFunctionLike).toEqual(expect.any(Function));
-  expect(isHttpPackage).toEqual(expect.any(Function));
   expect(isIifeCallee).toEqual(expect.any(Function));
-  expect(isReactSpecifier).toEqual(expect.any(Function));
-  expect(isTanstackQuerySpecifier).toEqual(expect.any(Function));
   expect(queryHookName).toEqual(expect.any(Function));
 });
 

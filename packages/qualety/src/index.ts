@@ -125,7 +125,9 @@ export interface ArtifactMap {
   typescript: ParsedProject;
 }
 
-export { defineConfig } from "./config.ts";
+export function defineConfig<T extends UserConfig>(config: T): T {
+  return config;
+}
 export { defineRule } from "./define-rule.ts";
 export {
   artifactProviderSchema,

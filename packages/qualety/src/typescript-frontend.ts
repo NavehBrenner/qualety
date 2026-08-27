@@ -12,7 +12,7 @@ export function createTypeScriptProvider(): ArtifactProvider {
     skipLoadingLibFiles: true,
   });
   return {
-    build(context) {
+    build: (context) => {
       const absolutePaths = context.files
         .map((file) => resolve(context.cwd, file))
         .filter((path) => TS_EXTENSIONS.has(extname(path)));

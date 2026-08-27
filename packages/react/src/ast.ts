@@ -41,23 +41,14 @@ export function isFunctionLike(node: Node): node is FunctionLike {
   );
 }
 
-export function isReactSpecifier(spec: string): boolean {
-  return spec === "react" || spec.startsWith("react/");
-}
-
-export function isHttpPackage(spec: string): boolean {
-  return HTTP_PACKAGES.some((pkg) => spec === pkg || spec.startsWith(`${pkg}/`));
-}
-
-export function isTanstackQuerySpecifier(spec: string): boolean {
-  return spec === "@tanstack/react-query" || spec.startsWith("@tanstack/react-query/");
-}
-
 export function collectReactEffectBindings(sf: SourceFile): {
   effects: Set<string>;
   namespaces: Set<string>;
 } {
-  const { named, namespaces } = collectMatchingImports(sf, isReactSpecifier);
+  const { named, namespaces } = collectMatchingImports(
+    sf,
+    (spec) => spec === "react" || spec.startsWith("react/"),
+  );
   const effects = new Set<string>();
   for (const item of named) {
     if (EFFECT_HOOKS.has(item.imported)) {
@@ -109,7 +100,10 @@ export function collectQueryHookBindings(sf: SourceFile): {
   hooks: Map<string, string>;
   namespaces: Set<string>;
 } {
-  const { named, namespaces } = collectMatchingImports(sf, isTanstackQuerySpecifier);
+  const { named, namespaces } = collectMatchingImports(
+    sf,
+    (spec) => spec === "@tanstack/react-query" || spec.startsWith("@tanstack/react-query/"),
+  );
   const hooks = new Map<string, string>();
   for (const item of named) {
     if (QUERY_HOOKS.has(item.imported)) {

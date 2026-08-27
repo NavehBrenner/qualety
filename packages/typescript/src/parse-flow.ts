@@ -16,8 +16,13 @@ export type FunctionLike =
   | ArrowFunction
   | MethodDeclaration;
 
-const BOUNDARY_NAMES = new Set(["validateConfig", "readConfigFile", "loadConfig", "loadPlugin"]);
-const BOUNDARY_PREFIX = /^(read|load|parse)/i;
+export const BOUNDARY_NAMES = new Set([
+  "validateConfig",
+  "readConfigFile",
+  "loadConfig",
+  "loadPlugin",
+]);
+export const BOUNDARY_PREFIX = /^(read|load|parse)/i;
 
 export function isFunctionLike(node: Node): node is FunctionLike {
   return (
@@ -37,10 +42,6 @@ export function functionLikeName(node: FunctionLike): string | undefined {
     return parent.getName();
   }
   return undefined;
-}
-
-export function isBoundaryName(name: string): boolean {
-  return BOUNDARY_NAMES.has(name) || BOUNDARY_PREFIX.test(name);
 }
 
 export function unknownParamNames(node: FunctionLike): string[] {
@@ -91,17 +92,6 @@ export function firstArgIdentifier(node: Node): string | undefined {
   }
   const arg = node.getArguments()[0];
   return arg !== undefined && Node.isIdentifier(arg) ? arg.getText() : undefined;
-}
-
-export function isArgToSchemaParse(node: Node): boolean {
-  const parent = node.getParent();
-  if (parent === undefined) {
-    return false;
-  }
-  if (!isSchemaParseCall(parent)) {
-    return false;
-  }
-  return parent.getArguments().includes(node);
 }
 
 export function aliasesOf(fn: FunctionLike, root: string): Set<string> {

@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { defineRule, type RuleContext } from "qualety";
-import { Node, type ObjectLiteralExpression, type SourceFile } from "ts-morph";
+import { Node, type ObjectLiteralExpression } from "ts-morph";
 import { findSource, lineRange, rangeOf } from "./ast.ts";
 
 const PLUGIN_CATALOGS = [
@@ -19,7 +19,7 @@ export const docsExportHonesty = defineRule({
         "Public core exports and implemented plugin rule ids must match their documentation inventories.",
     },
   },
-  create(context) {
+  create: (context) => {
     const sources = context.getArtifact("typescript").sources;
     const docs = context.getArtifact("workspace-docs");
     checkCoreApi(context, sources, docs.files);
@@ -36,7 +36,10 @@ function checkCoreApi(
   if (entry === undefined) {
     return;
   }
-  const exported = collectExportNames(entry);
+  const exported = new Map<string, Node>();
+  for (const stmt of entry.getStatements()) {
+    addExportFromStatement(stmt, exported);
+  }
   const documented = tableNames(files.get("docs/api.md") ?? "", "Exports", "Export");
   const apiPath = join(context.getCwd(), "docs/api.md");
   for (const [name, node] of exported) {
@@ -104,39 +107,32 @@ function checkCatalogs(
   }
 }
 
-function collectExportNames(sourceFile: SourceFile): Map<string, Node> {
-  const names = new Map<string, Node>();
-  const push = (name: string, node: Node) => {
-    if (!names.has(name)) {
-      names.set(name, node);
-    }
-  };
-  for (const stmt of sourceFile.getStatements()) {
-    addExportFromStatement(stmt, push);
-  }
-  return names;
-}
-
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: export-form dispatch; splitting recreates single-use helpers
-function addExportFromStatement(stmt: Node, push: (name: string, node: Node) => void) {
+function addExportFromStatement(stmt: Node, names: Map<string, Node>) {
   if (Node.isExportDeclaration(stmt)) {
     if (!stmt.isNamespaceExport()) {
       for (const spec of stmt.getNamedExports()) {
-        push(spec.getName(), spec.getNameNode());
+        if (!names.has(spec.getName())) {
+          names.set(spec.getName(), spec.getNameNode());
+        }
       }
     }
     return;
   }
   if (Node.isExportAssignment(stmt) && !stmt.isExportEquals()) {
-    push("default", stmt);
+    if (!names.has("default")) {
+      names.set("default", stmt);
+    }
     return;
   }
-  if (addNamedExportable(stmt, push)) {
+  if (addNamedExportable(stmt, names)) {
     return;
   }
   if (Node.isVariableStatement(stmt) && stmt.hasExportKeyword()) {
     for (const decl of stmt.getDeclarations()) {
-      push(decl.getName(), decl.getNameNode() ?? decl);
+      if (!names.has(decl.getName())) {
+        names.set(decl.getName(), decl.getNameNode() ?? decl);
+      }
     }
     return;
   }
@@ -144,11 +140,13 @@ function addExportFromStatement(stmt: Node, push: (name: string, node: Node) => 
     (Node.isTypeAliasDeclaration(stmt) || Node.isInterfaceDeclaration(stmt)) &&
     stmt.hasExportKeyword()
   ) {
-    push(stmt.getName(), stmt.getNameNode());
+    if (!names.has(stmt.getName())) {
+      names.set(stmt.getName(), stmt.getNameNode());
+    }
   }
 }
 
-function addNamedExportable(stmt: Node, push: (name: string, node: Node) => void): boolean {
+function addNamedExportable(stmt: Node, names: Map<string, Node>): boolean {
   const named =
     Node.isFunctionDeclaration(stmt) ||
     Node.isClassDeclaration(stmt) ||
@@ -160,14 +158,16 @@ function addNamedExportable(stmt: Node, push: (name: string, node: Node) => void
     return true;
   }
   if (stmt.isDefaultExport()) {
-    push("default", stmt.getNameNode() ?? stmt);
+    if (!names.has("default")) {
+      names.set("default", stmt.getNameNode() ?? stmt);
+    }
     return true;
   }
   const nameNode = stmt.getNameNode();
   if (nameNode !== undefined) {
     const name = stmt.getName();
-    if (name !== undefined) {
-      push(name, nameNode);
+    if (name !== undefined && !names.has(name)) {
+      names.set(name, nameNode);
     }
   }
   return true;

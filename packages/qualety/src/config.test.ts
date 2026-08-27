@@ -6,8 +6,6 @@ import rootVitestConfig from "../../../vitest.config.ts";
 import {
   CONFIG_FILENAMES,
   ConfigError,
-  defineConfig,
-  findConfigPath,
   loadConfig,
   readConfigFile,
   userConfigSchema,
@@ -39,8 +37,7 @@ async function writeTree(files: Record<string, string>): Promise<string> {
 }
 
 test("defineConfig is exported and returns the same reference", () => {
-  expect(exportedDefineConfig).toBe(defineConfig);
-  expect(defineConfig(valid)).toBe(valid);
+  expect(exportedDefineConfig(valid)).toBe(valid);
   expect(CONFIG_FILENAMES.length).toBeGreaterThan(0);
   expect(userConfigSchema).toBeDefined();
   expect(new ConfigError("x")).toBeInstanceOf(Error);
@@ -129,7 +126,6 @@ test("loadConfig reads a TypeScript config default export", async () => {
 test("loadConfig returns undefined when no config file exists", async () => {
   const dir = await writeTree({ "readme.txt": "no config here" });
   expect(await loadConfig(dir)).toBeUndefined();
-  expect(await findConfigPath(dir)).toBeUndefined();
 });
 
 test("loadConfig rejects unknown keys in JSON", async () => {

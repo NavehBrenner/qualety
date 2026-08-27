@@ -3,7 +3,7 @@ import type { ParsedProject, Rule } from "./index.ts";
 
 defineRule({
   meta: { requires: ["typescript"], docs: { description: "typed" } },
-  create(context) {
+  create: (context) => {
     const project: ParsedProject = context.getArtifact("typescript");
     void project;
     // @ts-expect-error workspace-docs is not in requires
@@ -16,7 +16,7 @@ defineRule({
     requires: ["typescript", "workspace-docs"],
     docs: { description: "both" },
   },
-  create(context) {
+  create: (context) => {
     context.getArtifact("typescript");
     context.getArtifact("workspace-docs");
   },
@@ -24,7 +24,7 @@ defineRule({
 
 defineRule({
   meta: { docs: { description: "omitted" } },
-  create(context) {
+  create: (context) => {
     // @ts-expect-error omitted requires ⇒ no getArtifact
     context.getArtifact("typescript");
   },
@@ -32,6 +32,6 @@ defineRule({
 
 const assignable: Rule = defineRule({
   meta: { requires: ["typescript"], docs: { description: "assignable" } },
-  create() {},
+  create: () => {},
 });
 void assignable;

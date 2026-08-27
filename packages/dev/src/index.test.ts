@@ -5,7 +5,6 @@ import { expect, test } from "vitest";
 import {
   findSource,
   importNameMap,
-  isCorePackagePath,
   isProductPluginPath,
   isSourceFile,
   isTestPath,
@@ -58,7 +57,6 @@ test("dev helpers and rules are exported", () => {
   expect(noFsInRules).toBeDefined();
   expect(findSource).toEqual(expect.any(Function));
   expect(importNameMap).toEqual(expect.any(Function));
-  expect(isCorePackagePath).toEqual(expect.any(Function));
   expect(isProductPluginPath).toEqual(expect.any(Function));
   expect(isSourceFile).toEqual(expect.any(Function));
   expect(isTestPath).toEqual(expect.any(Function));

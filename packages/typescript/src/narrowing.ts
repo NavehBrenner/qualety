@@ -308,15 +308,7 @@ function priorGuardHit(
   };
 }
 
-export function mixedCallerHits(fn: FunctionLike, sourceFile: SourceFile): ConstantHit[] {
-  const hits: ConstantHit[] = [];
-  for (const cond of conditionNodes(fn)) {
-    hits.push(...mixedHitsForCondition(fn, cond, sourceFile));
-  }
-  return hits;
-}
-
-function mixedHitsForCondition(
+export function mixedHitsForCondition(
   fn: FunctionLike,
   cond: Node,
   sourceFile: SourceFile,

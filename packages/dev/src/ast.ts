@@ -38,10 +38,6 @@ export function isTestPath(filePath: string): boolean {
   return normalized.split("/").includes("__tests__");
 }
 
-export function isCorePackagePath(filePath: string): boolean {
-  return posix(filePath).includes("/packages/qualety/");
-}
-
 export function isProductPluginPath(filePath: string): boolean {
   const normalized = posix(filePath);
   return PRODUCT_PLUGIN_DIRS.some((dir) => normalized.includes(`/packages/${dir}/`));

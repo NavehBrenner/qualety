@@ -31,18 +31,42 @@ test("pass-through, small+flat, single-use type, impl export, useFoo without Rea
   expect(result.err).toBe("");
   expect(result.code).toBe(1);
   expect(result.out).toMatch(/ts\/no-unnecessary-abstraction/);
-  expect(result.out).toMatch(/"wrap"/);
+  expect(result.out).toMatch(/"wrap" is only called once and does not pay for the indirection/);
   expect(result.out).toMatch(/"add"/);
   expect(result.out).toMatch(/"useFoo"/);
-  expect(result.out).toMatch(/"Id"/);
+  expect(result.out).toMatch(/"Id" is only referenced once/);
   expect(result.out).toMatch(/"smallFlat"/);
   expect(result.out).toMatch(/Inline at its only call site/);
   expect(result.out).toMatch(/Inline the type at its only use/);
+  expect(result.out).not.toMatch(/in this file/);
   expect(result.out).not.toMatch(NO_SUGGESTION);
 });
 
-test("two call sites, zero callers, nested control flow, branded type exit 0", async () => {
+test("one other-file caller, unused helper and type exit 1", async () => {
+  const result = await runFixture("abstraction-bad-cross-file");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/ts\/no-unnecessary-abstraction/);
+  expect(result.out).toMatch(/"wrap" is only called once and does not pay for the indirection/);
+  expect(result.out).toMatch(/"unusedFn" is not called and does not pay for the indirection/);
+  expect(result.out).toMatch(/"Id" is only referenced once/);
+  expect(result.out).toMatch(/"UnusedType" is not referenced/);
+  expect(result.out).toMatch(/Inline at its only call site/);
+  expect(result.out).toMatch(/Remove this helper/);
+  expect(result.out).toMatch(/Inline the type at its only use/);
+  expect(result.out).toMatch(/Remove this type/);
+  expect(result.out).not.toMatch(/in this file/);
+  expect(result.out).not.toMatch(NO_SUGGESTION);
+});
+
+test("two call sites, nested control flow, branded type exit 0", async () => {
   const result = await runFixture("abstraction-ok");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+});
+
+test("two files each call and each reference once exit 0", async () => {
+  const result = await runFixture("abstraction-ok-cross-file");
   expect(result.err).toBe("");
   expect(result.code).toBe(0);
 });

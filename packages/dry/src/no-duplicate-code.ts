@@ -48,7 +48,21 @@ export const noDuplicateCode = defineRule({
     const artifact = context.getArtifact("typescript");
     const cwd = context.getCwd();
     const merged = mergeReports([
-      ...reportsFromClusters(clustersFromDupehound(index)),
+      ...reportsFromClusters(
+        index.clusters.map((cluster) => ({
+          arm: "F" as const,
+          similarity: cluster.similarity,
+          members: cluster.members.map((member) => ({
+            file: member.file,
+            startLine: member.startLine,
+            startColumn: 1,
+            endLine: member.endLine,
+            endColumn: 1,
+            host: member.name,
+            loc: member.endLine - member.startLine + 1,
+          })),
+        })),
+      ),
       ...reportsFromClusters(clustersFromWindows(artifact.sources, cwd)),
     ]);
     for (const report of merged) {
@@ -58,23 +72,29 @@ export const noDuplicateCode = defineRule({
 });
 
 export function reportsFromIndex(index: DupehoundIndex): Omit<Violation, "ruleId">[] {
-  return reportsFromClusters(clustersFromDupehound(index)).map((report) => report.item);
-}
-
-function clustersFromDupehound(index: DupehoundIndex): CloneCluster[] {
-  return index.clusters.map((cluster) => ({
-    arm: "F",
-    similarity: cluster.similarity,
-    members: cluster.members.map((member) => ({
-      file: member.file,
-      startLine: member.startLine,
-      startColumn: 1,
-      endLine: member.endLine,
-      endColumn: 1,
-      host: member.name,
-      loc: member.endLine - member.startLine + 1,
-    })),
-  }));
+  const clusters: CloneCluster[] = [];
+  for (const cluster of index.clusters) {
+    clusters.push({
+      arm: "F",
+      similarity: cluster.similarity,
+      members: cluster.members.map((member) => ({
+        file: member.file,
+        startLine: member.startLine,
+        startColumn: 1,
+        endLine: member.endLine,
+        endColumn: 1,
+        host: member.name,
+        loc: member.endLine - member.startLine + 1,
+      })),
+    });
+  }
+  const out: Omit<Violation, "ruleId">[] = [];
+  for (const report of reportsFromClusters(clusters)) {
+    if (report.item.message.length > 0) {
+      out.push(report.item);
+    }
+  }
+  return out;
 }
 
 function clustersFromWindows(sources: ReadonlyMap<string, unknown>, cwd: string): CloneCluster[] {
@@ -350,7 +370,13 @@ function reportsFromCluster(cluster: CloneCluster): CloneReport[] {
   if (windowLoc * repetitions < JOINT_LOC_GATE && repetitions < REPS_GATE) {
     return [];
   }
-  const members = cluster.members.slice().sort(compareSpan);
+  const members = cluster.members.slice().sort((left, right) => {
+    return (
+      left.file.localeCompare(right.file) ||
+      left.startLine - right.startLine ||
+      left.startColumn - right.startColumn
+    );
+  });
   const rep = members[0];
   if (rep === undefined) {
     return [];
@@ -398,7 +424,20 @@ function armWReport(member: CloneSpan, rep: CloneSpan): Omit<Violation, "ruleId"
 }
 
 function mergeReports(reports: CloneReport[]): CloneReport[] {
-  const ranked = reports.slice().sort(compareReports);
+  const ranked = reports.slice().sort((left, right) => {
+    const span = right.endLine - right.startLine - (left.endLine - left.startLine);
+    if (span !== 0) {
+      return span;
+    }
+    if (left.arm !== right.arm) {
+      return left.arm === "F" ? -1 : 1;
+    }
+    return (
+      left.file.localeCompare(right.file) ||
+      left.startLine - right.startLine ||
+      left.startColumn - right.startColumn
+    );
+  });
   const kept: CloneReport[] = [];
   for (const item of ranked) {
     if (
@@ -411,32 +450,10 @@ function mergeReports(reports: CloneReport[]): CloneReport[] {
       kept.push(item);
     }
   }
-  return kept.sort((left, right) => compareLocation(left, right));
-}
-
-function compareReports(left: CloneReport, right: CloneReport): number {
-  const span = right.endLine - right.startLine - (left.endLine - left.startLine);
-  if (span !== 0) {
-    return span;
-  }
-  if (left.arm !== right.arm) {
-    return left.arm === "F" ? -1 : 1;
-  }
-  return compareLocation(left, right);
-}
-
-function compareLocation(left: CloneReport, right: CloneReport): number {
-  return (
-    left.file.localeCompare(right.file) ||
-    left.startLine - right.startLine ||
-    left.startColumn - right.startColumn
-  );
-}
-
-function compareSpan(left: CloneSpan, right: CloneSpan): number {
-  return (
-    left.file.localeCompare(right.file) ||
-    left.startLine - right.startLine ||
-    left.startColumn - right.startColumn
+  return kept.sort(
+    (left, right) =>
+      left.file.localeCompare(right.file) ||
+      left.startLine - right.startLine ||
+      left.startColumn - right.startColumn,
   );
 }

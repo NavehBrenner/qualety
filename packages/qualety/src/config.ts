@@ -32,11 +32,6 @@ export class ConfigError extends Error {
   }
 }
 
-/** Identity helper. The loader parses via `validateConfig`; this does not parse. */
-export function defineConfig<T extends UserConfig>(config: T): T {
-  return config;
-}
-
 export function validateConfig(raw: unknown): UserConfig {
   const result = userConfigSchema.safeParse(raw);
   if (result.success) {
@@ -45,15 +40,19 @@ export function validateConfig(raw: unknown): UserConfig {
   throw mapConfigZodError(raw, result.error);
 }
 
-export async function findConfigPath(cwd: string): Promise<string | undefined> {
+export async function loadConfig(
+  cwd: string,
+): Promise<{ path: string; config: UserConfig } | undefined> {
   let dir = cwd;
   while (true) {
     for (const name of CONFIG_FILENAMES) {
       const candidate = join(dir, name);
       try {
         await access(candidate);
-        return candidate;
-      } catch {}
+      } catch {
+        continue;
+      }
+      return { path: candidate, config: await readConfigFile(candidate) };
     }
     const parent = dirname(dir);
     if (parent === dir) {
@@ -61,16 +60,6 @@ export async function findConfigPath(cwd: string): Promise<string | undefined> {
     }
     dir = parent;
   }
-}
-
-export async function loadConfig(
-  cwd: string,
-): Promise<{ path: string; config: UserConfig } | undefined> {
-  const path = await findConfigPath(cwd);
-  if (path === undefined) {
-    return undefined;
-  }
-  return { path, config: await readConfigFile(path) };
 }
 
 export async function readConfigFile(path: string): Promise<UserConfig> {

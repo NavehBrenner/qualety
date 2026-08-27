@@ -6,10 +6,10 @@ import { NO_SUGGESTION } from "../../qualety/src/index.ts";
 import plugin from "./index.ts";
 import {
   aliasesOf,
+  BOUNDARY_NAMES,
+  BOUNDARY_PREFIX,
   firstArgIdentifier,
   functionLikeName,
-  isArgToSchemaParse,
-  isBoundaryName,
   isFunctionLike,
   isHandGuardCall,
   isJsonParseCall,
@@ -36,11 +36,11 @@ async function runFixture(name: string) {
 
 test("plugin exports zod-boundary and recommended includes it", () => {
   expect(zodBoundary).toBeDefined();
+  expect(BOUNDARY_NAMES.size).toBeGreaterThan(0);
+  expect(BOUNDARY_PREFIX.test("loadFoo")).toBe(true);
   expect(aliasesOf).toEqual(expect.any(Function));
   expect(firstArgIdentifier).toEqual(expect.any(Function));
   expect(functionLikeName).toEqual(expect.any(Function));
-  expect(isArgToSchemaParse).toEqual(expect.any(Function));
-  expect(isBoundaryName).toEqual(expect.any(Function));
   expect(isFunctionLike).toEqual(expect.any(Function));
   expect(isHandGuardCall).toEqual(expect.any(Function));
   expect(isJsonParseCall).toEqual(expect.any(Function));
