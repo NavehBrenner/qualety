@@ -7,6 +7,7 @@ export const WORKSPACE_DOC_PATHS = [
   "docs/rulesets/typescript.md",
   "docs/rulesets/react.md",
   "docs/rulesets/dry.md",
+  "docs/rulesets/python.md",
   "docs/rulesets/dev.md",
   "docs/rulesets/plugin-kit.md",
   "packages/qualety/package.json",

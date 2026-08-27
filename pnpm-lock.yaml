@@ -20,6 +20,9 @@ importers:
       '@qualety/plugin-kit':
         specifier: workspace:*
         version: link:packages/plugin-kit
+      '@qualety/python':
+        specifier: workspace:*
+        version: link:packages/python
       '@qualety/typescript':
         specifier: workspace:*
         version: link:packages/typescript
@@ -73,6 +76,16 @@ importers:
       ts-morph:
         specifier: ^28.0.0
         version: 28.0.0
+    devDependencies:
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+
+  packages/python:
+    dependencies:
+      qualety:
+        specifier: workspace:*
+        version: link:../qualety
     devDependencies:
       '@types/node':
         specifier: ^26.2.0

@@ -1,0 +1,41 @@
+{
+  "name": "@qualety/python",
+  "version": "0.0.0",
+  "description": "Python baseline rules for qualety.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NavehBrenner/qualety.git",
+    "directory": "packages/python"
+  },
+  "bugs": {
+    "url": "https://github.com/NavehBrenner/qualety/issues"
+  },
+  "homepage": "https://github.com/NavehBrenner/qualety",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "qualety": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0"
+  }
+}

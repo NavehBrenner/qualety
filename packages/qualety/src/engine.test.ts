@@ -371,6 +371,35 @@ test("language provider skips non-TS paths", async () => {
   expect(lines.join("\n")).not.toMatch(/expected 1 TS source/);
 });
 
+test("default include lists py files", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": `export default {
+  name: "fixture",
+  rules: {
+    hasPy: {
+      meta: { docs: { description: "hello.py must be listed" } },
+      create(context) {
+        if (!context.getFiles().includes("src/hello.py")) {
+          context.report({
+            severity: "error",
+            file: "src/hello.py",
+            range: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+            message: "src/hello.py not listed",
+          });
+        }
+      },
+    },
+  },
+};
+`,
+    "qualety.config.json": config({ "fixture/hasPy": "error" }),
+    "src/hello.py": "x = 1\n",
+  });
+  const lines: string[] = [];
+  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(0);
+  expect(lines.join("\n")).not.toMatch(/src\/hello\.py not listed/);
+});
+
 test("requires python with no provider exits 2", async () => {
   const dir = await writeTree({
     "plugin.mjs": pluginWith(`{ requires: ["python"], docs: { description: "needs python" } }`),
