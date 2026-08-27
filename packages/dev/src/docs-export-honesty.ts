@@ -7,6 +7,7 @@ const PLUGIN_CATALOGS = [
   { dir: "typescript", catalog: "docs/rulesets/typescript.md" },
   { dir: "react", catalog: "docs/rulesets/react.md" },
   { dir: "dry", catalog: "docs/rulesets/dry.md" },
+  { dir: "python", catalog: "docs/rulesets/python.md" },
   { dir: "dev", catalog: "docs/rulesets/dev.md" },
   { dir: "plugin-kit", catalog: "docs/rulesets/plugin-kit.md" },
 ] as const;

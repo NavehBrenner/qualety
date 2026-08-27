@@ -37,8 +37,8 @@ test("plugin exports name, rules, workspace-docs, and no recommended", () => {
   expect(typeof plugin.provides?.["workspace-docs"]?.build).toBe("function");
 });
 
-test("existing ts/react/dry fixture configs do not load @qualety/dev", () => {
-  for (const dir of ["typescript", "react", "dry"]) {
+test("existing ts/react/dry/python fixture configs do not load @qualety/dev", () => {
+  for (const dir of ["typescript", "react", "dry", "python"]) {
     const configs = collectConfigs(join(here, "../../", dir, "fixtures"));
     expect(configs.length).toBeGreaterThan(0);
     for (const body of configs) {

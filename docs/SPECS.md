@@ -28,13 +28,13 @@ These decisions are considered stable unless a major new constraint appears:
 4. **Plugins**  
    First-class and user-writable. There is one explicit contract (see § Plugin contract). Plugins can be published as npm packages or loaded from local paths. Agent skills for creating and maintaining plugins are part of the deliverable.  
    **v1 plugin language is TypeScript only.** Plugins are TypeScript/JavaScript packages that export the `Plugin` interface. Python-written plugins may be supported later via the same protocol once a Python frontend exists.  
-    **Core has no built-in rule bag.** Every check is a plugin rule. Core is the engine, default artifact providers, config/CLI, and a generic artifact seam — not a default catalog and **not** a dupehound (or other niche binary) host.     Baseline TypeScript rules live in `@qualety/typescript` (`Plugin.name: "ts"`). React compositional rules live in `@qualety/react` (`Plugin.name: "react"`). Structural DRY lives in `@qualety/dry` (`Plugin.name: "dry"`), which **provides** the `dupehound` artifact. `@qualety/plugin-kit` (`Plugin.name: "plugin-kit"`) is the portable plugin-authoring ruleset — not core, not `@qualety/dev`, not a product app catalog. `@qualety/dev` (`Plugin.name: "dev"`) is this monorepo’s dogfood plugin, not a product catalog. Shared/provider-only packages load as **ruleless plugins** (`name` + `provides`, no `rules`) via `plugins[]`.     A plugin may ship `configs.recommended`; installing a plugin does **not** enable its rules (locked #2). This repo’s root config enables every applicable product rule at error; framework plugins only when the tree needs them.
+    **Core has no built-in rule bag.** Every check is a plugin rule. Core is the engine, default artifact providers, config/CLI, and a generic artifact seam — not a default catalog and **not** a dupehound (or other niche binary) host.     Baseline TypeScript rules live in `@qualety/typescript` (`Plugin.name: "ts"`). React compositional rules live in `@qualety/react` (`Plugin.name: "react"`). Structural DRY lives in `@qualety/dry` (`Plugin.name: "dry"`), which **provides** the `dupehound` artifact. Python baseline lives in `@qualety/python` (`Plugin.name: "python"`), which **provides** the `python` artifact (not a default). `@qualety/plugin-kit` (`Plugin.name: "plugin-kit"`) is the portable plugin-authoring ruleset — not core, not `@qualety/dev`, not a product app catalog. `@qualety/dev` (`Plugin.name: "dev"`) is this monorepo’s dogfood plugin, not a product catalog. Shared/provider-only packages load as **ruleless plugins** (`name` + `provides`, no `rules`) via `plugins[]`.     A plugin may ship `configs.recommended`; installing a plugin does **not** enable its rules (locked #2). This repo’s root config enables every applicable product rule at error; framework plugins only when the tree needs them.
 
 5. **Runtime helpers**  
    Optional companion packages (e.g. a future official `DataRegion`). Static rules work both with the official helpers and with equivalent structural patterns the user already has. **Helpers are optional; this WP ships none.** TanStack Query detectors live under `@qualety/react`, not a separate package.
 
 6. **Scope of v1**  
-   High-quality TypeScript/React engine first. Python (and other languages) later, reusing the same core protocol.
+   High-quality TypeScript/React engine first. Python baseline starts with `@qualety/python` (`python/no-unnecessary-def`); other languages later, reusing the same core protocol.
 
 7. **Relationship to classic linters/formatters**  
    `qualety` is the *higher-order* layer. It does **not** wrap, re-implement, or own configuration for Biome, ESLint, Prettier, Oxlint, or Ruff. Users are expected to run a fast linter/formatter of their choice.     We may later offer a thin convenience flag that invokes the user’s existing Biome/ESLint config and then runs our rules, but we never own those tools’ configuration or rule sets. This monorepo enables Biome `noExcessiveCognitiveComplexity` (error, max 15) for its own sources; that is not a qualety product rule and we do not own the metric for consumers. Custom plugins that need classic lint/format results should call those tools themselves.
@@ -45,6 +45,8 @@ These decisions are considered stable unless a major new constraint appears:
 
     **DRY plugin — what we own:** `dry/no-duplicate-code` (structural R4: dupehound whole-function path plus ts-morph fragment windows). We wrap the dupehound CLI for whole-function fingerprints and plugin config; we do not re-own its winnowing / Jaccard. Fragment clones are exact structural hashes on statement windows. Embeddings / Slopo-style semantic near-dupes remain later. Architecture fitness only if we add something ArchUnit / dependency-cruiser do not already cover.
 
+    **Python plugin — what we own:** `python/no-unnecessary-def` (package-local ≤1-use pass-through / small-flat defs). Not a Ruff clone.
+
    **What we do not own** (use Biome, ESLint, or dependency-cruiser): circular imports; max relative import depth; simple path bans (`dist/`, `generated/`, …); deep-import / internal-module bans; generic layer charts those tools already do well.
 
    **Overlap family:** `import-boundary` / layers / no-import-from / no-deep-import / max-relative-depth are one policy family. The v1 TypeScript plugin catalogs **none** of them unless a future WP proves a unique agent-facing gap. Prefer configuring Biome + dependency-cruiser over reimplementation.
@@ -52,9 +54,9 @@ These decisions are considered stable unless a major new constraint appears:
 8. **One provider map / one engine loop**  
     No unified cross-language AST. Same product idea on two languages ⇒ **two rules** (convention, not `meta.kind`), each `requires` that artifact id. There is a single `Rule` / `RuleContext`. Optional `meta.requires: string[]` names artifacts. In-repo / TypeScript plugin authors use `defineRule` (identity) so `getArtifact(id)` is typed from `ArtifactMap` (no `as ParsedProject` / `as DupehoundIndex`). `defineRule` types accepted `getArtifact` ids from that rule’s `requires` tuple (omitted ⇒ uncallable). Runtime engine `getArtifact` stays untyped at the `Map<string, unknown>` boundary. Load path is Zod (`pluginSchema` / `ruleSchema` / `artifactProviderSchema`), not hand guards.
 
-   **Who provides:** one map. Start empty → register every `provides` entry from loaded **plugin modules** (collision → exit 2, names **both owners**) → for each id in the **default registry** still missing, fill with `owner: "default"`. Defaults only fill gaps; they never replace a plugin-provided id. A plugin `provides.typescript` **wins** (default skipped for that id). v1 default registry is `as const` with `"typescript"` → today’s `ParsedProject`. Default providers are compiled-in trusted factories (`DEFAULT_PROVIDERS` / `createTypeScriptProvider`), gap-filled after plugin `provides`, and are **not** loaded through `pluginSchema`. `dupehound` stays in `@qualety/dry`. Multi-team shared providers load as **ruleless plugins** via `plugins[]`. There is **no** `config.languages` and **no** reserved-id category.
+   **Who provides:** one map. Start empty → register every `provides` entry from loaded **plugin modules** (collision → exit 2, names **both owners**) → for each id in the **default registry** still missing, fill with `owner: "default"`. Defaults only fill gaps; they never replace a plugin-provided id. A plugin `provides.typescript` **wins** (default skipped for that id). v1 default registry is `as const` with `"typescript"` → today’s `ParsedProject`. Default providers are compiled-in trusted factories (`DEFAULT_PROVIDERS` / `createTypeScriptProvider`), gap-filled after plugin `provides`, and are **not** loaded through `pluginSchema`.     `dupehound` stays in `@qualety/dry`. `python` stays in `@qualety/python` (not a default). Multi-team shared providers load as **ruleless plugins** via `plugins[]`. There is **no** `config.languages` and **no** reserved-id category.
 
-   **Engine:** collect all providers into one map → union `requires` from enabled rules → **build each id once** (`await provider.build(context)`) → `create` every rule once with the same context. One include/exclude file pass; extension filtering lives **inside** the typescript provider’s `build` (`.ts`/`.tsx`/`.mts`/`.cts`). Empty sources after filter is success, not an error.
+   **Engine:** collect all providers into one map → union `requires` from enabled rules → **build each id once** (`await provider.build(context)`) → `create` every rule once with the same context. One include/exclude file pass; extension filtering lives **inside** each language provider’s `build` (typescript: `.ts`/`.tsx`/`.mts`/`.cts`; python plugin: `.py`, not `.pyi`). Default include lists `**/*.py`. Empty sources after filter is success, not an error.
 
    **Fail closed (exit 2, name rule ids):** malformed plugin / rule / provider at load; invalid `requires`; missing provider (provider-neutral copy, not “No plugin provides…”); duplicate provider id; build throw; `getArtifact` for an id not in that rule’s `requires`. Do not silently skip.
 
@@ -88,9 +90,10 @@ These decisions are considered stable unless a major new constraint appears:
     | `@qualety/typescript` | yes | bundled |
     | `@qualety/react` | yes | bundled |
     | `@qualety/dry` | yes | bundled |
+    | `@qualety/python` | yes | bundled when it ships |
     | `@qualety/plugin-kit` | yes (plugin authors) | **not** bundled |
     | `@qualety/dev` | no (`private`) | **not** bundled |
-    | Future product plugin (e.g. Python when named) | yes when it ships | bundled when it ships |
+    | Future product plugin | yes when it ships | bundled when it ships |
 
     Bundling is not a core rule bag. Locked **#4** stands: core has no built-in rules; the binary statically includes the **same plugin modules**. Locked **#2** stands: listing or bundling a plugin does not enable its rules.
 
@@ -119,11 +122,12 @@ These decisions are considered stable unless a major new constraint appears:
 └────────────────────────────┬────────────────────────────────┘
                              │
               ┌──────────────▼──────────────┐
-              │   Artifact providers        │
-              │   default: "typescript" →   │
-              │     ParsedProject           │
-              │   dry: "dupehound"          │
-              │   embeddings later          │
+               │   Artifact providers        │
+               │   default: "typescript" →   │
+               │     ParsedProject           │
+               │   dry: "dupehound"          │
+               │   python: "python"          │
+               │   embeddings later          │
               └─────────────────────────────┘
 ```
 
@@ -135,9 +139,9 @@ These decisions are considered stable unless a major new constraint appears:
 
   `NO_SUGGESTION = "No suggestion available for this rule."`
 
-    Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-code`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
+    Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-code`, `python/no-unnecessary-def`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
 - **Plugin**: A package that exports `name` plus optional `rules` and/or `provides`. Ruleless plugins (`name` + `provides` only) are shared providers.
-- **Artifact**: Opaque value built once per check when an enabled rule `requires` its id. One provider map: plugin `provides` first, then default registry gap-fill (`"typescript"` → `ParsedProject`; `"dupehound"` in `@qualety/dry`). Vector / embedding index is still future.
+- **Artifact**: Opaque value built once per check when an enabled rule `requires` its id. One provider map: plugin `provides` first, then default registry gap-fill (`"typescript"` → `ParsedProject`; `"dupehound"` in `@qualety/dry`; `"python"` in `@qualety/python`). Vector / embedding index is still future.
 
 ## 2. Plugin contract (explicit)
 
@@ -353,6 +357,16 @@ Do **not** own classic eslint-plugin-react / react-hooks / jsx-a11y, TanStack es
 
 Embeddings / semantic near-dupes are **not** this plugin.
 
+### v1 Python plugin catalog
+
+`@qualety/python` (`name: "python"`) ships only:
+
+| Rule | Status |
+|------|--------|
+| `python/no-unnecessary-def` | Implemented (package-local ≤1-use pass-through / small-flat defs; see [python.md](./rulesets/python.md)) |
+
+Authored in TypeScript. Provides artifact `"python"` (CPython `ast` via `python3` spawn); not a default provider. Not a Ruff clone. DRY / types arm / Python-authored plugins are **not** this WP.
+
 ## 4. CLI interface
 
 ```bash
@@ -403,7 +417,7 @@ Thin wrapper exposing at least: `check_file`, `check_diff`, `query_similar`, `li
 
 | Capability                    | TypeScript | Python |
 |-------------------------------|------------|--------|
-| AST compositional rules       | Primary    | Planned |
+| AST compositional rules       | Primary    | First slice (`python/no-unnecessary-def`) |
 | Semantic style / tokens       | Primary    | Later   |
 | Semantic DRY (embeddings)     | Yes        | Yes     |
 | Structural clone detection    | Yes        | Yes     |

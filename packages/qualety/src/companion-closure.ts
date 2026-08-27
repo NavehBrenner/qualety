@@ -4,6 +4,7 @@ const COMPANION_PAIRS = [
   ["docs/rulesets/typescript.md", "packages/typescript/src/index.ts"],
   ["docs/rulesets/react.md", "packages/react/src/index.ts"],
   ["docs/rulesets/dry.md", "packages/dry/src/index.ts"],
+  ["docs/rulesets/python.md", "packages/python/src/index.ts"],
   ["docs/rulesets/dev.md", "packages/dev/src/index.ts"],
   ["docs/rulesets/plugin-kit.md", "packages/plugin-kit/src/index.ts"],
   ["docs/api.md", "packages/qualety/src/index.ts"],

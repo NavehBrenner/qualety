@@ -5,7 +5,14 @@ import { type Node, SourceFile } from "ts-morph";
 const TS_EXTS = [".ts", ".tsx", ".mts", ".cts"] as const;
 const SWAP_EXTS = new Set([".js", ".jsx", ".mjs", ".cjs", ...TS_EXTS]);
 
-export const PRODUCT_PLUGIN_DIRS = ["typescript", "react", "dry", "dev", "plugin-kit"] as const;
+export const PRODUCT_PLUGIN_DIRS = [
+  "typescript",
+  "react",
+  "dry",
+  "python",
+  "dev",
+  "plugin-kit",
+] as const;
 
 export function isSourceFile(value: unknown): value is SourceFile {
   return value instanceof SourceFile;

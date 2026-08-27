@@ -27,11 +27,11 @@ Scope: `packages/qualety/**` only.
 Requires `typescript` and `workspace-docs` (markdown/text only; the rule does not use `node:fs`).
 
 - **Arm A:** `docs/api.md` `## Exports` table ↔ names on `packages/qualety/src/index.ts` (value + type), both directions.
-- **Arm B:** Implemented tables in `docs/rulesets/{typescript,react,dry,dev}.md` ↔ `plugin.name` + `rules` keys, both directions. Stop at the next `## `. Skip Backlog / Not planned / research inventories.
+- **Arm B:** Implemented tables in `docs/rulesets/{typescript,react,dry,python,dev,plugin-kit}.md` ↔ `plugin.name` + `rules` keys, both directions. Stop at the next `## `. Skip Backlog / Not planned / research inventories.
 
 ### `dev/no-fs-in-rules`
 
-Scope: `packages/{typescript,react,dry,dev}/**`, skip tests. Flag `node:fs` / `fs` imports on the rule-side module graph (files reachable from plugin `rules` entries). Exempt files reachable from `provides.*.build`.
+Scope: `packages/{typescript,react,dry,python,dev}/**`, skip tests. Flag `node:fs` / `fs` imports on the rule-side module graph (files reachable from plugin `rules` entries). Exempt files reachable from `provides.*.build`.
 
 Known miss: dynamic specifier concat; non-`fs` IO (`node:child_process` in a rule → `plugin-kit/no-spawn-in-create`).
 

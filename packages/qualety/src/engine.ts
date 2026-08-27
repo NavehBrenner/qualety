@@ -21,7 +21,7 @@ import { expandTypeScriptClosure } from "./typescript-frontend.ts";
 
 const NOTHING_TO_CHECK = "No rules configured — nothing to check.";
 const NO_RULES_MATCHED = "No rules matched filters.";
-const DEFAULT_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts"];
+const DEFAULT_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.py"];
 const DEFAULT_EXCLUDE = ["**/node_modules/**", "**/dist/**"];
 
 export type CheckFilters = {
