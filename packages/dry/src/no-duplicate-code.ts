@@ -47,22 +47,30 @@ export const noDuplicateCode = defineRule({
     const index = context.getArtifact("dupehound");
     const artifact = context.getArtifact("typescript");
     const cwd = context.getCwd();
-    const merged = mergeReports([
-      ...reportsFromClusters(
-        index.clusters.map((cluster) => ({
-          arm: "F" as const,
-          similarity: cluster.similarity,
-          members: cluster.members.map((member) => ({
-            file: member.file,
-            startLine: member.startLine,
-            startColumn: 1,
-            endLine: member.endLine,
-            endColumn: 1,
-            host: member.name,
-            loc: member.endLine - member.startLine + 1,
-          })),
+    const functionClusters: CloneCluster[] = [];
+    for (const cluster of index.clusters) {
+      const members = cluster.members.filter((member) =>
+        /\.(?:ts|tsx|mts|cts)$/.test(member.file.replaceAll("\\", "/")),
+      );
+      if (members.length < 2) {
+        continue;
+      }
+      functionClusters.push({
+        arm: "F",
+        similarity: cluster.similarity,
+        members: members.map((member) => ({
+          file: member.file,
+          startLine: member.startLine,
+          startColumn: 1,
+          endLine: member.endLine,
+          endColumn: 1,
+          host: member.name,
+          loc: member.endLine - member.startLine + 1,
         })),
-      ),
+      });
+    }
+    const merged = mergeReports([
+      ...reportsFromClusters(functionClusters),
       ...reportsFromClusters(clustersFromWindows(artifact.sources, cwd)),
     ]);
     for (const report of merged) {

@@ -20,6 +20,7 @@ export default defineConfig({
     "ts/no-unnecessary-abstraction": "error",
     "python/no-unnecessary-def": "error",
     "dry/no-duplicate-code": "error",
+    "dry/no-duplicate-python": "error",
     "plugin-kit/no-spawn-in-create": "error",
     "plugin-kit/prefer-define-rule": "error",
   },
