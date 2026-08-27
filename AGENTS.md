@@ -54,7 +54,20 @@ Code style and TypeScript hygiene will be enforced by the tool itself as it matu
   tokens fail closed. Issue-open never overrides.
 - A plan states: files touched, the SPECS sections it honours, what gets tested, and what is deliberately out of scope.
 
-PR body: `Closes #<github-issue>`, then what changed, why, and how to verify. The closing reference is load-bearing — CI reads it to attach the PR to Linear and to request review. Nothing else about Linear or reviewers is your job.
+PR **title**: imperative, specific. PR **body is** the squash commit body (GitHub squash uses title + body). Thin one-liners or a one-paragraph “rationale” are **not** enough. Write for a human reading the squash commit months later — enough context without opening the diff. Do **not** put OpenCode trigger tokens in the PR body.
+
+First line (or a GitHub closing trailer): load-bearing `Closes #<github-issue>`. CI reads it to attach the PR to Linear and to request review. Nothing else about Linear or reviewers is your job.
+
+Body **must** explain in long form (not a single sentence):
+
+- **What** changed (product surface, packages, rules, engine, CI, docs)
+- **Why** (issue goal, SPECS locks honoured, problem being solved)
+- **How** (approach in plain language: key mechanisms, not a file dump only)
+- **Files / areas** touched (grouped; call out load-bearing paths)
+- **Tests / fixtures** added or updated
+- **How to verify** (exact commands)
+- **Out of scope / deliberately not done**
+- **Follow-ups** only if real (no fake roadmap)
 
 ## Workflow skills
 
