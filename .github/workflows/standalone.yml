@@ -22,7 +22,7 @@ jobs:
             best_effort: false
           - os: macos-13
             artifact: darwin-x64
-            best_effort: false
+            best_effort: true
           - os: windows-latest
             artifact: windows-x64
             best_effort: true

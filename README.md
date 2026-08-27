@@ -62,9 +62,33 @@ Full research notes and comparisons are in [docs/RESEARCH.md](docs/RESEARCH.md).
 
 The engine (`qualety check`) loads config, collects **one provider map** (plugin `provides`, then default-registry gap-fill), unions enabled rules’ `requires`, builds each artifact **once**, and runs every rule with the same context. Core has **no built-in rule bag** and **no dupehound (or other niche binary) host**. Default `"typescript"` → ts-morph `ParsedProject` (a plugin may provide the same id; default is skipped). `@qualety/dry` provides `"dupehound"`. `@qualety/python` provides `"python"`. Shared providers load as ruleless plugins via `plugins[]`. No `config.languages`. In-repo rules use `defineRule` so `getArtifact` is typed. Product plugins: [`@qualety/typescript`](packages/typescript) (`ts/public-exports-tested`), [`@qualety/react`](packages/react) (`react/no-fetch-in-useeffect`, `react/query-error-handled`), [`@qualety/dry`](packages/dry) (`dry/no-duplicate-code`), and [`@qualety/python`](packages/python) (`python/no-unnecessary-def`). Portable authoring: [`@qualety/plugin-kit`](packages/plugin-kit) (`plugin-kit/no-spawn-in-create`, `plugin-kit/prefer-define-rule`). Multi-plugin configs load them together; catalog ids are namespaced (`ts/…` vs `react/…` vs `dry/…` vs `python/…` vs `plugin-kit/…`). Every violation has a required `suggestion` (concrete text on product rules). With nothing configured, check reports that honestly and exits 0.
 
-**Core architectural decisions are locked** in [docs/SPECS.md](docs/SPECS.md) (CLI shape, `defineConfig`, plugin contract, TypeScript-first core, no wrapping of Biome/ESLint, default artifact providers, performance approach, etc.). Catalogs: [docs/rulesets/typescript.md](docs/rulesets/typescript.md), [docs/rulesets/react.md](docs/rulesets/react.md), [docs/rulesets/dry.md](docs/rulesets/dry.md), [docs/rulesets/python.md](docs/rulesets/python.md), [docs/rulesets/plugin-kit.md](docs/rulesets/plugin-kit.md). IDE resolve of bare package names needs `pnpm -r build` (dist `.d.ts`). Install surfaces (npm, standalone binary, pip) are locked in SPECS #10; they are not shipped.
+**Core architectural decisions are locked** in [docs/SPECS.md](docs/SPECS.md) (CLI shape, `defineConfig`, plugin contract, TypeScript-first core, no wrapping of Biome/ESLint, default artifact providers, performance approach, etc.). Catalogs: [docs/rulesets/typescript.md](docs/rulesets/typescript.md), [docs/rulesets/react.md](docs/rulesets/react.md), [docs/rulesets/dry.md](docs/rulesets/dry.md), [docs/rulesets/python.md](docs/rulesets/python.md), [docs/rulesets/plugin-kit.md](docs/rulesets/plugin-kit.md). IDE resolve of bare package names needs `pnpm -r build` (dist `.d.ts`). Install surfaces (npm, standalone binary, pip) are locked in SPECS #10.
 
 The original author has a working internal TypeScript/TSX prototype for several of the compositional rules. The goal of this public repo is to generalise it, add the missing pieces (semantic DRY, Python, agent integration, test-presence gates), and make it a proper open-source project that coding agents can build upon.
+
+## Install
+
+One engine, three surfaces (SPECS #10). **Public npm and PyPI packages are not published yet** (first registry cut is [#59](https://github.com/NavehBrenner/qualety/issues/59)). Until then: this workspace (`pnpm install` / `pnpm build`) or a GitHub Release binary after a deliberate `v*` tag.
+
+| Surface | Use when |
+|---|---|
+| **npm** | TypeScript, `defineConfig`, **custom / relative JS plugins** |
+| **standalone binary** | Official plugins only (`@qualety/typescript`, `@qualety/react`, `@qualety/dry`, `@qualety/python`). `qualety.config.json`. |
+| **pip** | Same binary via `python -m qualety`. Not a second engine. |
+
+Custom or relative plugins on the binary/pip exit 2 — use `npm i qualety`. Python rules need **`python3` on PATH** (CPython is not bundled). DRY still needs `dupehound` on `PATH` or `QUALETY_DUPEHOUND`.
+
+```bash
+# npm (when published)
+npm i -D qualety @qualety/typescript
+
+# pip (when published)
+pip install qualety
+python -m qualety check
+
+# binary from a GitHub Release
+./qualety check
+```
 
 ## Development
 
@@ -91,7 +115,7 @@ Layout: `packages/qualety` (engine, CLI, plugin contract),
 `packages/dry` (`@qualety/dry`),
 `packages/python` (`@qualety/python`), and
 `packages/plugin-kit` (`@qualety/plugin-kit`).
-Registry publish is **not** live yet (tag publish is #50); install-from-workspace remains the path until then.
+Public registry publish is **not** live yet (first cut is #59); install-from-workspace remains the path until then.
 
 ## Roadmap (High Level)
 

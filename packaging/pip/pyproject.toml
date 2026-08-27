@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qualety"
+version = "0.0.0"
+description = "Thin wrapper that execs the qualety standalone binary."
+requires-python = ">=3.9"
+license = "MIT"
+
+[project.urls]
+Homepage = "https://github.com/NavehBrenner/qualety"
+
+[project.scripts]
+qualety = "qualety.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+qualety = ["qualety", "qualety.exe"]

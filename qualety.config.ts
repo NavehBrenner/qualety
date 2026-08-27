@@ -24,5 +24,5 @@ export default defineConfig({
     "plugin-kit/no-spawn-in-create": "error",
     "plugin-kit/prefer-define-rule": "error",
   },
-  exclude: ["**/node_modules/**", "**/dist/**", "**/fixtures/**"],
+  exclude: ["**/node_modules/**", "**/dist/**", "**/fixtures/**", "packaging/**"],
 });
