@@ -1,7 +1,8 @@
 import { defineRule } from "qualety";
-import type { PythonNode, PythonSource } from "./python.ts";
+import type { PythonNode } from "./python.ts";
 import {
   asNodes,
+  collectModuleAliases,
   isPublicCallable,
   isPythonNode,
   isSkippedSource,
@@ -29,7 +30,10 @@ export const noPublicAny = defineRule({
       if (isSkippedSource(abs, cwd)) {
         continue;
       }
-      const aliases = readAnyAliases(unit);
+      const aliases = collectModuleAliases(unit.tree, (stmt, aliases) => {
+        addImportedAny(stmt, aliases);
+        addAssignedAny(stmt, aliases);
+      });
       const initNames = publicInitNames(unit);
       walkCallables(unit.tree, "", false, (fn, className, nested) => {
         if (!isPublicCallable(fn, className, nested, initNames)) {
@@ -82,17 +86,6 @@ function isBareAny(node: unknown, aliases: ReadonlySet<string>): boolean {
     return false;
   }
   return node.value._type === "Name" && node.value.id === "typing";
-}
-
-function readAnyAliases(unit: PythonSource): Set<string> {
-  const aliases = new Set<string>();
-  for (const stmt of asNodes(unit.tree.body)) {
-    if (stmt._type === "ImportFrom" || stmt._type === "Assign") {
-      addImportedAny(stmt, aliases);
-      addAssignedAny(stmt, aliases);
-    }
-  }
-  return aliases;
 }
 
 function addImportedAny(stmt: PythonNode, aliases: Set<string>) {

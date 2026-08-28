@@ -4,6 +4,7 @@ import {
   childNodes,
   clearReexports,
   collectImports,
+  collectModuleAliases,
   containsPos,
   forEachPythonSource,
   groupByPackage,
@@ -52,5 +53,6 @@ test("walk helpers", () => {
   expect(walkNodes).toBeTypeOf("function");
   expect(publicInitNames).toBeTypeOf("function");
   expect(walkCallables).toBeTypeOf("function");
+  expect(collectModuleAliases).toBeTypeOf("function");
   expect(isPublicCallable({ _type: "FunctionDef", name: "foo" }, "", false, undefined)).toBe(true);
 });

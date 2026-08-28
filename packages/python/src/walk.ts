@@ -101,6 +101,17 @@ export function walkNodes(node: PythonNode, visit: (node: PythonNode) => void) {
   }
 }
 
+export function collectModuleAliases(
+  tree: PythonNode,
+  visit: (stmt: PythonNode, aliases: Set<string>) => void,
+): Set<string> {
+  const aliases = new Set<string>();
+  for (const stmt of asNodes(tree.body)) {
+    visit(stmt, aliases);
+  }
+  return aliases;
+}
+
 export function groupByPackage(
   sources: ReadonlyMap<string, PythonSource>,
   cwd: string,
