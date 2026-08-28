@@ -19,9 +19,6 @@ jobs:
           - os: macos-latest
             artifact: darwin-arm64
             best_effort: false
-          - os: macos-13
-            artifact: darwin-x64
-            best_effort: true
           - os: windows-latest
             artifact: windows-x64
             best_effort: true
@@ -122,7 +119,6 @@ jobs:
           }
           map_one artifacts/qualety-linux-x64 qualety-linux-x64
           map_one artifacts/qualety-darwin-arm64 qualety-darwin-arm64
-          map_one artifacts/qualety-darwin-x64 qualety-darwin-x64
           map_one artifacts/qualety-linux-arm64 qualety-linux-arm64
           map_one artifacts/qualety-windows-x64 qualety-windows-x64.exe
           if [[ ! -f qualety-linux-x64 || ! -f qualety-darwin-arm64 ]]; then
@@ -227,7 +223,6 @@ jobs:
           }
           pack artifacts/qualety-linux-x64/qualety manylinux_2_17_x86_64
           pack artifacts/qualety-darwin-arm64/qualety macosx_11_0_arm64
-          pack artifacts/qualety-darwin-x64/qualety macosx_10_13_x86_64
           pack artifacts/qualety-windows-x64/qualety.exe win_amd64
           pack artifacts/qualety-linux-arm64/qualety manylinux_2_17_aarch64
       - uses: pypa/gh-action-pypi-publish@release/v1

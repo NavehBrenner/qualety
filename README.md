@@ -76,6 +76,8 @@ One engine, three surfaces (SPECS #10). **Public npm and PyPI packages are not p
 | **standalone binary** | Official plugins only (`@qualety/typescript`, `@qualety/react`, `@qualety/dry`, `@qualety/python`). `qualety.config.json`. |
 | **pip** | Same binary via `python -m qualety`. Not a second engine. |
 
+GitHub Release / pip Mac artifacts are **darwin-arm64** (Apple Silicon) only; Intel Mac → npm.
+
 Custom or relative plugins on the binary/pip exit 2 — use `npm i qualety`. Python rules need **`python3` on PATH** (CPython is not bundled). DRY still needs `dupehound` on `PATH` or `QUALETY_DUPEHOUND`.
 
 ```bash
