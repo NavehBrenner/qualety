@@ -29,7 +29,7 @@ Behavior is locked in [SPECS.md](../SPECS.md) §3 R4 and Semantic DRY. Summary:
 
 - **Rule:** `defineRule` with `requires: ["code-embeddings", "typescript", "python"]`. Reads only `getArtifact("code-embeddings")`. Does not `requires` `dupehound`. Needs `@qualety/python` in `plugins[]` even for TS-only trees (empty `.py` set is a no-op).
 - **Chunks:** functions, methods, and classes. Min-size: skip if non-blank lines < 5 or whitespace tokens < 20. Same skip family as structural dry (plus Python `conftest.py` / `.pyi`).
-- **Artifact:** `"code-embeddings"` (dry `provides`). Builds after `python` / `typescript`. Normalize: trim, collapse blank-line runs; keep identifiers and comments.
+- **Artifact:** `"code-embeddings"` (dry `provides`). Builds after `python` / `typescript` **and other required ids**; dispose pipeline after embed. Normalize: trim, collapse blank-line runs; keep identifiers and comments.
 - **Model:** module id `minilm-l6-local`, revision `onnx-quantized-1`, 384-d quantized ONNX (Xenova all-MiniLM-L6-v2 via `@huggingface/transformers`, `allowRemoteModels: false`). Weights: `.tools/minilm-l6/` (`scripts/install-minilm.sh`) or `QUALETY_EMBEDDINGS_MODEL`. Test stub: `QUALETY_EMBEDDINGS_MODULE`.
 - **Cache:** `$XDG_CACHE_HOME/qualety/code-embeddings/` (default `~/.cache/qualety/code-embeddings/`). Override `QUALETY_EMBEDDINGS_CACHE`. Key `modelId/revision/sha256(normalized)`. Corrupt entries re-embed.
 - **Report:** cosine threshold **0.90**. One violation per cluster ≥ 2. Primary = first by `(path, name)`; siblings named as `path:line`. Must not say “in this file”. Concrete suggestion to extract a shared helper or reuse a sibling. Never `NO_SUGGESTION`. Independent of structural dry.

@@ -537,6 +537,76 @@ test("build context getArtifact sees typescript and missing ids are undefined", 
   expect(errors.join("\n")).toBe("");
 });
 
+test("required artifacts build python then typescript then others then code-embeddings", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": `const order = [];
+export default {
+  name: "fixture",
+  provides: {
+    python: {
+      build() {
+        order.push("python");
+        return { sources: new Map() };
+      },
+    },
+    typescript: {
+      build() {
+        order.push("typescript");
+        return { project: "plugin", sources: new Map() };
+      },
+    },
+    zebra: {
+      build() {
+        order.push("zebra");
+        return {};
+      },
+    },
+    "code-embeddings": {
+      build() {
+        order.push("code-embeddings");
+        return { order: [...order] };
+      },
+    },
+  },
+  rules: {
+    ping: {
+      meta: {
+        requires: ["python", "typescript", "zebra", "code-embeddings"],
+        docs: { description: "records build order" },
+      },
+      create(context) {
+        const embeddings = context.getArtifact("code-embeddings");
+        const got = embeddings.order.join(",");
+        if (got !== "python,typescript,zebra,code-embeddings") {
+          context.report({
+            severity: "error",
+            file: context.getFiles()[0],
+            range: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+            message: \`order=\${got}\`,
+            suggestion: "n/a",
+          });
+        }
+      },
+    },
+  },
+};
+`,
+    "qualety.config.json": config({ "fixture/ping": "error" }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  const errors: string[] = [];
+  expect(
+    await check(
+      dir,
+      (m) => lines.push(String(m)),
+      (m) => errors.push(String(m)),
+    ),
+  ).toBe(0);
+  expect(lines.join("\n")).not.toMatch(/order=/);
+  expect(errors.join("\n")).toBe("");
+});
+
 test("artifact provider builds once and exposes getArtifact", async () => {
   const dir = await writeTree({
     "plugin.mjs": fakeProviderPlugin,

@@ -416,6 +416,9 @@ function artifactRank(id: string): number {
   if (id === "typescript") {
     return 1;
   }
+  if (id === "code-embeddings") {
+    return 3;
+  }
   return 2;
 }
 

@@ -40,18 +40,23 @@ export async function buildCodeEmbeddingsIndex(
     return { chunks: [] };
   }
   const env = options.env ?? process.env;
-  let embedder: EmbedModule;
+  let embedder: EmbedModule | undefined;
   try {
     embedder = options.embedder ?? (await resolveEmbedModule(options.cwd, env));
-  } catch (e) {
-    throw wrapLoad(e, options.requiredBy);
-  }
-  const cacheDir = options.cacheDir ?? embeddingsCacheDir(env);
-  try {
+    const cacheDir = options.cacheDir ?? embeddingsCacheDir(env);
     const embedded = await embedChunks(chunks, embedder, cacheDir);
     return { chunks: embedded };
   } catch (e) {
-    throw wrapLoad(e, options.requiredBy);
+    const who = options.requiredBy.join(", ") || "dry/no-semantic-duplicate";
+    const detail = e instanceof Error ? e.message : String(e);
+    if (detail.includes("dry/no-semantic-duplicate") || detail.includes("code-embeddings")) {
+      throw e instanceof Error ? e : new Error(detail);
+    }
+    throw new Error(
+      `Cannot run ${who}: failed to load embeddings module (artifact code-embeddings): ${detail}`,
+    );
+  } finally {
+    await embedder?.dispose?.();
   }
 }
 
@@ -122,15 +127,4 @@ function vectorAt(
     }
   }
   return vector;
-}
-
-function wrapLoad(e: unknown, requiredBy: readonly string[]): Error {
-  const who = requiredBy.join(", ") || "dry/no-semantic-duplicate";
-  const detail = e instanceof Error ? e.message : String(e);
-  if (detail.includes("dry/no-semantic-duplicate") || detail.includes("code-embeddings")) {
-    return e instanceof Error ? e : new Error(detail);
-  }
-  return new Error(
-    `Cannot run ${who}: failed to load embeddings module (artifact code-embeddings): ${detail}`,
-  );
 }
