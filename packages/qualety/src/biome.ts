@@ -1,10 +1,10 @@
-import { spawn } from "node:child_process";
 import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
-import { dirname, extname, join, relative, resolve, sep } from "node:path";
+import { dirname, extname, join } from "node:path";
 import { ConfigError } from "./config.ts";
 import type { Plugin, Range, UserConfig, Violation } from "./index.ts";
 import { isRecord } from "./record.ts";
+import { runTimedCommand } from "./run-command.ts";
 
 const SCAN_TIMEOUT_MS = 60_000;
 const GENERATED_DIR = ".qualety";
@@ -45,7 +45,7 @@ export function resolveBiomeBinary(): string {
   }
 }
 
-export function assertBiomeRuleId(id: string, owner: string): void {
+function assertBiomeRuleId(id: string, owner: string): void {
   const parts = id.split("/");
   if (parts.length !== 2 || parts[0] === "" || parts[1] === "") {
     throw new ConfigError(
@@ -89,7 +89,8 @@ export function nestBiomeRules(flat: Record<string, BiomeRuleSetting>): Record<s
     if (!isRecord(existing)) {
       rules[group] = groupRules;
     }
-    groupRules[name] = nestSetting(setting);
+    groupRules[name] =
+      typeof setting === "string" ? setting : { level: setting[0], options: setting[1] };
   }
   return rules;
 }
@@ -137,12 +138,12 @@ export async function runBiomePhase(input: {
     ...paths,
   ];
   const timeoutMs = input.timeoutMs ?? SCAN_TIMEOUT_MS;
-  const result = await spawnBiome(bin, args, input.cwd, timeoutMs);
-  return mapBiomeStdout(result, input.cwd, timeoutMs);
+  const result = await runTimedCommand(bin, args, input.cwd, timeoutMs);
+  return mapBiomeStdout(result, timeoutMs);
 }
 
 export async function readBiomeVersion(bin: string, cwd: string): Promise<string> {
-  const result = await spawnBiome(bin, ["--version"], cwd, 10_000);
+  const result = await runTimedCommand(bin, ["--version"], cwd, 10_000);
   if (result.timedOut) {
     throw new ConfigError("Biome timed out while reading version.");
   }
@@ -156,56 +157,48 @@ export async function readBiomeVersion(bin: string, cwd: string): Promise<string
   return text.replace(/^Version:\s*/i, "");
 }
 
-function nestSetting(setting: BiomeRuleSetting): unknown {
-  if (typeof setting === "string") {
-    return setting;
-  }
-  return { level: setting[0], options: setting[1] };
-}
-
-function mapBiomeStdout(result: CommandResult, cwd: string, timeoutMs: number): Violation[] {
-  if (result.timedOut) {
+function mapBiomeStdout(
+  result: Awaited<ReturnType<typeof runTimedCommand>>,
+  timeoutMs: number,
+): Violation[] {
+  const { timedOut, error, code, stdout, stderr } = result;
+  if (timedOut) {
     throw new ConfigError(`Biome timed out after ${timeoutMs / 1000}s.`);
   }
-  if (result.error !== undefined) {
-    throw new ConfigError(`Biome is not runnable: ${result.error}`);
+  if (error !== undefined) {
+    throw new ConfigError(`Biome is not runnable: ${error}`);
   }
-  if (result.code !== 0 && result.code !== 1) {
-    const detail = result.stderr.trim() || result.stdout.trim() || `exit ${result.code}`;
+  if (code !== 0 && code !== 1) {
+    const detail = stderr.trim() || stdout.trim() || `exit ${code}`;
     throw new ConfigError(`Biome failed: ${detail}`);
   }
-  const stdout = result.stdout.trim();
-  if (stdout.length === 0) {
-    if (result.code === 0) {
+  const text = stdout.trim();
+  if (text.length === 0) {
+    if (code === 0) {
       return [];
     }
     throw new ConfigError("Biome produced no JSON diagnostics.");
   }
   let parsed: unknown;
   try {
-    parsed = JSON.parse(stdout);
+    parsed = JSON.parse(text);
   } catch (e) {
     throw new ConfigError(
       `Biome produced invalid JSON: ${e instanceof Error ? e.message : String(e)}`,
     );
   }
-  return diagnosticsOf(parsed).flatMap((item) => {
-    const mapped = mapDiagnostic(item, cwd);
+  const items = Array.isArray(parsed)
+    ? parsed
+    : isRecord(parsed) && Array.isArray(parsed.diagnostics)
+      ? parsed.diagnostics
+      : [];
+  return items.flatMap((item) => {
+    const mapped = mapDiagnostic(item);
     return mapped === undefined ? [] : [mapped];
   });
 }
 
-function diagnosticsOf(parsed: unknown): unknown[] {
-  if (Array.isArray(parsed)) {
-    return parsed;
-  }
-  if (isRecord(parsed) && Array.isArray(parsed.diagnostics)) {
-    return parsed.diagnostics;
-  }
-  return [];
-}
-
-function mapDiagnostic(raw: unknown, cwd: string): Violation | undefined {
+function mapDiagnostic(raw: unknown): Violation | undefined {
   if (!isRecord(raw)) {
     return undefined;
   }
@@ -213,22 +206,15 @@ function mapDiagnostic(raw: unknown, cwd: string): Violation | undefined {
   if (category === undefined) {
     return undefined;
   }
-  const loc = locationOf(raw, cwd);
+  const loc = locationOf(raw);
   return {
     ruleId: category,
-    severity: severityOf(raw.severity),
+    severity: raw.severity === "warning" || raw.severity === "warn" ? "warn" : "error",
     file: loc.file,
     range: loc.range,
     message: messageOf(raw),
     suggestion: suggestionOf(raw),
   };
-}
-
-function severityOf(value: unknown): "error" | "warn" {
-  if (value === "warning" || value === "warn") {
-    return "warn";
-  }
-  return "error";
 }
 
 function messageOf(raw: Record<string, unknown>): string {
@@ -266,13 +252,13 @@ function suggestionOf(raw: Record<string, unknown>): string {
   return DEFAULT_SUGGESTION;
 }
 
-function locationOf(raw: Record<string, unknown>, cwd: string): { file: string; range: Range } {
+function locationOf(raw: Record<string, unknown>): { file: string; range: Range } {
   const loc = raw.location;
   const origin = { line: 1, column: 1 };
   if (!isRecord(loc)) {
     return { file: ".", range: { start: origin, end: origin } };
   }
-  const file = displayPath(cwd, pathOf(loc.path));
+  const file = typeof loc.path === "string" && loc.path.length > 0 ? loc.path : ".";
   if (isRecord(loc.start) && typeof loc.start.line === "number") {
     const start = coords(loc.start);
     const end = isRecord(loc.end) ? coords(loc.end) : start;
@@ -290,16 +276,6 @@ function locationOf(raw: Record<string, unknown>, cwd: string): { file: string; 
     };
   }
   return { file, range: { start: origin, end: origin } };
-}
-
-function pathOf(value: unknown): string {
-  if (typeof value === "string" && value.length > 0) {
-    return value;
-  }
-  if (isRecord(value) && typeof value.file === "string" && value.file.length > 0) {
-    return value.file;
-  }
-  return ".";
 }
 
 function coords(value: Record<string, unknown>): { line: number; column: number } {
@@ -321,78 +297,4 @@ function offsetToCoords(source: string, offset: number): { line: number; column:
     }
   }
   return { line, column };
-}
-
-function displayPath(cwd: string, file: string): string {
-  const abs = resolve(cwd, file);
-  const rel = relative(cwd, abs);
-  return (rel === "" ? file : rel).split(sep).join("/");
-}
-
-type CommandResult = {
-  code: number | null;
-  stdout: string;
-  stderr: string;
-  timedOut: boolean;
-  error?: string;
-};
-
-function spawnBiome(
-  bin: string,
-  args: string[],
-  cwd: string,
-  timeoutMs: number,
-): Promise<CommandResult> {
-  return new Promise((ok) => {
-    let settled = false;
-    const finish = (result: CommandResult) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      ok(result);
-    };
-    let child: ReturnType<typeof spawn>;
-    try {
-      child = spawn(bin, args, { cwd });
-    } catch (e) {
-      finish({
-        code: null,
-        stdout: "",
-        stderr: "",
-        timedOut: false,
-        error: e instanceof Error ? e.message : String(e),
-      });
-      return;
-    }
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGKILL");
-    }, timeoutMs);
-    child.stdout?.setEncoding("utf8");
-    child.stderr?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk: string) => {
-      stdout += chunk;
-    });
-    child.stderr?.on("data", (chunk: string) => {
-      stderr += chunk;
-    });
-    child.on("error", (e) => {
-      clearTimeout(timer);
-      finish({
-        code: null,
-        stdout,
-        stderr,
-        timedOut,
-        error: e.message,
-      });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      finish({ code, stdout, stderr, timedOut });
-    });
-  });
 }

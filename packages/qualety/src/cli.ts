@@ -113,22 +113,21 @@ async function runMeta(
     return 2;
   }
   try {
-    return command === "init" ? await runInit(cwd, out) : await runDoctor(cwd, out);
+    if (command !== "init") {
+      return await runDoctor(cwd, out);
+    }
+    const loaded = await loadConfig(cwd);
+    if (loaded === undefined) {
+      throw new Error("No qualety config found.");
+    }
+    const plugins = await loadPluginsFromConfig(loaded.config, loaded.path);
+    const path = await writeGeneratedBiomeConfig(cwd, plugins, loaded.config.biome);
+    out(path);
+    return 0;
   } catch (e) {
     err(e instanceof Error ? e.message : String(e));
     return 2;
   }
-}
-
-async function runInit(cwd: string, out: (msg: string) => void): Promise<number> {
-  const loaded = await loadConfig(cwd);
-  if (loaded === undefined) {
-    throw new Error("No qualety config found.");
-  }
-  const plugins = await loadPluginsFromConfig(loaded.config, loaded.path);
-  const path = await writeGeneratedBiomeConfig(cwd, plugins, loaded.config.biome);
-  out(path);
-  return 0;
 }
 
 async function runDoctor(cwd: string, out: (msg: string) => void): Promise<number> {

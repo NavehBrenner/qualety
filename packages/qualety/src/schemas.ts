@@ -27,18 +27,16 @@ export const artifactProviderSchema = z.object({
 
 export const pluginProvidesSchema = z.record(z.string().min(1), artifactProviderSchema);
 
-export const biomeRuleIdSchema = z
-  .string()
-  .regex(/^[^/]+\/[^/]+$/, "Biome rule id must be group/name");
+const biomeRuleIdSchema = z.string().regex(/^[^/]+\/[^/]+$/, "Biome rule id must be group/name");
 
-export const biomeRuleSettingSchema = z.union([
+const biomeRuleSettingSchema = z.union([
   z.enum(["off", "warn", "error"]),
   z.tuple([z.enum(["off", "warn", "error"]), z.record(z.string(), z.unknown())]),
 ]);
 
-export const biomeRulesSchema = z.record(biomeRuleIdSchema, biomeRuleSettingSchema);
+const biomeRulesSchema = z.record(biomeRuleIdSchema, biomeRuleSettingSchema);
 
-export const pluginBiomeSchema = z
+const pluginBiomeSchema = z
   .object({
     rules: biomeRulesSchema.optional(),
   })

@@ -9,6 +9,7 @@ Inventory of names on the `qualety` package public entry (`package.json` `export
 | `NO_SUGGESTION` | value |
 | `defineConfig` | value |
 | `defineRule` | value |
+| `runTimedCommand` | value |
 | `artifactProviderSchema` | value |
 | `functionSchema` | value |
 | `pluginProvidesSchema` | value |

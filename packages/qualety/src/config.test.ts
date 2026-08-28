@@ -22,6 +22,7 @@ import {
   requiresSchema as indexRequiresSchema,
   ruleMetaSchema as indexRuleMetaSchema,
   ruleSchema as indexRuleSchema,
+  runTimedCommand as indexRunTimedCommand,
 } from "./index.ts";
 
 const valid: UserConfig = { plugins: [], rules: {} };
@@ -50,6 +51,7 @@ test("defineConfig is exported and returns the same reference", () => {
   expect(indexRequiresSchema).toBeDefined();
   expect(indexRuleMetaSchema).toBeDefined();
   expect(indexRuleSchema).toBeDefined();
+  expect(indexRunTimedCommand).toEqual(expect.any(Function));
   expect(rootVitestConfig).toBeDefined();
 });
 

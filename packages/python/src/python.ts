@@ -1,7 +1,6 @@
-import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
-import type { ArtifactBuildContext } from "qualety";
+import { type ArtifactBuildContext, runTimedCommand } from "qualety";
 
 const SCAN_TIMEOUT_MS = 60_000;
 
@@ -100,45 +99,26 @@ export async function buildPythonProject(
   return { sources: sourcesFromDump(dumped, options.cwd, requiredBy) };
 }
 
-function dumpAst(
+async function dumpAst(
   paths: readonly string[],
   cwd: string,
   env: NodeJS.ProcessEnv,
   timeoutMs: number,
 ): Promise<string> {
-  const pending = new Promise<string>((ok, fail) => {
-    const child = spawn("python3", ["-c", DUMP_SCRIPT], {
-      cwd,
-      env,
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    const out: string[] = [];
-    const err: string[] = [];
-    child.stdout?.setEncoding("utf8");
-    child.stderr?.setEncoding("utf8");
-    child.stdout?.on("data", (piece: string) => {
-      out.push(piece);
-    });
-    child.stderr?.on("data", (piece: string) => {
-      err.push(piece);
-    });
-    child.stdin?.end(JSON.stringify(paths));
-    child.once("error", (cause) => {
-      if (cause.name === "AbortError") {
-        fail(new Error("timeout:"));
-        return;
-      }
-      fail(cause);
-    });
-    child.once("close", (status) => {
-      if (status === 0) {
-        ok(out.join(""));
-        return;
-      }
-      fail(new Error(`failed:${err.join("").trim() || `exit ${status}`}`));
-    });
+  const result = await runTimedCommand("python3", ["-c", DUMP_SCRIPT], cwd, timeoutMs, {
+    env,
+    stdin: JSON.stringify(paths),
   });
-  return pending;
+  if (result.timedOut) {
+    throw new Error("timeout:");
+  }
+  if (result.error !== undefined) {
+    throw new Error(result.error);
+  }
+  if (result.code !== 0) {
+    throw new Error(`failed:${result.stderr.trim() || `exit ${result.code}`}`);
+  }
+  return result.stdout;
 }
 
 function pythonFiles(cwd: string, files: readonly string[]): string[] {

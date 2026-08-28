@@ -102,12 +102,14 @@ export async function check(
 
     const displayPaths = files.map((abs) => displayPath(cwd, abs));
     const biomeViolations = runBiome
-      ? await runBiomePhase({
-          cwd,
-          files: displayPaths,
-          plugins,
-          biome: config.biome,
-        })
+      ? (
+          await runBiomePhase({
+            cwd,
+            files: displayPaths,
+            plugins,
+            biome: config.biome,
+          })
+        ).map((violation) => ({ ...violation, file: displayPath(cwd, violation.file) }))
       : [];
     const productViolations =
       selected.length === 0
@@ -122,7 +124,14 @@ export async function check(
               exclude: mergedExclude(config),
             }),
           );
-    const violations = sortViolations([...biomeViolations, ...productViolations]);
+    const violations = [...biomeViolations, ...productViolations];
+    violations.sort(
+      (a, b) =>
+        a.file.localeCompare(b.file) ||
+        a.range.start.line - b.range.start.line ||
+        a.range.start.column - b.range.start.column ||
+        a.ruleId.localeCompare(b.ruleId),
+    );
     printViolations(violations, out);
     return violations.length > 0 ? 1 : 0;
   } catch (e) {
@@ -171,17 +180,6 @@ function collectViolations(
       },
     });
   }
-  return violations;
-}
-
-function sortViolations(violations: Violation[]): Violation[] {
-  violations.sort(
-    (a, b) =>
-      a.file.localeCompare(b.file) ||
-      a.range.start.line - b.range.start.line ||
-      a.range.start.column - b.range.start.column ||
-      a.ruleId.localeCompare(b.ruleId),
-  );
   return violations;
 }
 

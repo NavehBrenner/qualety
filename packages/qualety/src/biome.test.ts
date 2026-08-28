@@ -3,10 +3,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
+import { z } from "zod";
 import {
+  biomeEnabled,
   GENERATED_BIOME_PATH,
   mergeBiomeRules,
   nestBiomeRules,
+  readBiomeVersion,
   resolveBiomeBinary,
   runBiomePhase,
   writeGeneratedBiomeConfig,
@@ -200,7 +203,23 @@ test("writeGeneratedBiomeConfig writes merged rules", async () => {
     },
   );
   expect(path).toBe(GENERATED_BIOME_PATH);
-  const written = JSON.parse(await readFile(join(dir, GENERATED_BIOME_PATH), "utf8"));
+  const written = z
+    .object({
+      linter: z.object({
+        rules: z.object({
+          preset: z.string(),
+          suspicious: z.object({ noConfusingVoidType: z.string() }),
+          nursery: z.object({ noUnsafeTypeAssertion: z.string() }),
+          complexity: z.object({
+            noExcessiveCognitiveComplexity: z.object({
+              level: z.string(),
+              options: z.record(z.string(), z.unknown()),
+            }),
+          }),
+        }),
+      }),
+    })
+    .parse(JSON.parse(await readFile(join(dir, GENERATED_BIOME_PATH), "utf8")));
   expect(written.linter.rules.preset).toBe("recommended");
   expect(written.linter.rules.suspicious.noConfusingVoidType).toBe("off");
   expect(written.linter.rules.nursery.noUnsafeTypeAssertion).toBe("error");
@@ -210,6 +229,10 @@ test("writeGeneratedBiomeConfig writes merged rules", async () => {
   });
 });
 
-test("resolveBiomeBinary finds the pinned package", () => {
-  expect(resolveBiomeBinary()).toMatch(/biome/);
+test("resolveBiomeBinary finds the pinned package", async () => {
+  const bin = resolveBiomeBinary();
+  expect(bin).toMatch(/biome/);
+  expect(await readBiomeVersion(bin, process.cwd())).toMatch(/\d/);
+  expect(biomeEnabled({ plugins: [], rules: {} })).toBe(true);
+  expect(biomeEnabled({ plugins: [], rules: {}, biome: false })).toBe(false);
 });
