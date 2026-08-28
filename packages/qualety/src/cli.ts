@@ -9,6 +9,13 @@ import {
 } from "./biome.ts";
 import { loadConfig } from "./config.ts";
 import { type CheckFilters, check, loadPluginsFromConfig } from "./engine.ts";
+import {
+  GENERATED_RUFF_PATH,
+  readRuffVersion,
+  resolveRuffModule,
+  ruffEnabled,
+  writeGeneratedRuffConfig,
+} from "./ruff.ts";
 
 const USAGE = `qualety — executable code invariants
 
@@ -121,8 +128,11 @@ async function runMeta(
       throw new Error("No qualety config found.");
     }
     const plugins = await loadPluginsFromConfig(loaded.config, loaded.path);
-    const path = await writeGeneratedBiomeConfig(cwd, plugins, loaded.config.biome);
-    out(path);
+    const paths = [await writeGeneratedBiomeConfig(cwd, plugins, loaded.config.biome)];
+    if (ruffEnabled(loaded.config)) {
+      paths.push(await writeGeneratedRuffConfig(cwd, plugins, loaded.config.ruff));
+    }
+    out(paths.join("\n"));
     return 0;
   } catch (e) {
     err(e instanceof Error ? e.message : String(e));
@@ -134,15 +144,23 @@ async function runDoctor(cwd: string, out: (msg: string) => void): Promise<numbe
   const loaded = await loadConfig(cwd);
   if (loaded === undefined) {
     out("biome: off (no qualety config)");
+    out("ruff: off (no qualety config)");
     return 0;
   }
   if (!biomeEnabled(loaded.config)) {
     out("biome: off (biome: false)");
-    return 0;
+  } else {
+    const bin = resolveBiomeBinary();
+    const version = await readBiomeVersion(bin, cwd);
+    out(`biome: on\nversion: ${version}\nbinary: ${bin}\nconfig: ${GENERATED_BIOME_PATH}`);
   }
-  const bin = resolveBiomeBinary();
-  const version = await readBiomeVersion(bin, cwd);
-  out(`biome: on\nversion: ${version}\nbinary: ${bin}\nconfig: ${GENERATED_BIOME_PATH}`);
+  if (!ruffEnabled(loaded.config)) {
+    out("ruff: off (ruff: false)");
+  } else {
+    const bin = resolveRuffModule();
+    const version = await readRuffVersion(bin);
+    out(`ruff: on\nversion: ${version}\nbinary: ${bin}\nconfig: ${GENERATED_RUFF_PATH}`);
+  }
   return 0;
 }
 

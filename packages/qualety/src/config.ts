@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { isRecord } from "./record.ts";
-import { ruleSettingSchema, userBiomeSchema } from "./schemas.ts";
+import { ruleSettingSchema, userBiomeSchema, userRuffSchema } from "./schemas.ts";
 
 export const userConfigSchema = z
   .object({
@@ -12,6 +12,7 @@ export const userConfigSchema = z
     include: z.array(z.string()).optional(),
     exclude: z.array(z.string()).optional(),
     biome: z.union([z.literal(false), userBiomeSchema]).optional(),
+    ruff: z.union([z.literal(false), userRuffSchema]).optional(),
   })
   .strict();
 
@@ -134,7 +135,10 @@ function mapFieldIssue(raw: unknown, issue: z.ZodIssue): ConfigError | undefined
     return new ConfigError(`"${String(key)}" must be an array of strings`);
   }
   if (key === "biome") {
-    return mapBiomeIssue(issue);
+    return mapComposedLinterIssue(issue, "biome", "expected group/name.");
+  }
+  if (key === "ruff") {
+    return mapComposedLinterIssue(issue, "ruff", "expected a Ruff code or prefix.");
   }
   if (key !== "rules") {
     return undefined;
@@ -173,10 +177,14 @@ function mapFieldIssue(raw: unknown, issue: z.ZodIssue): ConfigError | undefined
   );
 }
 
-function mapBiomeIssue(issue: z.ZodIssue): ConfigError {
+function mapComposedLinterIssue(
+  issue: z.ZodIssue,
+  tool: "biome" | "ruff",
+  idHint: string,
+): ConfigError {
   if (issue.code === "invalid_union") {
     for (const branch of issue.errors) {
-      const mapped = mapBiomeUnionBranch(branch);
+      const mapped = mapComposedLinterUnionBranch(branch, tool, idHint);
       if (mapped !== undefined) {
         return mapped;
       }
@@ -184,32 +192,35 @@ function mapBiomeIssue(issue: z.ZodIssue): ConfigError {
   }
   if (issue.code === "unrecognized_keys") {
     return new ConfigError(
-      `Unknown biome key${issue.keys.length > 1 ? "s" : ""}: ${issue.keys.join(", ")}.`,
+      `Unknown ${tool} key${issue.keys.length > 1 ? "s" : ""}: ${issue.keys.join(", ")}.`,
     );
   }
   if (issue.path[1] === "rules" && typeof issue.path[2] === "string") {
     return new ConfigError(
-      `Invalid Biome rule id ${JSON.stringify(issue.path[2])}; expected group/name.`,
+      `Invalid ${tool === "biome" ? "Biome" : "Ruff"} rule id ${JSON.stringify(issue.path[2])}; ${idHint}`,
     );
   }
   if (issue.path[1] === "format") {
-    return new ConfigError('"biome.format" must be a boolean');
+    return new ConfigError(`"${tool}.format" must be a boolean`);
   }
-  return new ConfigError(`Invalid biome config: ${issue.message}`);
+  return new ConfigError(`Invalid ${tool} config: ${issue.message}`);
 }
 
-function mapBiomeUnionBranch(branch: z.ZodIssue[]): ConfigError | undefined {
+function mapComposedLinterUnionBranch(
+  branch: z.ZodIssue[],
+  tool: "biome" | "ruff",
+  idHint: string,
+): ConfigError | undefined {
   for (const inner of branch) {
     if (inner.code === "unrecognized_keys") {
       return new ConfigError(
-        `Unknown biome key${inner.keys.length > 1 ? "s" : ""}: ${inner.keys.join(", ")}.`,
+        `Unknown ${tool} key${inner.keys.length > 1 ? "s" : ""}: ${inner.keys.join(", ")}.`,
       );
     }
     if (inner.code === "invalid_key") {
       const id = inner.path.find((part) => part !== "rules") ?? inner.path.at(-1);
-      return new ConfigError(
-        `Invalid Biome rule id ${JSON.stringify(String(id))}; expected group/name.`,
-      );
+      const label = tool === "biome" ? "Biome" : "Ruff";
+      return new ConfigError(`Invalid ${label} rule id ${JSON.stringify(String(id))}; ${idHint}`);
     }
   }
   return undefined;

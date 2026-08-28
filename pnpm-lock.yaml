@@ -86,6 +86,9 @@ importers:
 
   packages/python:
     dependencies:
+      '@astral-sh/ruff-wasm-nodejs':
+        specifier: ^0.16.5
+        version: 0.16.5
       qualety:
         specifier: workspace:*
         version: link:../qualety
@@ -137,6 +140,9 @@ importers:
         version: 26.2.0
 
 packages:
+
+  '@astral-sh/ruff-wasm-nodejs@0.16.5':
+    resolution: {integrity: sha512-61SAOrrBUCMaz7Gd9GBhGOkVWsc+kMf5yr5Con51EHnprkJR4rKQt497gBsgwSVlJDKMS5KsYHrhHioZFa+MDA==}
 
   '@biomejs/biome@2.5.10':
     resolution: {integrity: sha512-WRKXARA3kTuiV5sxqTpobJ/I0MVd4vk3pOL6wnp5az4LntFIhWTj1RWZq3DI9PCEN3lXcqy7p5aqUHzvq8AXyQ==}
@@ -1217,6 +1223,8 @@ packages:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
 
 snapshots:
+
+  '@astral-sh/ruff-wasm-nodejs@0.16.5': {}
 
   '@biomejs/biome@2.5.10':
     optionalDependencies:

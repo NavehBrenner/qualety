@@ -17,6 +17,7 @@ import {
   type Violation,
 } from "./index.ts";
 import { isRecord } from "./record.ts";
+import { ruffEnabled, runRuffPhase } from "./ruff.ts";
 import { compileRuleOptions } from "./rule-options.ts";
 import { pluginSchema } from "./schemas.ts";
 import { expandTypeScriptClosure } from "./typescript-frontend.ts";
@@ -88,8 +89,10 @@ export async function check(
     const enabled = resolveEnabledRules(plugins, config.rules);
     assertKnownFilters(plugins, enabled, filters);
     const selected = selectRules(enabled, filters);
-    const runBiome = biomeEnabled(config) && !hasNameFilters(filters);
-    if (selected.length === 0 && !runBiome) {
+    const composed = hasNameFilters(filters)
+      ? { biome: false, ruff: false }
+      : { biome: biomeEnabled(config), ruff: ruffEnabled(config) };
+    if (selected.length === 0 && !composed.biome && !composed.ruff) {
       out(hasNameFilters(filters) ? NO_RULES_MATCHED : NOTHING_TO_CHECK);
       return 0;
     }
@@ -101,16 +104,13 @@ export async function check(
     }
 
     const displayPaths = files.map((abs) => displayPath(cwd, abs));
-    const biomeViolations = runBiome
-      ? (
-          await runBiomePhase({
-            cwd,
-            files: displayPaths,
-            plugins,
-            biome: config.biome,
-          })
-        ).map((violation) => ({ ...violation, file: displayPath(cwd, violation.file) }))
-      : [];
+    const composedViolations = await runComposedPhases(
+      cwd,
+      displayPaths,
+      plugins,
+      config,
+      composed,
+    );
     const productViolations =
       selected.length === 0
         ? []
@@ -124,7 +124,7 @@ export async function check(
               exclude: mergedExclude(config),
             }),
           );
-    const violations = [...biomeViolations, ...productViolations];
+    const violations = [...composedViolations, ...productViolations];
     violations.sort(
       (a, b) =>
         a.file.localeCompare(b.file) ||
@@ -138,6 +138,36 @@ export async function check(
     err(e instanceof Error ? e.message : String(e));
     return 2;
   }
+}
+
+async function runComposedPhases(
+  cwd: string,
+  displayPaths: readonly string[],
+  plugins: Plugin[],
+  config: UserConfig,
+  composed: { biome: boolean; ruff: boolean },
+): Promise<Violation[]> {
+  const biomeViolations = composed.biome
+    ? (
+        await runBiomePhase({
+          cwd,
+          files: displayPaths,
+          plugins,
+          biome: config.biome,
+        })
+      ).map((violation) => ({ ...violation, file: displayPath(cwd, violation.file) }))
+    : [];
+  const ruffViolations = composed.ruff
+    ? (
+        await runRuffPhase({
+          cwd,
+          files: displayPaths,
+          plugins,
+          ruff: config.ruff,
+        })
+      ).map((violation) => ({ ...violation, file: displayPath(cwd, violation.file) }))
+    : [];
+  return [...biomeViolations, ...ruffViolations];
 }
 
 function collectViolations(

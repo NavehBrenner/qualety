@@ -215,6 +215,7 @@ function config(rules: Record<string, unknown>, extra: Record<string, unknown> =
     plugins: ["./plugin.mjs"],
     rules,
     biome: false,
+    ruff: false,
     ...extra,
   });
 }
@@ -354,7 +355,11 @@ test("later plugin recommended wins on the same id", async () => {
 test("missing configs.recommended is a no-op", async () => {
   const dir = await writeTree({
     "plugin.mjs": fixturePlugin,
-    "qualety.config.json": JSON.stringify({ plugins: ["./plugin.mjs"], biome: false }),
+    "qualety.config.json": JSON.stringify({
+      plugins: ["./plugin.mjs"],
+      biome: false,
+      ruff: false,
+    }),
     "src/hello.ts": "export const n = 1;\n",
   });
   const lines: string[] = [];
