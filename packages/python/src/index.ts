@@ -1,5 +1,10 @@
 import type { Plugin } from "qualety";
+import { noBareExcept } from "./no-bare-except.ts";
 import { noMutableDefault } from "./no-mutable-default.ts";
+import { noOpenWithoutWith } from "./no-open-without-with.ts";
+import { noPublicAny } from "./no-public-any.ts";
+import { noSilentExcept } from "./no-silent-except.ts";
+import { noSysPathHack } from "./no-sys-path-hack.ts";
 import { noUnnecessaryClass } from "./no-unnecessary-class.ts";
 import { noUnnecessaryDef } from "./no-unnecessary-def.ts";
 import { publicExportsTested } from "./public-exports-tested.ts";
@@ -19,6 +24,11 @@ const plugin: Plugin = {
     "public-exports-tested": publicExportsTested,
     "no-mutable-default": noMutableDefault,
     "require-typed-public": requireTypedPublic,
+    "no-bare-except": noBareExcept,
+    "no-silent-except": noSilentExcept,
+    "no-open-without-with": noOpenWithoutWith,
+    "no-sys-path-hack": noSysPathHack,
+    "no-public-any": noPublicAny,
   },
   configs: {
     recommended: {
@@ -28,6 +38,11 @@ const plugin: Plugin = {
         "python/public-exports-tested": "error",
         "python/no-mutable-default": "error",
         "python/require-typed-public": "error",
+        "python/no-bare-except": "error",
+        "python/no-silent-except": "error",
+        "python/no-open-without-with": "error",
+        "python/no-sys-path-hack": "error",
+        "python/no-public-any": "error",
       },
     },
   },

@@ -5,6 +5,7 @@ const MAX_NONBLANK_LINES = 10;
 const CONTROL = new Set(["If", "For", "AsyncFor", "While", "Try", "Match"]);
 const NESTED_STOP = new Set(["FunctionDef", "AsyncFunctionDef", "ClassDef", "Lambda"]);
 const DUNDER = /^__\w+__$/;
+const OVERLOAD = new Set(["overload"]);
 
 export type NamedImport = { file: string; name: string };
 
@@ -75,6 +76,29 @@ export function isSkippedSource(file: string, cwd: string): boolean {
     return true;
   }
   return /(?:^|\/)(?:fixtures|__pycache__)(?:\/|$)/.test(rel);
+}
+
+export function forEachPythonSource(
+  sources: unknown,
+  cwd: string,
+  visit: (unit: PythonSource) => void,
+) {
+  if (!(sources instanceof Map)) {
+    return;
+  }
+  for (const [abs, unit] of sources) {
+    if (isSkippedSource(abs, cwd)) {
+      continue;
+    }
+    visit(unit);
+  }
+}
+
+export function walkNodes(node: PythonNode, visit: (node: PythonNode) => void) {
+  visit(node);
+  for (const child of childNodes(node)) {
+    walkNodes(child, visit);
+  }
 }
 
 export function groupByPackage(
@@ -257,6 +281,69 @@ export function clearReexports(tree: PythonNode): Reexport[] {
     }
   }
   return out;
+}
+
+export function publicInitNames(unit: PythonSource): Set<string> | undefined {
+  if (!isInitModule(unit.file)) {
+    return undefined;
+  }
+  const all = readDunderAll(unit.tree);
+  if (all.kind !== "names") {
+    return new Set();
+  }
+  const names = new Set<string>();
+  for (const item of all.names) {
+    if (!item.name.startsWith("_")) {
+      names.add(item.name);
+    }
+  }
+  return names;
+}
+
+export function walkCallables(
+  node: PythonNode,
+  className: string,
+  inFn: boolean,
+  visit: (fn: PythonNode, className: string, nested: boolean) => void,
+) {
+  if (node._type === "FunctionDef" || node._type === "AsyncFunctionDef") {
+    visit(node, className, inFn);
+    for (const child of childNodes(node)) {
+      walkCallables(child, "", true, visit);
+    }
+    return;
+  }
+  if (node._type === "ClassDef") {
+    const next = typeof node.name === "string" ? node.name : className;
+    for (const child of childNodes(node)) {
+      walkCallables(child, next, inFn, visit);
+    }
+    return;
+  }
+  for (const child of childNodes(node)) {
+    walkCallables(child, className, inFn, visit);
+  }
+}
+
+export function isPublicCallable(
+  fn: PythonNode,
+  className: string,
+  nested: boolean,
+  initNames: Set<string> | undefined,
+): boolean {
+  if (nested || typeof fn.name !== "string") {
+    return false;
+  }
+  if (fn.name.startsWith("_") || isDunder(fn.name) || className.startsWith("_")) {
+    return false;
+  }
+  if (hasDecorator(fn, OVERLOAD)) {
+    return false;
+  }
+  if (initNames !== undefined && !initNames.has(fn.name)) {
+    return false;
+  }
+  return true;
 }
 
 function relativePosix(file: string, cwd: string): string {
