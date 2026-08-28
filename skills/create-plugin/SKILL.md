@@ -50,7 +50,7 @@ Prefer **verbose names** (`artifacts`, not `arts`; `artifactBuildContext`, not `
 
 ## Consumer config (not a third skill)
 
-Installing a plugin does **not** enable rules. Add the package to the consumer `qualety.config.*` `plugins[]` and turn on one rule (or copy ids from `configs.recommended`):
+Add the package to the consumer `qualety.config.*` `plugins[]`. Loading applies `configs.recommended` if the plugin exports one. Overlay `config.rules` to `"off"` or retune:
 
 ```ts
 import { defineConfig } from "qualety";
@@ -58,7 +58,7 @@ import { defineConfig } from "qualety";
 export default defineConfig({
   plugins: ["@qualety/foo"],
   rules: {
-    "foo/some-rule": "error",
+    "foo/some-rule": "off",
   },
 });
 ```

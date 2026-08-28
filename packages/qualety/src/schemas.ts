@@ -27,6 +27,11 @@ export const artifactProviderSchema = z.object({
 
 export const pluginProvidesSchema = z.record(z.string().min(1), artifactProviderSchema);
 
+export const ruleSettingSchema = z.union([
+  z.enum(["error", "warn", "off"]),
+  z.tuple([z.enum(["error", "warn"]), z.record(z.string(), z.unknown())]),
+]);
+
 const biomeRuleIdSchema = z.string().regex(/^[^/]+\/[^/]+$/, "Biome rule id must be group/name");
 
 const biomeRuleSettingSchema = z.union([
@@ -54,6 +59,14 @@ export const pluginSchema = z.object({
   version: z.string().optional(),
   rules: z.record(z.string().min(1), ruleSchema).optional(),
   provides: pluginProvidesSchema.optional(),
-  configs: z.object({ recommended: z.unknown().optional() }).optional(),
+  configs: z
+    .object({
+      recommended: z
+        .object({
+          rules: z.record(z.string(), ruleSettingSchema).optional(),
+        })
+        .optional(),
+    })
+    .optional(),
   biome: pluginBiomeSchema.optional(),
 });

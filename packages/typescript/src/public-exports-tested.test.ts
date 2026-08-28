@@ -20,6 +20,7 @@ async function runFixture(name: string) {
     join(fixtures, name),
     (m) => lines.push(String(m)),
     (m) => errors.push(String(m)),
+    { plugins: [], excludePlugins: [], rules: ["ts/public-exports-tested"], diff: "off" },
   );
   return { code, out: lines.join("\n"), err: errors.join("\n") };
 }
@@ -121,18 +122,17 @@ test("excluded production file is not reported", async () => {
   expect(result.out).not.toMatch(/dropped/);
 });
 
-test("loading the plugin without enabling the rule is an empty path", async () => {
+test("loading the plugin applies recommended without listing rules", async () => {
   const dir = await writeTree({
     "qualety.config.json": JSON.stringify({
       plugins: [pluginDist],
-      rules: {},
       biome: false,
     }),
     "src/foo.ts": "export const foo = 1;\n",
   });
   const lines: string[] = [];
-  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(0);
-  expect(lines.join("\n")).toMatch(/No rules configured — nothing to check/);
+  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(1);
+  expect(lines.join("\n")).toMatch(/ts\/public-exports-tested/);
 });
 
 test("excluding test paths makes a referenced export fail", async () => {
@@ -142,7 +142,14 @@ test("excluding test paths makes a referenced export fail", async () => {
     "src/foo.test.ts": 'import { foo } from "./foo";\n',
   });
   const lines: string[] = [];
-  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(1);
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, {
+      plugins: [],
+      excludePlugins: [],
+      rules: ["ts/public-exports-tested"],
+      diff: "off",
+    }),
+  ).toBe(1);
   expect(lines.join("\n")).toMatch(/Public export "foo" in src\/foo\.ts/);
 });
 
@@ -153,7 +160,14 @@ test("import * does not satisfy a named export", async () => {
     "src/foo.test.ts": 'import * as ns from "./foo";\nvoid ns;\n',
   });
   const lines: string[] = [];
-  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(1);
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, {
+      plugins: [],
+      excludePlugins: [],
+      rules: ["ts/public-exports-tested"],
+      diff: "off",
+    }),
+  ).toBe(1);
   expect(lines.join("\n")).toMatch(/Public export "foo"/);
 });
 
@@ -164,7 +178,14 @@ test("bare specifiers do not count as references", async () => {
     "src/foo.test.ts": 'import { foo } from "foo";\nvoid foo;\n',
   });
   const lines: string[] = [];
-  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(1);
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, {
+      plugins: [],
+      excludePlugins: [],
+      rules: ["ts/public-exports-tested"],
+      diff: "off",
+    }),
+  ).toBe(1);
   expect(lines.join("\n")).toMatch(/Public export "foo"/);
 });
 
@@ -175,6 +196,13 @@ test("dynamic import does not count as a reference", async () => {
     "src/foo.test.ts": 'const m = await import("./foo");\nvoid m;\n',
   });
   const lines: string[] = [];
-  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(1);
+  expect(
+    await check(dir, (m) => lines.push(String(m)), silent, {
+      plugins: [],
+      excludePlugins: [],
+      rules: ["ts/public-exports-tested"],
+      diff: "off",
+    }),
+  ).toBe(1);
   expect(lines.join("\n")).toMatch(/Public export "foo"/);
 });

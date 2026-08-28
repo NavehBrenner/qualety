@@ -80,7 +80,7 @@ GitHub Release / pip Mac artifacts are **darwin-arm64** (Apple Silicon) only; In
 
 Custom or relative plugins on the binary/pip exit 2 — use `npm i qualety`. Python rules need **`python3` on PATH** (CPython is not bundled). DRY still needs `dupehound` on `PATH` or `QUALETY_DUPEHOUND`. Semantic DRY needs local MiniLM weights (`scripts/install-minilm.sh` or `QUALETY_EMBEDDINGS_MODEL`).
 
-Installing `qualety` pins `@biomejs/biome`. With a `qualety.config.*` present, `qualety check` runs Biome (generated `.qualety/biome.json` from baseline + plugin `biome` sections + user overlay) then product rules. `biome: false` turns that phase off. `pnpm check` in this repo still uses committed `biome.json`.
+Installing `qualety` pins `@biomejs/biome`. Put a plugin on `plugins[]` and that plugin’s `configs.recommended` is applied (user `config.rules` overlays last; `"off"` still disables). With a `qualety.config.*` present, `qualety check` runs Biome (generated `.qualety/biome.json` from baseline + plugin `biome` sections + user overlay) then product rules. JS/TS Biome deltas live on `@qualety/typescript` `biome.rules`. `biome: false` turns that phase off. `pnpm check` in this repo still uses committed `biome.json`.
 
 ```bash
 # npm (when published)

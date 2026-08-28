@@ -116,7 +116,11 @@ process.stdout.write(${JSON.stringify(JSON.stringify(report))});
   return path;
 }
 
-async function runFixture(name: string, report: unknown) {
+async function runFixture(
+  name: string,
+  report: unknown,
+  rules: string[] = ["dry/no-duplicate-python"],
+) {
   const stubDir = await mkdtemp(join(tmpdir(), "ci-dry-py-stub-"));
   const stub = await writeStub(stubDir, report);
   const prevBin = process.env.QUALETY_DUPEHOUND;
@@ -128,6 +132,7 @@ async function runFixture(name: string, report: unknown) {
       join(fixtures, name),
       (m) => lines.push(String(m)),
       (m) => errors.push(String(m)),
+      { plugins: [], excludePlugins: [], rules, diff: "off" },
     );
     return { code, out: lines.join("\n"), err: errors.join("\n") };
   } finally {
@@ -294,6 +299,7 @@ test("missing dupehound binary exits 2 and names the python rule", async () => {
       join(fixtures, "python-unique"),
       () => {},
       (m) => errors.push(String(m)),
+      { plugins: [], excludePlugins: [], rules: ["dry/no-duplicate-python"], diff: "off" },
     );
     expect(code).toBe(2);
   } finally {
@@ -310,7 +316,10 @@ test("missing dupehound binary exits 2 and names the python rule", async () => {
 });
 
 test("mixed tree keeps each rule on its language", async () => {
-  const result = await runFixture("mixed-lang", bothLangsReport);
+  const result = await runFixture("mixed-lang", bothLangsReport, [
+    "dry/no-duplicate-code",
+    "dry/no-duplicate-python",
+  ]);
   expect(result.err).toBe("");
   expect(result.code).toBe(1);
   expect(result.out).toMatch(/dry\/no-duplicate-code/);
@@ -321,7 +330,10 @@ test("mixed tree keeps each rule on its language", async () => {
 });
 
 test("mixed-language cluster is quiet after each rule keeps one language", async () => {
-  const result = await runFixture("mixed-lang", mixedMembersReport);
+  const result = await runFixture("mixed-lang", mixedMembersReport, [
+    "dry/no-duplicate-code",
+    "dry/no-duplicate-python",
+  ]);
   expect(result.err).toBe("");
   expect(result.code).toBe(0);
   expect(result.out).not.toMatch(/dry\/no-duplicate-code/);
@@ -329,7 +341,10 @@ test("mixed-language cluster is quiet after each rule keeps one language", async
 });
 
 test("python rule ignores a typescript-only cluster", async () => {
-  const result = await runFixture("mixed-lang", tsPairReport);
+  const result = await runFixture("mixed-lang", tsPairReport, [
+    "dry/no-duplicate-code",
+    "dry/no-duplicate-python",
+  ]);
   expect(result.err).toBe("");
   expect(result.code).toBe(1);
   expect(result.out).toMatch(/dry\/no-duplicate-code/);

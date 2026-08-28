@@ -371,13 +371,16 @@ async function listCheckFiles(
   }
 }
 
-function resolveEnabledRules(plugins: Plugin[], rules: UserConfig["rules"]): Enabled[] {
+function resolveEnabledRules(plugins: Plugin[], userRules: UserConfig["rules"]): Enabled[] {
   const catalog = new Map<string, Rule>();
+  const rules: NonNullable<UserConfig["rules"]> = {};
   for (const plugin of plugins) {
     for (const [name, rule] of Object.entries(plugin.rules ?? {})) {
       catalog.set(`${plugin.name}/${name}`, rule);
     }
+    Object.assign(rules, plugin.configs?.recommended?.rules);
   }
+  Object.assign(rules, userRules);
   const unknown = Object.keys(rules).filter((id) => !catalog.has(id));
   if (unknown.length > 0) {
     throw new ConfigError(
@@ -396,7 +399,7 @@ function resolveEnabledRules(plugins: Plugin[], rules: UserConfig["rules"]): Ena
 
 function enableRule(
   id: string,
-  setting: UserConfig["rules"][string],
+  setting: NonNullable<UserConfig["rules"]>[string],
   rule: Rule | undefined,
 ): Enabled | undefined {
   if (setting === "off") {

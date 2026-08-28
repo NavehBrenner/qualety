@@ -3,7 +3,7 @@
 Honest catalog for **`@qualety/python`** (`Plugin.name: "python"`).  
 This is the implementation list for this plugin. Plugins stay **authored in TypeScript** while checking Python.
 
-The plugin **provides** artifact `"python"` (CPython `ast` via one `python3` spawn) on the same provider map as the default registry and other plugins. Core never imports Python AST types and does **not** default-provide `"python"`. Installing the plugin does **not** enable its rules. `configs.recommended` sets `python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`, `python/no-bare-except`, `python/no-silent-except`, `python/no-open-without-with`, `python/no-sys-path-hack`, and `python/no-public-any` to `"error"` for users who opt into that preset.
+The plugin **provides** artifact `"python"` (CPython `ast` via one `python3` spawn) on the same provider map as the default registry and other plugins. Core never imports Python AST types and does **not** default-provide `"python"`. Loading the plugin via `plugins[]` applies `configs.recommended` (`python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`, `python/no-bare-except`, `python/no-silent-except`, `python/no-open-without-with`, `python/no-sys-path-hack`, and `python/no-public-any` at `"error"`). Overlay user `config.rules` to `"off"` or retune.
 
 ## Implemented
 

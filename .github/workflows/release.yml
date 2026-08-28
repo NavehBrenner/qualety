@@ -59,7 +59,7 @@ jobs:
           trap 'rm -rf "$tmp"' EXIT
           printf '%s\n' '{"plugins":["@qualety/typescript"],"rules":{"ts/no-constant-condition":"error"}}' > "$tmp/qualety.config.json"
           mkdir -p "$tmp/src"
-          printf '%s\n' 'export const n = 1;' > "$tmp/src/hello.ts"
+          printf '%s\n' 'const n = 1;' > "$tmp/src/hello.ts"
           (cd "$tmp" && "$bin" check)
           printf '%s\n' '{"plugins":["./nope.mjs"],"rules":{"ts/no-constant-condition":"error"}}' > "$tmp/qualety.config.json"
           set +e

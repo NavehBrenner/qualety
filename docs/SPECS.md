@@ -20,7 +20,7 @@ These decisions are considered stable unless a major new constraint appears:
     Exit codes 0/1/2. JSON/SARIF output. Optional MCP server as a thin wrapper around the same engine. Official GitHub Action + pre-commit examples.
 
 2. **Configuration**  
-   Primary path is a typed `defineConfig` function (TypeScript) that provides IntelliSense, autocomplete, and runtime validation of unknown keys / mismatched rule ids. On-disk load is JSON + TS/JS (`qualety.config.ts` / `.mts` / `.js` / `.mjs` / `.json`). Every rule is independently toggleable; installing a plugin does **not** force all of its rules on. Plugin `biome` sections **do** feed the generated Biome config (baseline → `plugins[]` order → user `config.biome.rules`; `biome: false` off). They are not product rules.
+   Primary path is a typed `defineConfig` function (TypeScript) that provides IntelliSense, autocomplete, and runtime validation of unknown keys / mismatched rule ids. On-disk load is JSON + TS/JS (`qualety.config.ts` / `.mts` / `.js` / `.mjs` / `.json`).     Every rule is independently toggleable. **Loading** a plugin via `config.plugins` applies that plugin’s `configs.recommended` (if present) into the effective rule map (`plugins[]` order; later plugin wins on the same id). User `config.rules` overlays last (`"off"` still disables). Core still ships no built-in rule table. Installing or listing a package without putting it on `plugins[]` enables nothing. Plugin `biome` sections **do** feed the generated Biome config (baseline → `plugins[]` order → user `config.biome.rules`; `biome: false` off). They are not product rules.
 
 3. **Core language & multi-language strategy**  
    Core engine, CLI, MCP, and config system are written in **TypeScript**. Default artifact providers (e.g. `"typescript"`) may parse with language-specific libraries **inside** `build` (ts-morph for TypeScript). Rules consume native AST types via `getArtifact` plus their own imports. **The core never imports language-specific AST types** (`SourceFile` is not on `ArtifactMap`; `ParsedProject.sources` stays `unknown`). There is no public `LanguageFrontend` / `hasFrontend` / `createFrontend` product API.
@@ -28,7 +28,7 @@ These decisions are considered stable unless a major new constraint appears:
 4. **Plugins**  
    First-class and user-writable. There is one explicit contract (see § Plugin contract). Plugins can be published as npm packages or loaded from local paths. Agent skills for creating and maintaining plugins are part of the deliverable.  
    **v1 plugin language is TypeScript only.** Plugins are TypeScript/JavaScript packages that export the `Plugin` interface. Python-written plugins may be supported later via the same protocol once a Python frontend exists.  
-    **Core has no built-in rule bag.** Every check is a plugin rule. Core is the engine, default artifact providers, config/CLI, and a generic artifact seam — not a default catalog and **not** a dupehound (or other niche binary) host.     Baseline TypeScript rules live in `@qualety/typescript` (`Plugin.name: "ts"`). React compositional rules live in `@qualety/react` (`Plugin.name: "react"`). Structural DRY lives in `@qualety/dry` (`Plugin.name: "dry"`), which **provides** the `dupehound` artifact. Python baseline lives in `@qualety/python` (`Plugin.name: "python"`), which **provides** the `python` artifact (not a default). `@qualety/plugin-kit` (`Plugin.name: "plugin-kit"`) is the portable plugin-authoring ruleset — not core, not `@qualety/dev`, not a product app catalog. `@qualety/dev` (`Plugin.name: "dev"`) is this monorepo’s dogfood plugin, not a product catalog. Shared/provider-only packages load as **ruleless plugins** (`name` + `provides`, no `rules`) via `plugins[]`.     A plugin may ship `configs.recommended`; installing a plugin does **not** enable its rules (locked #2). This repo’s root config enables every applicable product rule at error; framework plugins only when the tree needs them.
+    **Core has no built-in rule bag.** Every check is a plugin rule. Core is the engine, default artifact providers, config/CLI, and a generic artifact seam — not a default catalog and **not** a dupehound (or other niche binary) host.     Baseline TypeScript rules live in `@qualety/typescript` (`Plugin.name: "ts"`). React compositional rules live in `@qualety/react` (`Plugin.name: "react"`). Structural DRY lives in `@qualety/dry` (`Plugin.name: "dry"`), which **provides** the `dupehound` artifact. Python baseline lives in `@qualety/python` (`Plugin.name: "python"`), which **provides** the `python` artifact (not a default). `@qualety/plugin-kit` (`Plugin.name: "plugin-kit"`) is the portable plugin-authoring ruleset — not core, not `@qualety/dev`, not a product app catalog. `@qualety/dev` (`Plugin.name: "dev"`) is this monorepo’s dogfood plugin, not a product catalog. Shared/provider-only packages load as **ruleless plugins** (`name` + `provides`, no `rules`) via `plugins[]`.     A plugin may ship `configs.recommended`; loading it via `plugins[]` applies that preset (locked #2). Installing a plugin without listing it on `plugins[]` enables nothing. This repo’s root config lists product plugins and keeps explicit `dev/*` rules (no consumer recommended on `@qualety/dev`); framework plugins only when the tree needs them.
 
 5. **Runtime helpers**  
    Optional companion packages (e.g. a future official `DataRegion`). Static rules work both with the official helpers and with equivalent structural patterns the user already has. **Helpers are optional; this WP ships none.** TanStack Query detectors live under `@qualety/react`, not a separate package.
@@ -39,7 +39,7 @@ These decisions are considered stable unless a major new constraint appears:
 7. **Relationship to classic linters/formatters**  
     `qualety` is the *higher-order* layer. For JS/TS it **may generate/merge a Biome config and invoke Biome** as part of `qualety check` (single-install gate). Biome still owns the lint engine and diagnostics. We **do not** reimplement Biome’s rules, wrap them as `biome/…` product rules, or own Biome’s engine. Formatter stays opt-in (`biome.format: true`; no default format-on-write, no `qualety fmt`). User `biome.json` is **not** auto-merged; user wins via `config.biome` / `biome: false`. Pin `@biomejs/biome` in the `qualety` package and bump it deliberately. ESLint, Prettier, Oxlint, and Ruff stay user-owned (Ruff is a follow-up compose).
 
-    This monorepo’s committed `biome.json` remains the `pnpm check` / formatter file. The same complexity override (`noExcessiveCognitiveComplexity`, error, max 15) is duplicated in root `qualety.config.ts` `biome.rules`. That is not a qualety product rule.
+    This monorepo’s committed `biome.json` remains the `pnpm check` / formatter file. Recommended Biome **deltas** live on `@qualety/typescript` `biome.rules` (not `ts/*` catalog rows): `nursery/noUnsafeTypeAssertion` at error, and `complexity/noExcessiveCognitiveComplexity` at error with `maxAllowedComplexity: 15`. Complexity is **not** a core `BASELINE_RULES` entry and not a product rule. Committed `biome.json` may still duplicate that complexity override for `pnpm check`.
 
     **Twin parity:** `ts/no-unsafe-assertion` is not equivalent to Biome `nursery/noUnsafeTypeAssertion` (`as any` / `as unknown as T` vs any `as T`). `ts/no-empty-catch` is not equivalent to Biome empty-block rules (catch-only vs all empty blocks). Both stay product rules.
 
@@ -99,7 +99,7 @@ These decisions are considered stable unless a major new constraint appears:
     | `@qualety/dev` | no (`private`) | **not** bundled |
     | Future product plugin | yes when it ships | bundled when it ships |
 
-    Bundling is not a core rule bag. Locked **#4** stands: core has no built-in rules; the binary statically includes the **same plugin modules**. Locked **#2** stands: listing or bundling a plugin does not enable its rules.
+    Bundling is not a core rule bag. Locked **#4** stands: core has no built-in rules; the binary statically includes the **same plugin modules**. Locked **#2** stands: bundling does not auto-enable; **loading** via `plugins[]` applies `configs.recommended`.
 
     **Config contract unchanged:** `plugins[]` + per-rule toggles. Binary/pip resolve **known official specs** from the bundle. Unknown / path / third-party specs **fail closed (exit 2)** with copy that says custom plugins need npm. Do not auto-register a silent extra catalog.
 
@@ -221,7 +221,7 @@ Runtime schemas (engine `safeParse` at load; do **not** replace the TypeScript i
 
 A malformed plugin / rule / provider, invalid `requires`, a missing provider, a duplicate provider id, a build throw, or `getArtifact` for an id not in that rule’s `requires` is an error (exit 2; do not silently skip). Missing-provider copy is provider-neutral (`No provider for artifact "…" (required by …).`). The message names the rule id(s).
 
-A custom plugin is simply an npm package (or local folder) that exports a `Plugin`. The core discovers it from the `plugins` array in the user’s config. Core never ships a default rule table; a rule exists only if a loaded plugin lists it. Installing `@qualety/typescript` (or any plugin) does not enable rules until they appear in `config.rules`. `configs.recommended` is an optional preset the user copies in — the engine does not apply it on install. Plugin `biome.rules` keys are `group/name` (exactly one `/`); extra `biome` keys fail closed (exit 2). Check writes `.qualety/biome.json` and runs Biome when a config is present and `biome !== false`, even if every product rule is off. `--plugin` / `--rule` / `--exclude-plugin` skip that phase. Zero JS/TS/JSX/JSON in the file list skips Biome (success). Biome unrunnable while enabled → exit 2.
+A custom plugin is simply an npm package (or local folder) that exports a `Plugin`. The core discovers it from the `plugins` array in the user’s config. Core never ships a default rule table; a rule exists only if a loaded plugin lists it. Loading a plugin via `plugins[]` applies its `configs.recommended` (user `config.rules` last). Installing a package without listing it on `plugins[]` enables nothing. Plugin `biome.rules` keys are `group/name` (exactly one `/`); extra `biome` keys fail closed (exit 2). Check writes `.qualety/biome.json` and runs Biome when a config is present and `biome !== false`, even if every product rule is off. `--plugin` / `--rule` / `--exclude-plugin` skip that phase. Zero JS/TS/JSX/JSON in the file list skips Biome (success). Biome unrunnable while enabled → exit 2.
 
 **v1 constraint**: plugins are authored in TypeScript/JavaScript only. Custom plugins load only on npm/Node this train (locked #10).
 
@@ -246,7 +246,7 @@ Implemented in `@qualety/react` as **`react/query-error-handled`**.
 | Config | none. |
 | Violation | Range on the hook call; `ruleId` `react/query-error-handled`; message names the hook and says the error is unhandled; concrete suggestion to branch locally **or** set `throwOnError: true` and render an Error Boundary. |
 
-**Recommended:** `configs.recommended.rules["react/query-error-handled"] = "error"`. Install does **not** apply recommended (locked #2 / #4).
+**Recommended:** `configs.recommended.rules["react/query-error-handled"] = "error"`. Loading the plugin via `plugins[]` applies recommended (locked #2).
 
 ### `react/no-fetch-in-useeffect`
 
@@ -298,7 +298,7 @@ Implemented in `@qualety/dry` as **`dry/no-duplicate-code`** (renamed from `dry/
 | Install | Binary on `PATH` or `QUALETY_DUPEHOUND`. Pin **v0.1.2**. No network in default `check`. Optional `scripts/install-dupehound.sh` for local/CI. |
 | Peace with abstraction | No code special-case of `ts/no-unnecessary-abstraction`. Multiplicity ≥ 2 is required before DRY can fire; the report gate may require 4 for tiny fragments. |
 
-**Recommended:** `configs.recommended.rules["dry/no-duplicate-code"] = "error"`. Install does **not** apply recommended (locked #2 / #4).
+**Recommended:** `configs.recommended.rules["dry/no-duplicate-code"] = "error"`. Loading the plugin via `plugins[]` applies recommended (locked #2).
 
 **Python twin (`dry/no-duplicate-python`):** same plugin, separate id (locked #8). Arm F only (`requires: ["dupehound"]`, pin **v0.1.2**). Does **not** `requires` `python` and does **not** copy Arm W. Keep `.py` members (drop `.pyi`); drop the cluster if fewer than 2 remain. Same Arm F report gate, message, and suggestion. Skip `test_*.py` / `*_test.py` / `*.test.py` / `*.spec.py` and path segments `tests` / `__tests__` / `fixtures` / `__pycache__`. Fail closed (exit 2) naming this rule. Mixed TS+Python clusters are quiet after each rule keeps only its language. Arm F of `dry/no-duplicate-code` keeps only `.ts` / `.tsx` / `.mts` / `.cts` members so Python never reports under the TS id. `configs.recommended.rules["dry/no-duplicate-python"] = "error"`.
 
@@ -338,7 +338,7 @@ Implemented in `@qualety/typescript` as **`ts/public-exports-tested`**.
    | Barrel + source | If both `impl.ts` (`export const x`) and `barrel.ts` (`export { x } from "./impl"`) are in `getArtifact("typescript").sources`, a test import from the barrel satisfies **only** the barrel export, not impl’s own public export. Each public surface needs its own test reference. |
 | Scope | Include/exclude only. No index. **Tests must not be excluded** or every export fails. This rule only sees files in the TypeScript artifact; a default/global `exclude` of `**/*.test.*` / `**/*.spec.*` wipes the reference sources. Production excludes (`**/generated/**`, `**/dist/**`) are fine. Recommended and example configs keep tests in the set. |
 | Violation | `ruleId` `ts/public-exports-tested`; location on the export; message names the export and file; suggestion: import it from a test. |
-| Recommended | `configs.recommended.rules["ts/public-exports-tested"] = "error"`. Install does **not** apply recommended (locked #2 / #4). |
+| Recommended | `configs.recommended.rules["ts/public-exports-tested"] = "error"`. Loading the plugin via `plugins[]` applies recommended (locked #2). |
 
 See [docs/rulesets/typescript.md](./rulesets/typescript.md).
 
@@ -438,11 +438,9 @@ export default defineConfig({
     // "@qualety/dry",
     "./my-custom-plugin",
   ],
+  // recommended applied by load; overlay to disable or retune
   rules: {
-    "ts/public-exports-tested": "error",
-    "react/no-fetch-in-useeffect": "error",
-    "react/query-error-handled": "error",
-    // "dry/no-duplicate-code": "error",
+    "ts/public-exports-tested": "off",
   },
   include: ["src/**/*.{ts,tsx}"],
   exclude: ["**/generated/**"],
@@ -475,7 +473,7 @@ Thin wrapper exposing at least: `check_file`, `check_diff`, `query_similar`, `li
 
 Supported skills (not drafts):
 
-- [`skills/create-plugin`](../skills/create-plugin/SKILL.md) — scaffold a contract-valid plugin (rules or ruleless provider). Consumer config wiring (`plugins[]` + enable one rule) is a closing section of this skill, not a third skill.
+- [`skills/create-plugin`](../skills/create-plugin/SKILL.md) — scaffold a contract-valid plugin (rules or ruleless provider). Consumer config wiring (`plugins[]` applies recommended; overlay to disable) is a closing section of this skill, not a third skill.
 - [`skills/add-rule`](../skills/add-rule/SKILL.md) — add one tested rule to an existing plugin.
 
 Later: skills for filing issues and opening PRs against this repository.

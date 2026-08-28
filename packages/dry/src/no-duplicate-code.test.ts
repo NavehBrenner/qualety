@@ -82,7 +82,11 @@ process.stdout.write(${JSON.stringify(JSON.stringify(report))});
   return path;
 }
 
-async function runFixture(name: string, report: unknown) {
+async function runFixture(
+  name: string,
+  report: unknown,
+  rules: string[] = ["dry/no-duplicate-code"],
+) {
   const stubDir = await mkdtemp(join(tmpdir(), "ci-dry-stub-"));
   const stub = await writeStub(stubDir, report);
   const prevBin = process.env.QUALETY_DUPEHOUND;
@@ -94,6 +98,7 @@ async function runFixture(name: string, report: unknown) {
       join(fixtures, name),
       (m) => lines.push(String(m)),
       (m) => errors.push(String(m)),
+      { plugins: [], excludePlugins: [], rules, diff: "off" },
     );
     return { code, out: lines.join("\n"), err: errors.join("\n") };
   } finally {
@@ -475,6 +480,7 @@ test("missing dupehound binary exits 2 and names the rule", async () => {
       join(fixtures, "unique"),
       () => {},
       (m) => errors.push(String(m)),
+      { plugins: [], excludePlugins: [], rules: ["dry/no-duplicate-code"], diff: "off" },
     );
     expect(code).toBe(2);
   } finally {
@@ -507,6 +513,7 @@ process.stdout.write("not-json");
       join(fixtures, "unique"),
       () => {},
       (m) => errors.push(String(m)),
+      { plugins: [], excludePlugins: [], rules: ["dry/no-duplicate-code"], diff: "off" },
     );
     expect(code).toBe(2);
   } finally {
@@ -521,7 +528,12 @@ process.stdout.write("not-json");
 });
 
 test("multi-plugin run attributes ts/, react/, and dry/ without cross-talk", async () => {
-  const result = await runFixture("multi-plugin", cannedReport);
+  const result = await runFixture("multi-plugin", cannedReport, [
+    "ts/public-exports-tested",
+    "react/no-fetch-in-useeffect",
+    "react/query-error-handled",
+    "dry/no-duplicate-code",
+  ]);
   expect(result.err).toBe("");
   expect(result.code).toBe(1);
   expect(result.out).toMatch(/react\/no-fetch-in-useeffect/);
@@ -593,34 +605,38 @@ test("fragment nested inner still clusters nested bodies", async () => {
 });
 
 test("Arm F never reports Python under dry/no-duplicate-code", async () => {
-  const result = await runFixture("mixed-lang", {
-    schema_version: 2,
-    clusters: [
-      {
-        id: 1,
-        similarity: 0.94,
-        test_only: false,
-        members: [
-          {
-            file: "src/invoice.py",
-            name: "tokenize_words",
-            start_line: 1,
-            end_line: 20,
-            representative: true,
-            test: false,
-          },
-          {
-            file: "src/billing.py",
-            name: "walk_depth_sum",
-            start_line: 1,
-            end_line: 20,
-            representative: false,
-            test: false,
-          },
-        ],
-      },
-    ],
-  });
+  const result = await runFixture(
+    "mixed-lang",
+    {
+      schema_version: 2,
+      clusters: [
+        {
+          id: 1,
+          similarity: 0.94,
+          test_only: false,
+          members: [
+            {
+              file: "src/invoice.py",
+              name: "tokenize_words",
+              start_line: 1,
+              end_line: 20,
+              representative: true,
+              test: false,
+            },
+            {
+              file: "src/billing.py",
+              name: "walk_depth_sum",
+              start_line: 1,
+              end_line: 20,
+              representative: false,
+              test: false,
+            },
+          ],
+        },
+      ],
+    },
+    ["dry/no-duplicate-code", "dry/no-duplicate-python"],
+  );
   expect(result.err).toBe("");
   expect(result.code).toBe(1);
   expect(result.out).toMatch(/dry\/no-duplicate-python/);
@@ -647,6 +663,7 @@ test.skipIf(!hasRealDupehound())(
         join(fixtures, "duplicate-pair"),
         (m) => dupLines.push(String(m)),
         (m) => dupErr.push(String(m)),
+        { plugins: [], excludePlugins: [], rules: ["dry/no-duplicate-code"], diff: "off" },
       );
       expect(dupErr.join("\n")).toBe("");
       expect(dup).toBe(1);
@@ -659,6 +676,7 @@ test.skipIf(!hasRealDupehound())(
         join(fixtures, "unique"),
         (m) => uniqLines.push(String(m)),
         (m) => uniqErr.push(String(m)),
+        { plugins: [], excludePlugins: [], rules: ["dry/no-duplicate-code"], diff: "off" },
       );
       expect(uniqErr.join("\n")).toBe("");
       expect(uniq).toBe(0);

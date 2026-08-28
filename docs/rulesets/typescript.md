@@ -3,7 +3,7 @@
 Honest catalog for **`@qualety/typescript`** (`Plugin.name: "ts"`).  
 This is the implementation list for this plugin. [typescript-baseline.md](./typescript-baseline.md) and [typescript-nice-to-have.md](./typescript-nice-to-have.md) are research inventories, **not** an implementation backlog.
 
-Core has no built-in rule bag. Rules exist only on this plugin’s `rules` map. Installing the plugin does **not** enable them. `configs.recommended` sets `ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `ts/no-unsafe-assertion`, `ts/no-empty-catch`, `ts/no-floating-promises`, and `ts/no-public-any` to `"error"` for users who opt into that preset.
+Core has no built-in rule bag. Rules exist only on this plugin’s `rules` map. Loading the plugin via `plugins[]` applies `configs.recommended` (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `ts/no-unsafe-assertion`, `ts/no-empty-catch`, `ts/no-floating-promises`, and `ts/no-public-any` at `"error"`). Overlay user `config.rules` to `"off"` or retune. `biome: false` skips the Biome phase.
 
 ## Implemented
 
@@ -19,7 +19,7 @@ Core has no built-in rule bag. Rules exist only on this plugin’s `rules` map. 
 | `ts/type-narrowing-checks` | A runtime check on a value is legitimate only if the TypeScript checker shows a strict refinement of that subject on the true/success path. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/zod-boundary` | Load/parse functions with an `unknown` param (Z1) and `JSON.parse` results (Z2) must hit schema `.parse` / `.safeParse` before property access. `defineRule` / `requires: ["typescript"]` | `error` |
 
-Recommended presets may also enable **Biome** rules via this plugin’s `biome.rules` (not `ts/*` rows). Shipped bag: `nursery/noUnsafeTypeAssertion: "error"`. `ts/no-unsafe-assertion` and `ts/no-empty-catch` stay Implemented: Biome’s `noUnsafeTypeAssertion` flags any `as T`, and empty-block rules are not catch-only.
+Recommended Biome **deltas** live on this plugin’s `biome.rules` (not `ts/*` rows): `nursery/noUnsafeTypeAssertion: "error"` and `complexity/noExcessiveCognitiveComplexity` at error with `maxAllowedComplexity: 15`. `ts/no-unsafe-assertion` and `ts/no-empty-catch` stay Implemented: Biome’s `noUnsafeTypeAssertion` flags any `as T`, and empty-block rules are not catch-only.
 
 Behavior is locked in [SPECS.md](../SPECS.md) §3 R5. Summary:
 

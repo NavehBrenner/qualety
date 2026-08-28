@@ -3,19 +3,12 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { isRecord } from "./record.ts";
-import { userBiomeSchema } from "./schemas.ts";
-
-const severitySchema = z.enum(["error", "warn", "off"]);
-const optionsObjectSchema = z.record(z.string(), z.unknown());
-const ruleSettingSchema = z.union([
-  severitySchema,
-  z.tuple([z.enum(["error", "warn"]), optionsObjectSchema]),
-]);
+import { ruleSettingSchema, userBiomeSchema } from "./schemas.ts";
 
 export const userConfigSchema = z
   .object({
     plugins: z.array(z.string()),
-    rules: z.record(z.string(), ruleSettingSchema),
+    rules: z.record(z.string(), ruleSettingSchema).optional(),
     include: z.array(z.string()).optional(),
     exclude: z.array(z.string()).optional(),
     biome: z.union([z.literal(false), userBiomeSchema]).optional(),
@@ -114,13 +107,11 @@ function mapConfigZodError(raw: unknown, error: z.ZodError): ConfigError {
     error.issues.some((issue) => {
       const key = issue.path[0];
       return (
-        (key === "plugins" || key === "rules") &&
-        issue.code === "invalid_type" &&
-        valueAt(raw, issue.path) === undefined
+        key === "plugins" && issue.code === "invalid_type" && valueAt(raw, issue.path) === undefined
       );
     })
   ) {
-    return new ConfigError('Config must include "plugins" and "rules"');
+    return new ConfigError('Config must include "plugins"');
   }
   return (
     firstFieldError(raw, error) ?? new ConfigError(error.issues[0]?.message ?? "Invalid config")
