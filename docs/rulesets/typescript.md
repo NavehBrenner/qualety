@@ -3,14 +3,18 @@
 Honest catalog for **`@qualety/typescript`** (`Plugin.name: "ts"`).  
 This is the implementation list for this plugin. [typescript-baseline.md](./typescript-baseline.md) and [typescript-nice-to-have.md](./typescript-nice-to-have.md) are research inventories, **not** an implementation backlog.
 
-Core has no built-in rule bag. Rules exist only on this plugin’s `rules` map. Installing the plugin does **not** enable them. `configs.recommended` sets `ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, and `ts/no-unnecessary-abstraction` to `"error"` for users who opt into that preset.
+Core has no built-in rule bag. Rules exist only on this plugin’s `rules` map. Installing the plugin does **not** enable them. `configs.recommended` sets `ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `ts/no-unsafe-assertion`, `ts/no-empty-catch`, `ts/no-floating-promises`, and `ts/no-public-any` to `"error"` for users who opt into that preset.
 
 ## Implemented
 
 | ID | Intent | Default in recommended |
 |----|--------|------------------------|
 | `ts/no-constant-condition` | Do not branch on a condition the analyzer can prove always true or always false (param type, prior narrowing, prior parse, same-file call-site facts, cheap literals). `defineRule` / `requires: ["typescript"]` | `error` |
+| `ts/no-empty-catch` | Do not use a catch clause whose body is empty or only comments. `defineRule` / `requires: ["typescript"]` | `error` |
+| `ts/no-floating-promises` | Do not leave a Promise as an expression statement without `await`, `return`, `void`, or a rejection handler. `defineRule` / `requires: ["typescript"]` | `error` |
+| `ts/no-public-any` | Public value exports must not be annotated as `any` or `any[]`. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/no-unnecessary-abstraction` | Do not keep a local abstraction that does not pay for its indirection: package-local ≤1-use pass-through / small-flat helpers and ≤1-use type aliases. `defineRule` / `requires: ["typescript"]` | `error` |
+| `ts/no-unsafe-assertion` | Do not use `as any` or `as unknown as T` assertions that erase type safety. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/public-exports-tested` | Every public value export in included non-test sources is referenced from a test path (static R5-lite; not coverage). `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/type-narrowing-checks` | A runtime check on a value is legitimate only if the TypeScript checker shows a strict refinement of that subject on the true/success path. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/zod-boundary` | Load/parse functions with an `unknown` param (Z1) and `JSON.parse` results (Z2) must hit schema `.parse` / `.safeParse` before property access. `defineRule` / `requires: ["typescript"]` | `error` |
@@ -69,6 +73,24 @@ Do not keep a local abstraction that does not pay for its indirection. **Underap
 **Types:** `type` / `interface` with package-local type-reference count ≤ 1 (declaration name does not count; import/export specifiers do not count). Multiple decls, `extends`, intersections, and unique-symbol brands are silenced.
 
 **React:** only if the owning or workspace-root `package.json` lists `react` / `react-dom` / `preact` in `dependencies` | `peerDependencies` | `devDependencies`, skip `/^use[A-Z]/` names and PascalCase decls that return JSX or are typed as `React.FC` / `FC` / `FunctionComponent`.
+
+### `ts/no-unsafe-assertion`
+
+Flag `expr as any` and `expr as unknown as T` (once, on the outer assertion). Skip `.d.ts`, `*.test.*` / `*.spec.*`, `__tests__`. Do not flag `as const`, lone `as unknown`, or other `as T`. Non-null `expr!` and angle-bracket `<any>x` are deferred.
+
+### `ts/no-empty-catch`
+
+Flag `catch` whose block has zero statements (`catch {}`, `catch (e) {}`, comment-only). Any statement silences (including `throw`, `return`, `continue`, `;`). Same skip set. Does not prove logging quality.
+
+### `ts/no-floating-promises`
+
+Expression statements only. Skip `void expr`. Skip a chain that has `.catch(...)` or `.then(onFulfilled, onRejected)` (arity ≥ 2). Bare `.then(onFulfilled)` and `.finally` do not skip. `await` / `return` are quiet by construction.
+
+Promise signal is underapprox (default provider skips lib files): checker type named `Promise` / text `/^Promise</` and not `any` / `unknown` / `error` / union / intersection, **or** callee is `async` / explicit return type starting with `Promise` / `new Promise`. Silence when neither is clear. Known miss: unannotated non-async function that returns a Promise when the checker cannot see `Promise`. Same skip set.
+
+### `ts/no-public-any`
+
+Exported declarations only (`export function` / `export const|let|var` / `export default` function or binding). Flag explicit `: any` / `: any[]` on params, returns, and bindings, and initializer `as any` on that export. Skip type-only, `export *`, `export =`, `.d.ts`, test paths. Silence `export { x }` / `export { x } from`. Do not infer unannotated internals. Do not flag `unknown`. Public `Function` / `Object` deferred.
 
 ### Split (A vs B vs `ts/zod-boundary`)
 

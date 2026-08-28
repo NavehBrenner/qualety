@@ -279,7 +279,9 @@ function findOnPath(cmd: string, pathVar: string): string | undefined {
     try {
       accessSync(candidate, constants.X_OK);
       return candidate;
-    } catch {}
+    } catch {
+      void candidate;
+    }
   }
   return undefined;
 }

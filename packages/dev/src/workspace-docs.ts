@@ -28,7 +28,9 @@ export async function buildWorkspaceDocs(context: ArtifactBuildContext): Promise
   for (const rel of WORKSPACE_DOC_PATHS) {
     try {
       files.set(rel, await readFile(join(context.cwd, rel), "utf8"));
-    } catch {}
+    } catch {
+      void rel;
+    }
   }
   return { files };
 }
