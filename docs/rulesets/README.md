@@ -5,7 +5,7 @@
 | [typescript.md](./typescript.md) | **Binding catalog** for `@qualety/typescript` — implemented vs not planned |
 | [react.md](./react.md) | **Binding catalog** for `@qualety/react` — implemented vs backlog |
 | [dry.md](./dry.md) | **Binding catalog** for `@qualety/dry` — structural `dry/no-duplicate-code` |
-| [python.md](./python.md) | **Binding catalog** for `@qualety/python` — `python/no-unnecessary-def` |
+| [python.md](./python.md) | **Binding catalog** for `@qualety/python` — `python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public` |
 | [plugin-kit.md](./plugin-kit.md) | **Portable authoring** for `@qualety/plugin-kit` — not a product app catalog |
 | [dev.md](./dev.md) | **Monorepo dogfood** for `@qualety/dev` — **not** a consumer ruleset |
 | [typescript-baseline.md](./typescript-baseline.md) | Research inventory (must-have ideas). **Not** an implementation backlog |

@@ -1,6 +1,10 @@
 import type { Plugin } from "qualety";
+import { noMutableDefault } from "./no-mutable-default.ts";
+import { noUnnecessaryClass } from "./no-unnecessary-class.ts";
 import { noUnnecessaryDef } from "./no-unnecessary-def.ts";
+import { publicExportsTested } from "./public-exports-tested.ts";
 import { buildPythonProject } from "./python.ts";
+import { requireTypedPublic } from "./require-typed-public.ts";
 
 const plugin: Plugin = {
   name: "python",
@@ -11,11 +15,19 @@ const plugin: Plugin = {
   },
   rules: {
     "no-unnecessary-def": noUnnecessaryDef,
+    "no-unnecessary-class": noUnnecessaryClass,
+    "public-exports-tested": publicExportsTested,
+    "no-mutable-default": noMutableDefault,
+    "require-typed-public": requireTypedPublic,
   },
   configs: {
     recommended: {
       rules: {
         "python/no-unnecessary-def": "error",
+        "python/no-unnecessary-class": "error",
+        "python/public-exports-tested": "error",
+        "python/no-mutable-default": "error",
+        "python/require-typed-public": "error",
       },
     },
   },

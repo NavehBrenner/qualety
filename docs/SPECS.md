@@ -45,7 +45,7 @@ These decisions are considered stable unless a major new constraint appears:
 
     **DRY plugin — what we own:** `dry/no-duplicate-code` (structural R4: dupehound whole-function path plus ts-morph fragment windows) and `dry/no-duplicate-python` (Arm F whole-function twin). We wrap the dupehound CLI for whole-function fingerprints and plugin config; we do not re-own its winnowing / Jaccard. Fragment clones are exact structural hashes on statement windows (TypeScript only). Embeddings / Slopo-style semantic near-dupes remain later. Architecture fitness only if we add something ArchUnit / dependency-cruiser do not already cover.
 
-    **Python plugin — what we own:** `python/no-unnecessary-def` (package-local ≤1-use pass-through / small-flat defs). Not a Ruff clone.
+     **Python plugin — what we own:** `python/no-unnecessary-def` (package-local ≤1-use pass-through / small-flat defs), `python/no-unnecessary-class` (package-local ≤1-use thin / pass-through classes), `python/public-exports-tested` (static test-presence for package `__all__` / `__init__` re-exports), `python/no-mutable-default` (mutable default args), `python/require-typed-public` (annotation presence on public callables). Not a Ruff clone.
 
    **What we do not own** (use Biome, ESLint, or dependency-cruiser): circular imports; max relative import depth; simple path bans (`dist/`, `generated/`, …); deep-import / internal-module bans; generic layer charts those tools already do well.
 
@@ -141,7 +141,7 @@ These decisions are considered stable unless a major new constraint appears:
 
   `NO_SUGGESTION = "No suggestion available for this rule."`
 
-    Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-code`, `dry/no-duplicate-python`, `python/no-unnecessary-def`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
+    Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-code`, `dry/no-duplicate-python`, `python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
 - **Plugin**: A package that exports `name` plus optional `rules` and/or `provides`. Ruleless plugins (`name` + `provides` only) are shared providers.
 - **Artifact**: Opaque value built once per check when an enabled rule `requires` its id. One provider map: plugin `provides` first, then default registry gap-fill (`"typescript"` → `ParsedProject`; `"dupehound"` in `@qualety/dry`; `"python"` in `@qualety/python`). Vector / embedding index is still future.
 
@@ -369,6 +369,10 @@ Embeddings / semantic near-dupes are **not** this plugin.
 | Rule | Status |
 |------|--------|
 | `python/no-unnecessary-def` | Implemented (package-local ≤1-use pass-through / small-flat defs; see [python.md](./rulesets/python.md)) |
+| `python/no-unnecessary-class` | Implemented (package-local ≤1-use thin / pass-through classes; see [python.md](./rulesets/python.md)) |
+| `python/public-exports-tested` | Implemented (static test-presence for package `__all__` / `__init__` re-exports; see [python.md](./rulesets/python.md)) |
+| `python/no-mutable-default` | Implemented (mutable default args; see [python.md](./rulesets/python.md)) |
+| `python/require-typed-public` | Implemented (annotation presence on public callables; see [python.md](./rulesets/python.md)) |
 
 Authored in TypeScript. Provides artifact `"python"` (CPython `ast` via `python3` spawn); not a default provider. Not a Ruff clone. DRY / types arm / Python-authored plugins are **not** this WP.
 
