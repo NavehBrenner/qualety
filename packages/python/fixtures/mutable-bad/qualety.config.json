@@ -2,5 +2,6 @@
   "plugins": ["../../dist/index.js"],
   "rules": {
     "python/no-mutable-default": "error"
-  }
+  },
+  "biome": false
 }

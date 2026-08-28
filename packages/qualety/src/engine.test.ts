@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { expect, test } from "vitest";
 import { expandCompanions } from "./companion-closure.ts";
-import { check } from "./engine.ts";
+import { check, loadPluginsFromConfig } from "./engine.ts";
 import { listGitSeed } from "./git-seed.ts";
 import { expandTypeScriptClosure } from "./typescript-frontend.ts";
 
@@ -214,15 +214,27 @@ function config(rules: Record<string, unknown>, extra: Record<string, unknown> =
   return JSON.stringify({
     plugins: ["./plugin.mjs"],
     rules,
+    biome: false,
     ...extra,
   });
 }
+
+test("loadPluginsFromConfig loads a relative plugin", async () => {
+  const dir = await writeTree({ "plugin.mjs": fixturePlugin });
+  const plugins = await loadPluginsFromConfig(
+    { plugins: ["./plugin.mjs"], rules: {} },
+    join(dir, "qualety.config.json"),
+  );
+  expect(plugins).toHaveLength(1);
+  expect(plugins[0]?.name).toBe("fixture");
+});
 
 test("official package spec loads typescript plugin", async () => {
   const dir = await writeTree({
     "qualety.config.json": JSON.stringify({
       plugins: ["@qualety/typescript"],
       rules: { "ts/no-constant-condition": "error" },
+      biome: false,
     }),
     "src/hello.ts": "export const n = 1;\n",
   });
@@ -244,6 +256,7 @@ test("unknown rule id exits 2", async () => {
     "qualety.config.json": JSON.stringify({
       plugins: [],
       rules: { "react/data-region-exhaustive": "error" },
+      biome: false,
     }),
   });
   const errors: string[] = [];
@@ -685,6 +698,7 @@ test("duplicate artifact id exits 2", async () => {
     "qualety.config.json": JSON.stringify({
       plugins: ["./plugin.mjs", "./other.mjs"],
       rules: { "fixture/ping": "error" },
+      biome: false,
     }),
     "src/hello.ts": "export const n = 1;\n",
   });
@@ -790,6 +804,7 @@ export default {
     "qualety.config.json": JSON.stringify({
       plugins: ["./providers.mjs", "./plugin.mjs"],
       rules: { "fixture/ping": "error", "fixture/again": "error" },
+      biome: false,
     }),
     "src/hello.ts": "export const n = 1;\n",
   });
@@ -1136,6 +1151,7 @@ test("--plugin union keeps each named plugin", async () => {
     "qualety.config.json": JSON.stringify({
       plugins: ["./plugin.mjs", "./other.mjs"],
       rules: { "fixture/ping": "error", "other/pong": "error" },
+      biome: false,
     }),
     "src/hello.ts": "export const n = 1;\n",
   });
@@ -1157,6 +1173,7 @@ test("--exclude-plugin applies after --plugin allow", async () => {
     "qualety.config.json": JSON.stringify({
       plugins: ["./plugin.mjs", "./other.mjs"],
       rules: { "fixture/ping": "error", "other/pong": "error" },
+      biome: false,
     }),
     "src/hello.ts": "export const n = 1;\n",
   });
@@ -1179,6 +1196,7 @@ test("--plugin and --rule intersect", async () => {
     "qualety.config.json": JSON.stringify({
       plugins: ["./plugin.mjs", "./other.mjs"],
       rules: { "fixture/ping": "error", "other/pong": "error" },
+      biome: false,
     }),
     "src/hello.ts": "export const n = 1;\n",
   });

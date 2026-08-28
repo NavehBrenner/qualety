@@ -13,6 +13,6 @@
 
 Core has no built-in rule bag. Language/framework/DRY rules live in `@qualety/typescript`, `@qualety/react`, `@qualety/dry`, and `@qualety/python`. Portable plugin-authoring rules live in `@qualety/plugin-kit` (not core, not `@qualety/dev`). `@qualety/dev` is this repository’s dogfood plugin only — not a consumer ruleset. Installing a plugin does not enable its rules.
 
-We do **not** reimplement Biome / ESLint / dependency-cruiser (cycles, deep imports, path bans, generic layer charts). See SPECS locked #7 and [typescript.md](./typescript.md). We do **not** own classic eslint-plugin-react / react-hooks / jsx-a11y or TanStack eslint mechanics. See [react.md](./react.md).
+We may **invoke and merge Biome** as a composed gate (plugin `biome` sections). We do **not** reimplement Biome / ESLint / dependency-cruiser (cycles, deep imports, path bans, generic layer charts). See SPECS locked #7 and [typescript.md](./typescript.md). We do **not** own classic eslint-plugin-react / react-hooks / jsx-a11y or TanStack eslint mechanics. See [react.md](./react.md).
 
 See [SPECS](../SPECS.md) for the plugin contract and locked rule behavior.

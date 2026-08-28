@@ -9,5 +9,6 @@
     "react/no-fetch-in-useeffect": "error",
     "react/query-error-handled": "error",
     "dry/no-duplicate-code": "error"
-  }
+  },
+  "biome": false
 }

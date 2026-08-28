@@ -114,6 +114,16 @@ export interface Plugin {
   configs?: {
     recommended?: Partial<UserConfig>;
   };
+  /**
+   * Recommended Biome lint settings (`group/name`). Not product rules.
+   * Merged into the generated Biome config; Biome owns the engine.
+   */
+  biome?: {
+    rules?: Record<
+      string,
+      "off" | "warn" | "error" | ["off" | "warn" | "error", Record<string, unknown>]
+    >;
+  };
 }
 
 /** Opaque to core; default TypeScript provider uses ts-morph Project + SourceFiles. */
@@ -135,6 +145,7 @@ export function defineConfig<T extends UserConfig>(config: T): T {
   return config;
 }
 export { defineRule } from "./define-rule.ts";
+export { runTimedCommand } from "./run-command.ts";
 export {
   artifactProviderSchema,
   functionSchema,

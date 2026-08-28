@@ -2,5 +2,6 @@
   "plugins": ["../../dist/index.js"],
   "rules": {
     "plugin-kit/prefer-define-rule": "error"
-  }
+  },
+  "biome": false
 }

@@ -1,7 +1,6 @@
-import { spawn } from "node:child_process";
 import { accessSync, constants } from "node:fs";
 import { delimiter, isAbsolute, join } from "node:path";
-import type { ArtifactBuildContext } from "qualety";
+import { type ArtifactBuildContext, runTimedCommand } from "qualety";
 import { z } from "zod";
 
 export const DUPEHOUND_PIN = "v0.1.2";
@@ -142,7 +141,7 @@ export async function buildDupehoundIndex(options: BuildDupehoundOptions): Promi
   args.push(".");
 
   const timeoutMs = options.timeoutMs ?? SCAN_TIMEOUT_MS;
-  const result = await runCommand(bin, args, options.cwd, timeoutMs);
+  const result = await runTimedCommand(bin, args, options.cwd, timeoutMs);
   if (result.timedOut) {
     throw new DupehoundError(
       `dupehound timed out after ${timeoutMs / 1000}s (required by ${byLabel(requiredBy)}).`,
@@ -315,72 +314,4 @@ export function missingBinaryMessage(requiredBy: readonly string[]): string {
 
 function byLabel(ids: readonly string[]): string {
   return ids.length ? ids.join(", ") : "a dupehound-backed rule";
-}
-
-type CommandResult = {
-  code: number | null;
-  stdout: string;
-  stderr: string;
-  timedOut: boolean;
-  error?: string;
-};
-
-function runCommand(
-  bin: string,
-  args: string[],
-  cwd: string,
-  timeoutMs: number,
-): Promise<CommandResult> {
-  return new Promise((resolve) => {
-    let stdout = "";
-    let stderr = "";
-    let timedOut = false;
-    let settled = false;
-    const finish = (result: CommandResult) => {
-      if (settled) {
-        return;
-      }
-      settled = true;
-      resolve(result);
-    };
-    let child: ReturnType<typeof spawn>;
-    try {
-      child = spawn(bin, args, { cwd });
-    } catch (e) {
-      finish({
-        code: null,
-        stdout: "",
-        stderr: "",
-        timedOut: false,
-        error: e instanceof Error ? e.message : String(e),
-      });
-      return;
-    }
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill("SIGKILL");
-    }, timeoutMs);
-    child.stdout?.setEncoding("utf8");
-    child.stderr?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk: string) => {
-      stdout += chunk;
-    });
-    child.stderr?.on("data", (chunk: string) => {
-      stderr += chunk;
-    });
-    child.on("error", (e) => {
-      clearTimeout(timer);
-      finish({
-        code: null,
-        stdout,
-        stderr,
-        timedOut,
-        error: e.message,
-      });
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      finish({ code, stdout, stderr, timedOut });
-    });
-  });
 }

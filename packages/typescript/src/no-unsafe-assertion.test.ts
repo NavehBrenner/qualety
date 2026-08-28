@@ -24,6 +24,7 @@ test("plugin exports no-unsafe-assertion and recommended includes it", () => {
   expect(noUnsafeAssertion).toBeDefined();
   expect(plugin.rules?.["no-unsafe-assertion"]).toBeDefined();
   expect(plugin.configs?.recommended?.rules?.["ts/no-unsafe-assertion"]).toBe("error");
+  expect(plugin.biome?.rules?.["nursery/noUnsafeTypeAssertion"]).toBe("error");
 });
 
 test("as any and as unknown as T exit 1", async () => {

@@ -22,6 +22,7 @@ import {
   requiresSchema as indexRequiresSchema,
   ruleMetaSchema as indexRuleMetaSchema,
   ruleSchema as indexRuleSchema,
+  runTimedCommand as indexRunTimedCommand,
 } from "./index.ts";
 
 const valid: UserConfig = { plugins: [], rules: {} };
@@ -50,7 +51,37 @@ test("defineConfig is exported and returns the same reference", () => {
   expect(indexRequiresSchema).toBeDefined();
   expect(indexRuleMetaSchema).toBeDefined();
   expect(indexRuleSchema).toBeDefined();
+  expect(indexRunTimedCommand).toEqual(expect.any(Function));
   expect(rootVitestConfig).toBeDefined();
+});
+
+test("validateConfig accepts biome false and rules overlay", () => {
+  expect(validateConfig({ ...valid, biome: false })).toEqual({ ...valid, biome: false });
+  expect(
+    validateConfig({
+      ...valid,
+      biome: {
+        rules: {
+          "complexity/noExcessiveCognitiveComplexity": ["error", { maxAllowedComplexity: 15 }],
+        },
+        format: true,
+      },
+    }).biome,
+  ).toEqual({
+    rules: {
+      "complexity/noExcessiveCognitiveComplexity": ["error", { maxAllowedComplexity: 15 }],
+    },
+    format: true,
+  });
+});
+
+test("validateConfig rejects invalid biome contributions", () => {
+  expect(() => validateConfig({ ...valid, biome: { rules: { noSlash: "error" } } })).toThrow(
+    /expected group\/name/,
+  );
+  expect(() => validateConfig({ ...valid, biome: { files: [] } })).toThrow(
+    /Unknown biome key: files/,
+  );
 });
 
 test("validateConfig rejects unknown keys", () => {

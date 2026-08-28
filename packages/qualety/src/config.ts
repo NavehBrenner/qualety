@@ -3,6 +3,7 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
 import { isRecord } from "./record.ts";
+import { userBiomeSchema } from "./schemas.ts";
 
 const severitySchema = z.enum(["error", "warn", "off"]);
 const optionsObjectSchema = z.record(z.string(), z.unknown());
@@ -17,6 +18,7 @@ export const userConfigSchema = z
     rules: z.record(z.string(), ruleSettingSchema),
     include: z.array(z.string()).optional(),
     exclude: z.array(z.string()).optional(),
+    biome: z.union([z.literal(false), userBiomeSchema]).optional(),
   })
   .strict();
 
@@ -140,6 +142,9 @@ function mapFieldIssue(raw: unknown, issue: z.ZodIssue): ConfigError | undefined
   if (key === "plugins" || key === "include" || key === "exclude") {
     return new ConfigError(`"${String(key)}" must be an array of strings`);
   }
+  if (key === "biome") {
+    return mapBiomeIssue(issue);
+  }
   if (key !== "rules") {
     return undefined;
   }
@@ -177,10 +182,52 @@ function mapFieldIssue(raw: unknown, issue: z.ZodIssue): ConfigError | undefined
   );
 }
 
+function mapBiomeIssue(issue: z.ZodIssue): ConfigError {
+  if (issue.code === "invalid_union") {
+    for (const branch of issue.errors) {
+      const mapped = mapBiomeUnionBranch(branch);
+      if (mapped !== undefined) {
+        return mapped;
+      }
+    }
+  }
+  if (issue.code === "unrecognized_keys") {
+    return new ConfigError(
+      `Unknown biome key${issue.keys.length > 1 ? "s" : ""}: ${issue.keys.join(", ")}.`,
+    );
+  }
+  if (issue.path[1] === "rules" && typeof issue.path[2] === "string") {
+    return new ConfigError(
+      `Invalid Biome rule id ${JSON.stringify(issue.path[2])}; expected group/name.`,
+    );
+  }
+  if (issue.path[1] === "format") {
+    return new ConfigError('"biome.format" must be a boolean');
+  }
+  return new ConfigError(`Invalid biome config: ${issue.message}`);
+}
+
+function mapBiomeUnionBranch(branch: z.ZodIssue[]): ConfigError | undefined {
+  for (const inner of branch) {
+    if (inner.code === "unrecognized_keys") {
+      return new ConfigError(
+        `Unknown biome key${inner.keys.length > 1 ? "s" : ""}: ${inner.keys.join(", ")}.`,
+      );
+    }
+    if (inner.code === "invalid_key") {
+      const id = inner.path.find((part) => part !== "rules") ?? inner.path.at(-1);
+      return new ConfigError(
+        `Invalid Biome rule id ${JSON.stringify(String(id))}; expected group/name.`,
+      );
+    }
+  }
+  return undefined;
+}
+
 function unrecognizedConfigKeys(error: z.ZodError): string[] {
   const keys: string[] = [];
   for (const issue of error.issues) {
-    if (issue.code !== "unrecognized_keys") {
+    if (issue.code !== "unrecognized_keys" || issue.path.length > 0) {
       continue;
     }
     keys.push(...issue.keys);

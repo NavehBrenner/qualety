@@ -2,5 +2,6 @@
   "plugins": ["../../dist/index.js"],
   "rules": {
     "python/no-sys-path-hack": "error"
-  }
+  },
+  "biome": false
 }

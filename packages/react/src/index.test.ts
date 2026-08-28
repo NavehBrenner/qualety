@@ -96,6 +96,7 @@ test("unknown rule id with react plugin loaded exits 2 naming the id", async () 
     "qualety.config.json": JSON.stringify({
       plugins: [reactDist],
       rules: { "react/no-such-rule": "error" },
+      biome: false,
     }),
     "src/a.ts": "export const a = 1;\n",
   });
@@ -109,6 +110,7 @@ test("loading both plugins without enabling rules is an empty path", async () =>
     "qualety.config.json": JSON.stringify({
       plugins: [tsDist, reactDist],
       rules: {},
+      biome: false,
     }),
     "src/a.ts": "export const a = 1;\n",
   });

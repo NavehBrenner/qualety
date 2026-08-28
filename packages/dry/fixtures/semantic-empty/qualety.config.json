@@ -2,5 +2,6 @@
   "plugins": ["../../dist/index.js", "../../../python/dist/index.js"],
   "rules": {
     "dry/no-semantic-duplicate": "error"
-  }
+  },
+  "biome": false
 }

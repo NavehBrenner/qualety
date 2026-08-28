@@ -20,7 +20,7 @@ These decisions are considered stable unless a major new constraint appears:
     Exit codes 0/1/2. JSON/SARIF output. Optional MCP server as a thin wrapper around the same engine. Official GitHub Action + pre-commit examples.
 
 2. **Configuration**  
-   Primary path is a typed `defineConfig` function (TypeScript) that provides IntelliSense, autocomplete, and runtime validation of unknown keys / mismatched rule ids. On-disk load is JSON + TS/JS (`qualety.config.ts` / `.mts` / `.js` / `.mjs` / `.json`). Every rule is independently toggleable; installing a plugin does **not** force all of its rules on.
+   Primary path is a typed `defineConfig` function (TypeScript) that provides IntelliSense, autocomplete, and runtime validation of unknown keys / mismatched rule ids. On-disk load is JSON + TS/JS (`qualety.config.ts` / `.mts` / `.js` / `.mjs` / `.json`). Every rule is independently toggleable; installing a plugin does **not** force all of its rules on. Plugin `biome` sections **do** feed the generated Biome config (baseline → `plugins[]` order → user `config.biome.rules`; `biome: false` off). They are not product rules.
 
 3. **Core language & multi-language strategy**  
    Core engine, CLI, MCP, and config system are written in **TypeScript**. Default artifact providers (e.g. `"typescript"`) may parse with language-specific libraries **inside** `build` (ts-morph for TypeScript). Rules consume native AST types via `getArtifact` plus their own imports. **The core never imports language-specific AST types** (`SourceFile` is not on `ArtifactMap`; `ParsedProject.sources` stays `unknown`). There is no public `LanguageFrontend` / `hasFrontend` / `createFrontend` product API.
@@ -37,7 +37,11 @@ These decisions are considered stable unless a major new constraint appears:
    High-quality TypeScript/React engine first. Python baseline starts with `@qualety/python` (`python/no-unnecessary-def`); other languages later, reusing the same core protocol.
 
 7. **Relationship to classic linters/formatters**  
-   `qualety` is the *higher-order* layer. It does **not** wrap, re-implement, or own configuration for Biome, ESLint, Prettier, Oxlint, or Ruff. Users are expected to run a fast linter/formatter of their choice.     We may later offer a thin convenience flag that invokes the user’s existing Biome/ESLint config and then runs our rules, but we never own those tools’ configuration or rule sets. This monorepo enables Biome `noExcessiveCognitiveComplexity` (error, max 15) for its own sources; that is not a qualety product rule and we do not own the metric for consumers. Custom plugins that need classic lint/format results should call those tools themselves.
+    `qualety` is the *higher-order* layer. For JS/TS it **may generate/merge a Biome config and invoke Biome** as part of `qualety check` (single-install gate). Biome still owns the lint engine and diagnostics. We **do not** reimplement Biome’s rules, wrap them as `biome/…` product rules, or own Biome’s engine. Formatter stays opt-in (`biome.format: true`; no default format-on-write, no `qualety fmt`). User `biome.json` is **not** auto-merged; user wins via `config.biome` / `biome: false`. Pin `@biomejs/biome` in the `qualety` package and bump it deliberately. ESLint, Prettier, Oxlint, and Ruff stay user-owned (Ruff is a follow-up compose).
+
+    This monorepo’s committed `biome.json` remains the `pnpm check` / formatter file. The same complexity override (`noExcessiveCognitiveComplexity`, error, max 15) is duplicated in root `qualety.config.ts` `biome.rules`. That is not a qualety product rule.
+
+    **Twin parity:** `ts/no-unsafe-assertion` is not equivalent to Biome `nursery/noUnsafeTypeAssertion` (`as any` / `as unknown as T` vs any `as T`). `ts/no-empty-catch` is not equivalent to Biome empty-block rules (catch-only vs all empty blocks). Both stay product rules.
 
       **TypeScript baseline — what we own:** `ts/public-exports-tested` (static R5-lite), `ts/zod-boundary` (Z1 load/parse + Z2 `JSON.parse`), `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `ts/no-unsafe-assertion` (`as any` + `as unknown as T`; `expr!` deferred), `ts/no-empty-catch`, `ts/no-floating-promises`, `ts/no-public-any` (`any` / `any[]`; public `Function` / `Object` deferred).
 
@@ -142,7 +146,7 @@ These decisions are considered stable unless a major new constraint appears:
   `NO_SUGGESTION = "No suggestion available for this rule."`
 
     Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `ts/no-unsafe-assertion`, `ts/no-empty-catch`, `ts/no-floating-promises`, `ts/no-public-any`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-code`, `dry/no-duplicate-python`, `dry/no-semantic-duplicate`, `python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`, `python/no-bare-except`, `python/no-silent-except`, `python/no-open-without-with`, `python/no-sys-path-hack`, `python/no-public-any`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
-- **Plugin**: A package that exports `name` plus optional `rules` and/or `provides`. Ruleless plugins (`name` + `provides` only) are shared providers.
+- **Plugin**: A package that exports `name` plus optional `rules` and/or `provides`. Ruleless plugins (`name` + `provides` only) are shared providers. Optional `biome.rules` (`group/name`) feed the generated Biome config; they are **not** product rules.
 - **Artifact**: Opaque value built once per check when an enabled rule `requires` its id. One provider map: plugin `provides` first, then default registry gap-fill (`"typescript"` → `ParsedProject`; `"dupehound"` and `"code-embeddings"` in `@qualety/dry`; `"python"` in `@qualety/python`). `"code-embeddings"` is a check-time artifact, not `qualety index`.
 
 ## 2. Plugin contract (explicit)
@@ -157,6 +161,9 @@ export interface Plugin {
   provides?: Record<string, ArtifactProvider>;
   configs?: {
     recommended?: Partial<UserConfig>;
+  };
+  biome?: {
+    rules?: Record<string, "off" | "warn" | "error" | [severity, options]>;
   };
 }
 
@@ -214,7 +221,7 @@ Runtime schemas (engine `safeParse` at load; do **not** replace the TypeScript i
 
 A malformed plugin / rule / provider, invalid `requires`, a missing provider, a duplicate provider id, a build throw, or `getArtifact` for an id not in that rule’s `requires` is an error (exit 2; do not silently skip). Missing-provider copy is provider-neutral (`No provider for artifact "…" (required by …).`). The message names the rule id(s).
 
-A custom plugin is simply an npm package (or local folder) that exports a `Plugin`. The core discovers it from the `plugins` array in the user’s config. Core never ships a default rule table; a rule exists only if a loaded plugin lists it. Installing `@qualety/typescript` (or any plugin) does not enable rules until they appear in `config.rules`. `configs.recommended` is an optional preset the user copies in — the engine does not apply it on install.
+A custom plugin is simply an npm package (or local folder) that exports a `Plugin`. The core discovers it from the `plugins` array in the user’s config. Core never ships a default rule table; a rule exists only if a loaded plugin lists it. Installing `@qualety/typescript` (or any plugin) does not enable rules until they appear in `config.rules`. `configs.recommended` is an optional preset the user copies in — the engine does not apply it on install. Plugin `biome.rules` keys are `group/name` (exactly one `/`); extra `biome` keys fail closed (exit 2). Check writes `.qualety/biome.json` and runs Biome when a config is present and `biome !== false`, even if every product rule is off. `--plugin` / `--rule` / `--exclude-plugin` skip that phase. Zero JS/TS/JSX/JSON in the file list skips Biome (success). Biome unrunnable while enabled → exit 2.
 
 **v1 constraint**: plugins are authored in TypeScript/JavaScript only. Custom plugins load only on npm/Node this train (locked #10).
 
@@ -407,6 +414,7 @@ Authored in TypeScript. Provides artifact `"python"` (CPython `ast` via `python3
 
 ```bash
 qualety init
+qualety doctor
 qualety check
 qualety check --plugin react
 qualety check --rule react/data-region-exhaustive
@@ -438,6 +446,7 @@ export default defineConfig({
   },
   include: ["src/**/*.{ts,tsx}"],
   exclude: ["**/generated/**"],
+  // biome: false,  // off switch; omit to run the Biome phase
 });
 ```
 

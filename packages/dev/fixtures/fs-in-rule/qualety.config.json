@@ -2,5 +2,6 @@
   "plugins": ["../../dist/index.js"],
   "rules": {
     "dev/no-fs-in-rules": "error"
-  }
+  },
+  "biome": false
 }

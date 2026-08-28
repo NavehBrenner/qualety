@@ -1,11 +1,21 @@
 #!/usr/bin/env node
 import { parseArgs } from "node:util";
-import { type CheckFilters, check } from "./engine.ts";
+import {
+  biomeEnabled,
+  GENERATED_BIOME_PATH,
+  readBiomeVersion,
+  resolveBiomeBinary,
+  writeGeneratedBiomeConfig,
+} from "./biome.ts";
+import { loadConfig } from "./config.ts";
+import { type CheckFilters, check, loadPluginsFromConfig } from "./engine.ts";
 
 const USAGE = `qualety — executable code invariants
 
 Usage:
   qualety check [options]
+  qualety init
+  qualety doctor
 
 Options:
   -h, --help              Show this help
@@ -58,19 +68,82 @@ export async function run(
     out(USAGE);
     return values.help ? 0 : 2;
   }
+  return dispatch(positionals, values, out, err, cwd);
+}
 
+async function dispatch(
+  positionals: string[],
+  values: {
+    plugin?: string[];
+    "exclude-plugin"?: string[];
+    rule?: string[];
+    diff?: boolean;
+    "diff-worktree"?: boolean;
+  },
+  out: (msg: string) => void,
+  err: (msg: string) => void,
+  cwd: string,
+): Promise<number> {
   const [command, ...rest] = positionals;
+  if (command === "init" || command === "doctor") {
+    return runMeta(command, rest, positionals, out, err, cwd);
+  }
   if (command !== "check" || rest.length > 0) {
     err(`Unknown command: ${positionals.join(" ")}\n\n${USAGE}`);
     return 2;
   }
-
   const filters = filtersFromValues(values);
   if (filters === undefined) {
     err(`--diff and --diff-worktree cannot be used together.\n\n${USAGE}`);
     return 2;
   }
   return check(cwd, out, err, filters);
+}
+
+async function runMeta(
+  command: string,
+  rest: string[],
+  positionals: string[],
+  out: (msg: string) => void,
+  err: (msg: string) => void,
+  cwd: string,
+): Promise<number> {
+  if (rest.length > 0) {
+    err(`Unknown command: ${positionals.join(" ")}\n\n${USAGE}`);
+    return 2;
+  }
+  try {
+    if (command !== "init") {
+      return await runDoctor(cwd, out);
+    }
+    const loaded = await loadConfig(cwd);
+    if (loaded === undefined) {
+      throw new Error("No qualety config found.");
+    }
+    const plugins = await loadPluginsFromConfig(loaded.config, loaded.path);
+    const path = await writeGeneratedBiomeConfig(cwd, plugins, loaded.config.biome);
+    out(path);
+    return 0;
+  } catch (e) {
+    err(e instanceof Error ? e.message : String(e));
+    return 2;
+  }
+}
+
+async function runDoctor(cwd: string, out: (msg: string) => void): Promise<number> {
+  const loaded = await loadConfig(cwd);
+  if (loaded === undefined) {
+    out("biome: off (no qualety config)");
+    return 0;
+  }
+  if (!biomeEnabled(loaded.config)) {
+    out("biome: off (biome: false)");
+    return 0;
+  }
+  const bin = resolveBiomeBinary();
+  const version = await readBiomeVersion(bin, cwd);
+  out(`biome: on\nversion: ${version}\nbinary: ${bin}\nconfig: ${GENERATED_BIOME_PATH}`);
+  return 0;
 }
 
 function filtersFromValues(values: {

@@ -3,5 +3,6 @@
   "rules": {
     "ts/public-exports-tested": "error"
   },
-  "exclude": ["**/dropped.ts"]
+  "exclude": ["**/dropped.ts"],
+  "biome": false
 }

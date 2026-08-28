@@ -2,5 +2,6 @@
   "plugins": ["../../dist/index.js"],
   "rules": {
     "dev/core-provider-boundaries": "error"
-  }
+  },
+  "biome": false
 }

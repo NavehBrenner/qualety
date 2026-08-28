@@ -1,6 +1,7 @@
 import { glob } from "node:fs/promises";
 import { basename, dirname, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
+import { biomeEnabled, runBiomePhase } from "./biome.ts";
 import { expandCompanions } from "./companion-closure.ts";
 import { CONFIG_FILENAMES, ConfigError, loadConfig } from "./config.ts";
 import { DEFAULT_PROVIDERS } from "./default-providers.ts";
@@ -83,19 +84,12 @@ export async function check(
       return 0;
     }
     const { path: configPath, config } = loaded;
-    if (Object.keys(config.rules).length === 0 && !hasNameFilters(filters)) {
-      out(NOTHING_TO_CHECK);
-      return 0;
-    }
-
-    const plugins: Plugin[] = [];
-    for (const spec of config.plugins) {
-      plugins.push(await loadPlugin(spec, dirname(configPath)));
-    }
+    const plugins = await loadPluginsFromConfig(config, configPath);
     const enabled = resolveEnabledRules(plugins, config.rules);
     assertKnownFilters(plugins, enabled, filters);
     const selected = selectRules(enabled, filters);
-    if (selected.length === 0) {
+    const runBiome = biomeEnabled(config) && !hasNameFilters(filters);
+    if (selected.length === 0 && !runBiome) {
       out(hasNameFilters(filters) ? NO_RULES_MATCHED : NOTHING_TO_CHECK);
       return 0;
     }
@@ -107,13 +101,37 @@ export async function check(
     }
 
     const displayPaths = files.map((abs) => displayPath(cwd, abs));
-    const artifacts = await buildRequiredArtifacts(plugins, selected, {
-      cwd,
-      files: displayPaths,
-      exclude: mergedExclude(config),
-    });
-
-    const violations = collectViolations(selected, cwd, displayPaths, artifacts);
+    const biomeViolations = runBiome
+      ? (
+          await runBiomePhase({
+            cwd,
+            files: displayPaths,
+            plugins,
+            biome: config.biome,
+          })
+        ).map((violation) => ({ ...violation, file: displayPath(cwd, violation.file) }))
+      : [];
+    const productViolations =
+      selected.length === 0
+        ? []
+        : collectViolations(
+            selected,
+            cwd,
+            displayPaths,
+            await buildRequiredArtifacts(plugins, selected, {
+              cwd,
+              files: displayPaths,
+              exclude: mergedExclude(config),
+            }),
+          );
+    const violations = [...biomeViolations, ...productViolations];
+    violations.sort(
+      (a, b) =>
+        a.file.localeCompare(b.file) ||
+        a.range.start.line - b.range.start.line ||
+        a.range.start.column - b.range.start.column ||
+        a.ruleId.localeCompare(b.ruleId),
+    );
     printViolations(violations, out);
     return violations.length > 0 ? 1 : 0;
   } catch (e) {
@@ -162,13 +180,6 @@ function collectViolations(
       },
     });
   }
-  violations.sort(
-    (a, b) =>
-      a.file.localeCompare(b.file) ||
-      a.range.start.line - b.range.start.line ||
-      a.range.start.column - b.range.start.column ||
-      a.ruleId.localeCompare(b.ruleId),
-  );
   return violations;
 }
 
@@ -183,6 +194,17 @@ function printViolations(violations: readonly Violation[], out: (msg: string) =>
       );
     }
   }
+}
+
+export async function loadPluginsFromConfig(
+  config: UserConfig,
+  configPath: string,
+): Promise<Plugin[]> {
+  const plugins: Plugin[] = [];
+  for (const spec of config.plugins) {
+    plugins.push(await loadPlugin(spec, dirname(configPath)));
+  }
+  return plugins;
 }
 
 async function loadPlugin(spec: string, fromDir: string): Promise<Plugin> {

@@ -7,7 +7,7 @@
 
 `qualety` turns high-level engineering standards into **executable CI checks** so AI coding agents (and humans) get structural quality without relying on prose instructions or manual review of large diffs.
 
-It sits **above** formatters and classic linters: plugin rules (compositional AST, test-presence, structural DRY). Not a SAST product; not a reimplementation of Biome/ESLint. Core has **no built-in rule bag** — every check is a plugin rule. Baseline TypeScript lives in `@qualety/typescript`. React compositional rules live in `@qualety/react`. Structural and semantic DRY live in `@qualety/dry`. Python baseline lives in `@qualety/python`. Portable plugin-authoring rules live in `@qualety/plugin-kit` (not a product app catalog).
+It sits **above** formatters and classic linters: plugin rules (compositional AST, test-presence, structural DRY). Not a SAST product. Qualety may **invoke Biome** (merge plugin `biome` recommends, generate config, spawn). Do **not** reimplement Biome’s engine or rules as `ts/*` twins. Core has **no built-in rule bag** — every check is a plugin rule. Baseline TypeScript lives in `@qualety/typescript`. React compositional rules live in `@qualety/react`. Structural and semantic DRY live in `@qualety/dry`. Python baseline lives in `@qualety/python`. Portable plugin-authoring rules live in `@qualety/plugin-kit` (not a product app catalog).
 
 ## What to read before coding
 
@@ -86,6 +86,6 @@ Product MCP surface (draft): `check`, `check_diff`, `list_rules`, `get_rule_docs
 ## Non-goals for agents
 
 - Rewriting the core in Rust in v1
-- Wrapping or owning Biome/ESLint configuration
+- Reimplementing Biome/ESLint rules inside the qualety engine
 - Building a security SAST competitor
 - Large “fix everything” PRs without fixtures or SPECS alignment

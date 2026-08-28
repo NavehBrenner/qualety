@@ -3,4 +3,5 @@ dist/
 *.tsbuildinfo
 .DS_Store
 .tools/
+.qualety/
 __pycache__/

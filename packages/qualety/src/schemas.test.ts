@@ -10,6 +10,7 @@ import {
   requiresSchema,
   ruleMetaSchema,
   ruleSchema,
+  userBiomeSchema,
 } from "./schemas.ts";
 import { createTypeScriptProvider } from "./typescript-frontend.ts";
 
@@ -21,6 +22,8 @@ test("core helpers and schemas are exported", () => {
   expect(requiresSchema).toBeDefined();
   expect(ruleMetaSchema).toBeDefined();
   expect(ruleSchema).toBeDefined();
+  expect(userBiomeSchema.safeParse({ format: true }).success).toBe(true);
+  expect(userBiomeSchema.safeParse({ files: [] }).success).toBe(false);
 });
 
 test("pluginSchema accepts a ruleless provider module", () => {

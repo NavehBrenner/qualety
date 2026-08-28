@@ -4,5 +4,6 @@
   "rules": {
     "dry/no-duplicate-code": "error",
     "dry/no-duplicate-python": "error"
-  }
+  },
+  "biome": false
 }
