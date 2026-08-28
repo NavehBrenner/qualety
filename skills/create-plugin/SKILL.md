@@ -33,7 +33,7 @@ Scaffold a **new** plugin (e.g. `@qualety/foo` or a user-local plugin) that expo
    - **Ruleless provider** — `name` + `provides` only (no `rules`). Spawn-allowed pattern: dry’s `provides.dupehound` (`packages/dry/src/dupehound.ts`).
 3. Checklist:
    - `package.json` + entry that **exports a `Plugin` object**
-   - If a rule is in scope now: `defineRule` + `meta.docs.description` + optional `meta.requires`. Otherwise defer to [add-rule](../add-rule/SKILL.md)
+    - If a rule is in scope now: `defineRule` + `meta.docs.description` + optional `meta.requires`. If it takes tunables: `meta.schema` (engine validates options; omitted → `undefined`). Otherwise defer to [add-rule](../add-rule/SKILL.md)
    - No empty stub rules
    - In-repo: `packages/*` is already globbed; add `workspace:*` at the root only if root config loads the package
 4. Smoke-test: load the plugin, assert `name` and (if any) rule ids.

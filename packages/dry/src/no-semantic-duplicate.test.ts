@@ -105,6 +105,16 @@ test("unrelated vectors are silent", () => {
   expect(reports).toHaveLength(0);
 });
 
+test("cosine 0.85 is silent at default 0.90 and reports at 0.80", () => {
+  const left = new Float32Array([1, 0]);
+  const right = new Float32Array([0.85, Math.sqrt(1 - 0.85 * 0.85)]);
+  expect(cosineSimilarity(left, right)).toBeCloseTo(0.85);
+  const chunks = [member("src/a.ts", "alpha", left), member("src/b.ts", "beta", right)];
+  expect(reportsFromEmbeddings({ chunks })).toHaveLength(0);
+  expect(reportsFromEmbeddings({ chunks }, COSINE_THRESHOLD)).toHaveLength(0);
+  expect(reportsFromEmbeddings({ chunks }, 0.8)).toHaveLength(1);
+});
+
 test("cosineSimilarity is 1 for identical unit vectors", () => {
   const vector = new Float32Array([0, 1, 0]);
   expect(cosineSimilarity(vector, vector)).toBe(1);

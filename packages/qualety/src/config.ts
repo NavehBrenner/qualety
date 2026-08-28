@@ -5,11 +5,16 @@ import { z } from "zod";
 import { isRecord } from "./record.ts";
 
 const severitySchema = z.enum(["error", "warn", "off"]);
+const optionsObjectSchema = z.record(z.string(), z.unknown());
+const ruleSettingSchema = z.union([
+  severitySchema,
+  z.tuple([z.enum(["error", "warn"]), optionsObjectSchema]),
+]);
 
 export const userConfigSchema = z
   .object({
     plugins: z.array(z.string()),
-    rules: z.record(z.string(), severitySchema),
+    rules: z.record(z.string(), ruleSettingSchema),
     include: z.array(z.string()).optional(),
     exclude: z.array(z.string()).optional(),
   })
@@ -139,14 +144,36 @@ function mapFieldIssue(raw: unknown, issue: z.ZodIssue): ConfigError | undefined
     return undefined;
   }
   if (issue.path.length === 1) {
-    return new ConfigError('"rules" must be an object of rule ids to "error" | "warn" | "off"');
+    return new ConfigError(
+      '"rules" must be an object of rule ids to "error" | "warn" | "off" or [severity, options]',
+    );
   }
   const id = issue.path[1];
   if (typeof id !== "string") {
     return undefined;
   }
+  const value = valueAt(raw, ["rules", id]);
+  if (isRecord(value)) {
+    return new ConfigError(
+      `Invalid rules entry for "${id}": options require a severity. Use "error", "warn", or "off", or ["error" | "warn", options].`,
+    );
+  }
+  if (!Array.isArray(value)) {
+    return new ConfigError(
+      `Invalid severity for "${id}": ${JSON.stringify(value)}. Use "error", "warn", or "off".`,
+    );
+  }
+  if (value.length !== 2) {
+    return new ConfigError(`Invalid rules entry for "${id}": expected [severity, options].`);
+  }
+  if (value[0] === "off") {
+    return new ConfigError(`Rule "${id}" is "off"; options are not allowed.`);
+  }
+  if (!isRecord(value[1])) {
+    return new ConfigError(`Invalid options for "${id}": options must be an object.`);
+  }
   return new ConfigError(
-    `Invalid severity for "${id}": ${JSON.stringify(valueAt(raw, issue.path))}. Use "error", "warn", or "off".`,
+    `Invalid severity for "${id}": ${JSON.stringify(value[0])}. Use "error", "warn", or "off".`,
   );
 }
 
