@@ -4,19 +4,25 @@ import {
   childNodes,
   clearReexports,
   collectImports,
+  collectModuleAliases,
   containsPos,
+  forEachPythonSource,
   groupByPackage,
   hasDecorator,
   isDunder,
   isInitModule,
   isPassThrough,
+  isPublicCallable,
   isPythonNode,
   isSkippedSource,
   isSmallAndFlat,
   isTestPath,
   nameRange,
   nodeRange,
+  publicInitNames,
   readDunderAll,
+  walkCallables,
+  walkNodes,
 } from "./walk.ts";
 
 test("walk helpers", () => {
@@ -43,4 +49,10 @@ test("walk helpers", () => {
   );
   expect(readDunderAll({ _type: "Module", body: [] }).kind).toBe("absent");
   expect(clearReexports({ _type: "Module", body: [] })).toEqual([]);
+  expect(forEachPythonSource).toBeTypeOf("function");
+  expect(walkNodes).toBeTypeOf("function");
+  expect(publicInitNames).toBeTypeOf("function");
+  expect(walkCallables).toBeTypeOf("function");
+  expect(collectModuleAliases).toBeTypeOf("function");
+  expect(isPublicCallable({ _type: "FunctionDef", name: "foo" }, "", false, undefined)).toBe(true);
 });

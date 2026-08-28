@@ -1,18 +1,15 @@
 import { defineRule, type RuleContext } from "qualety";
-import type { PythonNode, PythonSource } from "./python.ts";
+import type { PythonNode } from "./python.ts";
 import {
   asNodes,
-  childNodes,
-  hasDecorator,
-  isDunder,
-  isInitModule,
+  isPublicCallable,
   isPythonNode,
   isSkippedSource,
   nameRange,
-  readDunderAll,
+  publicInitNames,
+  walkCallables,
 } from "./walk.ts";
 
-const OVERLOAD = new Set(["overload"]);
 const TYPED_HINT =
   "Add type annotations to every parameter (including *args/**kwargs) and the return type.";
 
@@ -41,48 +38,6 @@ export const requireTypedPublic = defineRule({
   },
 });
 
-function publicInitNames(unit: PythonSource): Set<string> | undefined {
-  if (!isInitModule(unit.file)) {
-    return undefined;
-  }
-  const all = readDunderAll(unit.tree);
-  if (all.kind !== "names") {
-    return new Set();
-  }
-  const names = new Set<string>();
-  for (const item of all.names) {
-    if (!item.name.startsWith("_")) {
-      names.add(item.name);
-    }
-  }
-  return names;
-}
-
-function walkCallables(
-  node: PythonNode,
-  className: string,
-  inFn: boolean,
-  visit: (fn: PythonNode, className: string, nested: boolean) => void,
-) {
-  if (node._type === "FunctionDef" || node._type === "AsyncFunctionDef") {
-    visit(node, className, inFn);
-    for (const child of childNodes(node)) {
-      walkCallables(child, "", true, visit);
-    }
-    return;
-  }
-  if (node._type === "ClassDef") {
-    const next = typeof node.name === "string" ? node.name : className;
-    for (const child of childNodes(node)) {
-      walkCallables(child, next, inFn, visit);
-    }
-    return;
-  }
-  for (const child of childNodes(node)) {
-    walkCallables(child, className, inFn, visit);
-  }
-}
-
 function considerTyped(
   fn: PythonNode,
   className: string,
@@ -108,27 +63,6 @@ function considerTyped(
     message: `"${name}" is public and is missing parameter or return annotations.`,
     suggestion: TYPED_HINT,
   });
-}
-
-function isPublicCallable(
-  fn: PythonNode,
-  className: string,
-  nested: boolean,
-  initNames: Set<string> | undefined,
-): boolean {
-  if (nested || typeof fn.name !== "string") {
-    return false;
-  }
-  if (fn.name.startsWith("_") || isDunder(fn.name) || className.startsWith("_")) {
-    return false;
-  }
-  if (hasDecorator(fn, OVERLOAD)) {
-    return false;
-  }
-  if (initNames !== undefined && !initNames.has(fn.name)) {
-    return false;
-  }
-  return true;
 }
 
 function missingTypes(fn: PythonNode): boolean {

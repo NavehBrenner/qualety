@@ -1,6 +1,13 @@
 import { defineRule, type RuleContext } from "qualety";
 import type { PythonNode } from "./python.ts";
-import { asNodes, childNodes, isPythonNode, isSkippedSource, nodeRange } from "./walk.ts";
+import {
+  asNodes,
+  childNodes,
+  collectModuleAliases,
+  isPythonNode,
+  isSkippedSource,
+  nodeRange,
+} from "./walk.ts";
 
 const MUTABLE_CTORS = new Set(["list", "dict", "set"]);
 const MUTABLE_HINT =
@@ -23,7 +30,10 @@ export const noMutableDefault = defineRule({
       if (isSkippedSource(abs, cwd)) {
         continue;
       }
-      const aliases = readCtorAliases(unit.tree);
+      const aliases = collectModuleAliases(unit.tree, (stmt, aliases) => {
+        addAssignAlias(stmt, aliases);
+        addImportAlias(stmt, aliases);
+      });
       const factories = readFactories(unit.tree);
       walkDefs(unit.tree, (fn) => {
         reportMutableDefaults(fn, unit.file, aliases, factories, context);
@@ -86,17 +96,6 @@ function isMutableExpr(
   return (
     MUTABLE_CTORS.has(node.func.id) || aliases.has(node.func.id) || factories.has(node.func.id)
   );
-}
-
-function readCtorAliases(tree: PythonNode): Set<string> {
-  const aliases = new Set<string>();
-  for (const stmt of asNodes(tree.body)) {
-    if (stmt._type === "Assign" || stmt._type === "AnnAssign" || stmt._type === "ImportFrom") {
-      addAssignAlias(stmt, aliases);
-      addImportAlias(stmt, aliases);
-    }
-  }
-  return aliases;
 }
 
 function addAssignAlias(stmt: PythonNode, aliases: Set<string>) {
