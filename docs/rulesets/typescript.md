@@ -5,6 +5,18 @@ This is the implementation list for this plugin. [typescript-baseline.md](./type
 
 Core has no built-in rule bag. Rules exist only on this plugin’s `rules` map. Loading the plugin via `plugins[]` applies `configs.recommended` (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `ts/no-unsafe-assertion`, `ts/no-empty-catch`, `ts/no-floating-promises`, and `ts/no-public-any` at `"error"`). Overlay user `config.rules` to `"off"` or retune. `biome: false` skips the Biome phase.
 
+## Compiler defaults
+
+Not a catalog row and not a `tsc` phase. The package ships a `compilerOptions` fragment. Install `@qualety/typescript` and extend it; product `ts/*` still need `plugins[]`. `qualety check` does not run `tsc --noEmit`.
+
+```json
+{
+  "extends": "@qualety/typescript/tsconfig/recommended.json"
+}
+```
+
+Keys (all `true`): `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `noFallthroughCasesInSwitch`, `skipLibCheck`, `verbatimModuleSyntax`, `isolatedModules`. Layer project `target` / `lib` / `module` on the extending config.
+
 ## Implemented
 
 | ID | Intent | Default in recommended |

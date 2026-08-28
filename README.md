@@ -94,6 +94,15 @@ python -m qualety check
 ./qualety check
 ```
 
+Recommended TypeScript `compilerOptions` ship from `@qualety/typescript`. One-line wire — this is **not** a `tsc` phase inside `qualety check`, and it does not enable product `ts/*` (those still need `plugins[]`):
+
+```json
+{
+  "extends": "@qualety/typescript/tsconfig/recommended.json"
+}
+```
+
+
 ## Development
 
 Requires Node >= 22 (CI runs 24, the active LTS). pnpm 11 is pinned via `packageManager`, so

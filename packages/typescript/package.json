@@ -20,11 +20,13 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./tsconfig/recommended.json": "./tsconfig/recommended.json"
   },
   "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "tsconfig"
   ],
   "engines": {
     "node": ">=22"
