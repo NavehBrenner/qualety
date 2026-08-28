@@ -18,6 +18,7 @@ async function runFixture(name: string) {
     join(fixtures, name),
     (m) => lines.push(String(m)),
     (m) => errors.push(String(m)),
+    { plugins: [], excludePlugins: [], rules: ["react/no-fetch-in-useeffect"], diff: "off" },
   );
   return { code, out: lines.join("\n"), err: errors.join("\n") };
 }
@@ -46,7 +47,12 @@ async function runSource(src: string) {
     "src/comp.ts": src,
   });
   const lines: string[] = [];
-  const code = await check(dir, (m) => lines.push(String(m)), silent);
+  const code = await check(dir, (m) => lines.push(String(m)), silent, {
+    plugins: [],
+    excludePlugins: [],
+    rules: ["react/no-fetch-in-useeffect"],
+    diff: "off",
+  });
   return { code, out: lines.join("\n") };
 }
 

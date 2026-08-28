@@ -245,6 +245,7 @@ test("official package spec loads typescript plugin", async () => {
       dir,
       (m) => lines.push(String(m)),
       (m) => errors.push(String(m)),
+      { plugins: [], excludePlugins: [], rules: ["ts/no-constant-condition"], diff: "off" },
     ),
   ).toBe(0);
   expect(errors.join("\n")).toBe("");
@@ -273,6 +274,133 @@ test("all rules off is an honest empty path", async () => {
   const lines: string[] = [];
   expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(0);
   expect(lines.join("\n")).toMatch(/No rules configured — nothing to check/);
+});
+
+const recommendedPlugin = `export default {
+  name: "fixture",
+  rules: {
+    ping: {
+      meta: { docs: { description: "always reports" } },
+      create(context) {
+        context.report({
+          severity: "error",
+          file: context.getFiles()[0] ?? ".",
+          range: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+          message: "ping",
+        });
+      },
+    },
+  },
+  configs: { recommended: { rules: { "fixture/ping": "error" } } },
+};
+`;
+
+test("plugin recommended merges when user omits rules", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": recommendedPlugin,
+    "qualety.config.json": JSON.stringify({ plugins: ["./plugin.mjs"], biome: false }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(1);
+  expect(lines.join("\n")).toMatch(/fixture\/ping/);
+});
+
+test("user off wins over plugin recommended", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": recommendedPlugin,
+    "qualety.config.json": config({ "fixture/ping": "off" }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(0);
+  expect(lines.join("\n")).toMatch(/No rules configured — nothing to check/);
+});
+
+test("later plugin recommended wins on the same id", async () => {
+  const dir = await writeTree({
+    "first.mjs": `export default {
+      name: "first",
+      rules: {
+        ping: {
+          meta: { docs: { description: "first ping" } },
+          create(context) {
+            context.report({
+              severity: "error",
+              file: context.getFiles()[0] ?? ".",
+              range: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+              message: "ping",
+            });
+          },
+        },
+      },
+      configs: { recommended: { rules: { "first/ping": "off" } } },
+    };`,
+    "second.mjs": `export default {
+      name: "second",
+      configs: { recommended: { rules: { "first/ping": "error" } } },
+    };`,
+    "qualety.config.json": JSON.stringify({
+      plugins: ["./first.mjs", "./second.mjs"],
+      biome: false,
+    }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(1);
+  expect(lines.join("\n")).toMatch(/first\/ping/);
+});
+
+test("missing configs.recommended is a no-op", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": fixturePlugin,
+    "qualety.config.json": JSON.stringify({ plugins: ["./plugin.mjs"], biome: false }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(0);
+  expect(lines.join("\n")).toMatch(/No rules configured — nothing to check/);
+});
+
+test("invalid recommended id exits 2", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": `export default {
+      name: "fixture",
+      rules: {
+        ping: {
+          meta: { docs: { description: "ping" } },
+          create() {},
+        },
+      },
+      configs: { recommended: { rules: { "fixture/nope": "error" } } },
+    };`,
+    "qualety.config.json": JSON.stringify({ plugins: ["./plugin.mjs"], biome: false }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const errors: string[] = [];
+  expect(await check(dir, silent, (m) => errors.push(String(m)))).toBe(2);
+  expect(errors.join("\n")).toMatch(/Unknown rule id: fixture\/nope/);
+});
+
+test("minimal typescript config applies recommended without listing ids", async () => {
+  const dir = await writeTree({
+    "qualety.config.json": JSON.stringify({
+      plugins: ["@qualety/typescript"],
+      biome: false,
+    }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  const errors: string[] = [];
+  expect(
+    await check(
+      dir,
+      (m) => lines.push(String(m)),
+      (m) => errors.push(String(m)),
+    ),
+  ).toBe(1);
+  expect(errors.join("\n")).toBe("");
+  expect(lines.join("\n")).toMatch(/ts\/public-exports-tested/);
 });
 
 test("enabled rule collects a violation and exits 1", async () => {

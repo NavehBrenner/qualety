@@ -40,6 +40,7 @@ const plugin: Plugin = {
   biome: {
     rules: {
       "nursery/noUnsafeTypeAssertion": "error",
+      "complexity/noExcessiveCognitiveComplexity": ["error", { maxAllowedComplexity: 15 }],
     },
   },
 };

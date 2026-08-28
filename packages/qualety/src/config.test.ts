@@ -150,10 +150,10 @@ test("validateConfig rejects off with options", () => {
   ).toThrow(/Rule "dry\/no-semantic-duplicate" is "off"/);
 });
 
-test("validateConfig requires plugins and rules", () => {
-  expect(() => validateConfig({})).toThrow(/must include "plugins" and "rules"/);
-  expect(() => validateConfig({ plugins: [] })).toThrow(/must include "plugins" and "rules"/);
-  expect(() => validateConfig({ rules: {} })).toThrow(/must include "plugins" and "rules"/);
+test("validateConfig requires plugins", () => {
+  expect(() => validateConfig({})).toThrow(/must include "plugins"/);
+  expect(() => validateConfig({ rules: {} })).toThrow(/must include "plugins"/);
+  expect(validateConfig({ plugins: [] })).toEqual({ plugins: [] });
 });
 
 test("validateConfig accepts config without languages", () => {

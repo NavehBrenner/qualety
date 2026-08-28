@@ -10,6 +10,7 @@ import {
   requiresSchema,
   ruleMetaSchema,
   ruleSchema,
+  ruleSettingSchema,
   userBiomeSchema,
 } from "./schemas.ts";
 import { createTypeScriptProvider } from "./typescript-frontend.ts";
@@ -22,6 +23,7 @@ test("core helpers and schemas are exported", () => {
   expect(requiresSchema).toBeDefined();
   expect(ruleMetaSchema).toBeDefined();
   expect(ruleSchema).toBeDefined();
+  expect(ruleSettingSchema).toBeDefined();
   expect(userBiomeSchema.safeParse({ format: true }).success).toBe(true);
   expect(userBiomeSchema.safeParse({ files: [] }).success).toBe(false);
 });
@@ -42,6 +44,15 @@ test("pluginSchema accepts a ruleless provider module", () => {
 
 test("pluginSchema rejects an empty name", () => {
   expect(pluginSchema.safeParse({ name: "" }).success).toBe(false);
+});
+
+test("pluginSchema rejects invalid recommended severity", () => {
+  expect(
+    pluginSchema.safeParse({
+      name: "fixture",
+      configs: { recommended: { rules: { "fixture/ping": "fatal" } } },
+    }).success,
+  ).toBe(false);
 });
 
 test("pluginSchema rejects an empty require id", () => {

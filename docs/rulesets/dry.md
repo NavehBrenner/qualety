@@ -1,7 +1,7 @@
 # DRY plugin catalog
 
 Honest catalog for **`@qualety/dry`** (`Plugin.name: "dry"`).  
-This is the implementation list for this plugin. Installing the plugin does **not** enable its rules. `configs.recommended` sets `dry/no-duplicate-code`, `dry/no-duplicate-python`, and `dry/no-semantic-duplicate` to `"error"` for users who opt into that preset.
+This is the implementation list for this plugin. Loading the plugin via `plugins[]` applies `configs.recommended` (`dry/no-duplicate-code`, `dry/no-duplicate-python`, and `dry/no-semantic-duplicate` at `"error"`). Overlay user `config.rules` to `"off"` or retune.
 
 The plugin **provides** artifact `"dupehound"` (structural fingerprints via [dupehound](https://github.com/Rafaelpta/dupehound)) and `"code-embeddings"` (check-time MiniLM vectors) on the same provider map as the default registry and other plugins. Core only orchestrates `requires` → build once → `getArtifact`. We do **not** re-own dupehound’s whole-function winnowing / Jaccard. Fragment clones are a ts-morph window hash on this plugin, not a second catalog id. TypeScript interface/type-shape matching is **not** this plugin. Embeddings here are **not** `qualety index`.
 

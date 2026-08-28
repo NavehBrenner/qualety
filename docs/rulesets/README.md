@@ -11,7 +11,7 @@
 | [typescript-baseline.md](./typescript-baseline.md) | Research inventory (must-have ideas). **Not** an implementation backlog |
 | [typescript-nice-to-have.md](./typescript-nice-to-have.md) | Research inventory (optional ideas). **Not** an implementation backlog |
 
-Core has no built-in rule bag. Language/framework/DRY rules live in `@qualety/typescript`, `@qualety/react`, `@qualety/dry`, and `@qualety/python`. Portable plugin-authoring rules live in `@qualety/plugin-kit` (not core, not `@qualety/dev`). `@qualety/dev` is this repository’s dogfood plugin only — not a consumer ruleset. Installing a plugin does not enable its rules.
+Core has no built-in rule bag. Language/framework/DRY rules live in `@qualety/typescript`, `@qualety/react`, `@qualety/dry`, and `@qualety/python`. Portable plugin-authoring rules live in `@qualety/plugin-kit` (not core, not `@qualety/dev`). `@qualety/dev` is this repository’s dogfood plugin only — not a consumer ruleset. Loading a plugin via `plugins[]` applies its `configs.recommended`.
 
 We may **invoke and merge Biome** as a composed gate (plugin `biome` sections). We do **not** reimplement Biome / ESLint / dependency-cruiser (cycles, deep imports, path bans, generic layer charts). See SPECS locked #7 and [typescript.md](./typescript.md). We do **not** own classic eslint-plugin-react / react-hooks / jsx-a11y or TanStack eslint mechanics. See [react.md](./react.md).
 

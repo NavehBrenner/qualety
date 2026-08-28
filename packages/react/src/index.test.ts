@@ -36,6 +36,16 @@ async function runFixture(name: string) {
     join(fixtures, name),
     (m) => lines.push(String(m)),
     (m) => errors.push(String(m)),
+    {
+      plugins: [],
+      excludePlugins: [],
+      rules: [
+        "ts/public-exports-tested",
+        "react/no-fetch-in-useeffect",
+        "react/query-error-handled",
+      ],
+      diff: "off",
+    },
   );
   return { code, out: lines.join("\n"), err: errors.join("\n") };
 }
@@ -105,16 +115,15 @@ test("unknown rule id with react plugin loaded exits 2 naming the id", async () 
   expect(errors.join("\n")).toMatch(/Unknown rule id: react\/no-such-rule/);
 });
 
-test("loading both plugins without enabling rules is an empty path", async () => {
+test("loading both plugins applies recommended without listing rules", async () => {
   const dir = await writeTree({
     "qualety.config.json": JSON.stringify({
       plugins: [tsDist, reactDist],
-      rules: {},
       biome: false,
     }),
     "src/a.ts": "export const a = 1;\n",
   });
   const lines: string[] = [];
-  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(0);
-  expect(lines.join("\n")).toMatch(/No rules configured — nothing to check/);
+  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(1);
+  expect(lines.join("\n")).toMatch(/ts\/public-exports-tested/);
 });

@@ -1,7 +1,7 @@
 # React plugin catalog
 
 Honest catalog for **`@qualety/react`** (`Plugin.name: "react"`).  
-This is the implementation list for this plugin plus a **backlog inventory** (not implement-now). Installing the plugin does **not** enable its rules. `configs.recommended` sets both implemented rules to `"error"` for users who opt into that preset.
+This is the implementation list for this plugin plus a **backlog inventory** (not implement-now). Loading the plugin via `plugins[]` applies `configs.recommended` (both implemented rules at `"error"`). Overlay user `config.rules` to `"off"` or retune.
 
 TanStack Query detectors live **in this plugin** (not a separate `@qualety/react-tanstack` package). No runtime UI kit / DataRegion ships here.
 

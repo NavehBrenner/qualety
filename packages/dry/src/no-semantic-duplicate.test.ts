@@ -31,6 +31,7 @@ async function runFixture(name: string, env: NodeJS.ProcessEnv = {}) {
       join(fixtures, name),
       (m) => lines.push(String(m)),
       (m) => errors.push(String(m)),
+      { plugins: [], excludePlugins: [], rules: ["dry/no-semantic-duplicate"], diff: "off" },
     );
     return { code, out: lines.join("\n"), err: errors.join("\n") };
   } finally {

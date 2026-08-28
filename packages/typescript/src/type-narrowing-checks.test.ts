@@ -34,6 +34,7 @@ async function runFixture(name: string) {
     join(fixtures, name),
     (m) => lines.push(String(m)),
     (m) => errors.push(String(m)),
+    { plugins: [], excludePlugins: [], rules: ["ts/type-narrowing-checks"], diff: "off" },
   );
   return { code, out: lines.join("\n"), err: errors.join("\n") };
 }

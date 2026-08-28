@@ -4,7 +4,7 @@ Honest catalog for **`@qualety/plugin-kit`** (`Plugin.name: "plugin-kit"`).
 
 Portable **plugin-authoring** rules. Same audience as the [create-plugin](../../skills/create-plugin/SKILL.md) and [add-rule](../../skills/add-rule/SKILL.md) skills (skills teach; this kit enforces). Not a product app catalog (`ts` / `react` / `dry`). Not monorepo architecture (`@qualety/dev`).
 
-Installing the plugin does **not** enable its rules. `configs.recommended` sets both v0 ids to `"error"` for users who opt into that preset.
+Loading the plugin via `plugins[]` applies `configs.recommended` (both v0 ids at `"error"`). Overlay user `config.rules` to `"off"` or retune.
 
 ## Implemented
 

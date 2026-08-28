@@ -16,6 +16,7 @@ async function runFixture(name: string) {
     join(fixtures, name),
     (m) => lines.push(String(m)),
     (m) => errors.push(String(m)),
+    { plugins: [], excludePlugins: [], rules: ["ts/no-unsafe-assertion"], diff: "off" },
   );
   return { code, out: lines.join("\n"), err: errors.join("\n") };
 }
@@ -25,6 +26,10 @@ test("plugin exports no-unsafe-assertion and recommended includes it", () => {
   expect(plugin.rules?.["no-unsafe-assertion"]).toBeDefined();
   expect(plugin.configs?.recommended?.rules?.["ts/no-unsafe-assertion"]).toBe("error");
   expect(plugin.biome?.rules?.["nursery/noUnsafeTypeAssertion"]).toBe("error");
+  expect(plugin.biome?.rules?.["complexity/noExcessiveCognitiveComplexity"]).toEqual([
+    "error",
+    { maxAllowedComplexity: 15 },
+  ]);
 });
 
 test("as any and as unknown as T exit 1", async () => {
