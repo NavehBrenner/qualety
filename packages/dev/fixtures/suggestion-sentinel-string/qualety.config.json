@@ -2,5 +2,6 @@
   "plugins": ["../../dist/index.js"],
   "rules": {
     "dev/concrete-suggestion": "error"
-  }
+  },
+  "biome": false
 }

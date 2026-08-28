@@ -2,5 +2,6 @@
   "plugins": ["../../dist/index.js"],
   "rules": {
     "react/no-fetch-in-useeffect": "error"
-  }
+  },
+  "biome": false
 }

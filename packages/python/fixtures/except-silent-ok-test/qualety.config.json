@@ -2,5 +2,6 @@
   "plugins": ["../../dist/index.js"],
   "rules": {
     "python/no-silent-except": "error"
-  }
+  },
+  "biome": false
 }

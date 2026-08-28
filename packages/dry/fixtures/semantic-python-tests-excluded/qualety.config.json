@@ -3,5 +3,6 @@
   "include": ["**/*.py"],
   "rules": {
     "dry/no-semantic-duplicate": "error"
-  }
+  },
+  "biome": false
 }

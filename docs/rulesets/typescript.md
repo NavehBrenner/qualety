@@ -19,6 +19,8 @@ Core has no built-in rule bag. Rules exist only on this plugin’s `rules` map. 
 | `ts/type-narrowing-checks` | A runtime check on a value is legitimate only if the TypeScript checker shows a strict refinement of that subject on the true/success path. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/zod-boundary` | Load/parse functions with an `unknown` param (Z1) and `JSON.parse` results (Z2) must hit schema `.parse` / `.safeParse` before property access. `defineRule` / `requires: ["typescript"]` | `error` |
 
+Recommended presets may also enable **Biome** rules via this plugin’s `biome.rules` (not `ts/*` rows). Shipped bag: `nursery/noUnsafeTypeAssertion: "error"`. `ts/no-unsafe-assertion` and `ts/no-empty-catch` stay Implemented: Biome’s `noUnsafeTypeAssertion` flags any `as T`, and empty-block rules are not catch-only.
+
 Behavior is locked in [SPECS.md](../SPECS.md) §3 R5. Summary:
 
 - **Public export:** value exports in non-test, non-`.d.ts` files already in the TypeScript artifact: `export function` / `class` / `const` / `let` / `var` / `enum`, `export default`, `export { name }`, `export { name } from`. Default name is `"default"`.

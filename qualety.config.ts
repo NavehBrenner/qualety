@@ -39,4 +39,9 @@ export default defineConfig({
     "plugin-kit/prefer-define-rule": "error",
   },
   exclude: ["**/node_modules/**", "**/dist/**", "**/fixtures/**", "packaging/**"],
+  biome: {
+    rules: {
+      "complexity/noExcessiveCognitiveComplexity": ["error", { maxAllowedComplexity: 15 }],
+    },
+  },
 });

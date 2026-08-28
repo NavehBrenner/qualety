@@ -1,0 +1,398 @@
+import { spawn } from "node:child_process";
+import { mkdir, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
+import { dirname, extname, join, relative, resolve, sep } from "node:path";
+import { ConfigError } from "./config.ts";
+import type { Plugin, Range, UserConfig, Violation } from "./index.ts";
+import { isRecord } from "./record.ts";
+
+const SCAN_TIMEOUT_MS = 60_000;
+const GENERATED_DIR = ".qualety";
+export const GENERATED_BIOME_PATH = `${GENERATED_DIR}/biome.json`;
+const DEFAULT_SUGGESTION = "Apply the Biome finding or override the rule in biome.rules.";
+const BIOME_EXTENSIONS = new Set([
+  ".js",
+  ".jsx",
+  ".ts",
+  ".tsx",
+  ".mjs",
+  ".cjs",
+  ".mts",
+  ".cts",
+  ".json",
+]);
+const BASELINE_RULES: Record<string, BiomeRuleSetting> = {
+  "suspicious/noConfusingVoidType": "off",
+};
+
+export type BiomeRuleSetting =
+  | "off"
+  | "warn"
+  | "error"
+  | ["off" | "warn" | "error", Record<string, unknown>];
+
+export function biomeEnabled(config: UserConfig): boolean {
+  return config.biome !== false;
+}
+
+export function resolveBiomeBinary(): string {
+  const require = createRequire(import.meta.url);
+  try {
+    const pkg = require.resolve("@biomejs/biome/package.json");
+    return join(dirname(pkg), "bin/biome");
+  } catch (e) {
+    throw new ConfigError(`Biome is not resolvable: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+export function assertBiomeRuleId(id: string, owner: string): void {
+  const parts = id.split("/");
+  if (parts.length !== 2 || parts[0] === "" || parts[1] === "") {
+    throw new ConfigError(
+      `Invalid Biome rule id ${JSON.stringify(id)} (${owner}); expected group/name.`,
+    );
+  }
+}
+
+export function mergeBiomeRules(
+  plugins: readonly Plugin[],
+  userRules: Record<string, BiomeRuleSetting> | undefined,
+): Record<string, BiomeRuleSetting> {
+  const merged: Record<string, BiomeRuleSetting> = { ...BASELINE_RULES };
+  for (const plugin of plugins) {
+    const rules = plugin.biome?.rules;
+    if (rules === undefined) {
+      continue;
+    }
+    for (const [id, setting] of Object.entries(rules)) {
+      assertBiomeRuleId(id, `plugin ${plugin.name}`);
+      merged[id] = setting;
+    }
+  }
+  if (userRules !== undefined) {
+    for (const [id, setting] of Object.entries(userRules)) {
+      assertBiomeRuleId(id, "config.biome.rules");
+      merged[id] = setting;
+    }
+  }
+  return merged;
+}
+
+export function nestBiomeRules(flat: Record<string, BiomeRuleSetting>): Record<string, unknown> {
+  const rules: Record<string, unknown> = { preset: "recommended" };
+  for (const [id, setting] of Object.entries(flat)) {
+    const slash = id.indexOf("/");
+    const group = id.slice(0, slash);
+    const name = id.slice(slash + 1);
+    const existing = rules[group];
+    const groupRules = isRecord(existing) ? existing : {};
+    if (!isRecord(existing)) {
+      rules[group] = groupRules;
+    }
+    groupRules[name] = nestSetting(setting);
+  }
+  return rules;
+}
+
+export async function writeGeneratedBiomeConfig(
+  cwd: string,
+  plugins: readonly Plugin[],
+  userBiome: UserConfig["biome"],
+): Promise<string> {
+  const userRules = userBiome === false || userBiome === undefined ? undefined : userBiome.rules;
+  const document = {
+    vcs: { enabled: false },
+    linter: {
+      enabled: true,
+      rules: nestBiomeRules(mergeBiomeRules(plugins, userRules)),
+    },
+  };
+  await mkdir(join(cwd, GENERATED_DIR), { recursive: true });
+  await writeFile(join(cwd, GENERATED_BIOME_PATH), `${JSON.stringify(document, null, 2)}\n`);
+  return GENERATED_BIOME_PATH;
+}
+
+export async function runBiomePhase(input: {
+  cwd: string;
+  files: readonly string[];
+  plugins: readonly Plugin[];
+  biome: UserConfig["biome"];
+  bin?: string;
+  timeoutMs?: number;
+}): Promise<Violation[]> {
+  const paths = input.files.filter((file) => BIOME_EXTENSIONS.has(extname(file)));
+  if (paths.length === 0) {
+    return [];
+  }
+  await writeGeneratedBiomeConfig(input.cwd, input.plugins, input.biome);
+  const bin = input.bin ?? resolveBiomeBinary();
+  const format = input.biome !== false && input.biome?.format === true;
+  const args = [
+    format ? "check" : "lint",
+    "--config-path",
+    GENERATED_BIOME_PATH,
+    "--reporter=json",
+    "--max-diagnostics=none",
+    "--files-ignore-unknown=true",
+    ...paths,
+  ];
+  const timeoutMs = input.timeoutMs ?? SCAN_TIMEOUT_MS;
+  const result = await spawnBiome(bin, args, input.cwd, timeoutMs);
+  return mapBiomeStdout(result, input.cwd, timeoutMs);
+}
+
+export async function readBiomeVersion(bin: string, cwd: string): Promise<string> {
+  const result = await spawnBiome(bin, ["--version"], cwd, 10_000);
+  if (result.timedOut) {
+    throw new ConfigError("Biome timed out while reading version.");
+  }
+  if (result.error !== undefined) {
+    throw new ConfigError(`Biome is not runnable: ${result.error}`);
+  }
+  const text = result.stdout.trim() || result.stderr.trim();
+  if (result.code !== 0 || text.length === 0) {
+    throw new ConfigError(`Biome is not runnable: ${text || `exit ${result.code}`}`);
+  }
+  return text.replace(/^Version:\s*/i, "");
+}
+
+function nestSetting(setting: BiomeRuleSetting): unknown {
+  if (typeof setting === "string") {
+    return setting;
+  }
+  return { level: setting[0], options: setting[1] };
+}
+
+function mapBiomeStdout(result: CommandResult, cwd: string, timeoutMs: number): Violation[] {
+  if (result.timedOut) {
+    throw new ConfigError(`Biome timed out after ${timeoutMs / 1000}s.`);
+  }
+  if (result.error !== undefined) {
+    throw new ConfigError(`Biome is not runnable: ${result.error}`);
+  }
+  if (result.code !== 0 && result.code !== 1) {
+    const detail = result.stderr.trim() || result.stdout.trim() || `exit ${result.code}`;
+    throw new ConfigError(`Biome failed: ${detail}`);
+  }
+  const stdout = result.stdout.trim();
+  if (stdout.length === 0) {
+    if (result.code === 0) {
+      return [];
+    }
+    throw new ConfigError("Biome produced no JSON diagnostics.");
+  }
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch (e) {
+    throw new ConfigError(
+      `Biome produced invalid JSON: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+  return diagnosticsOf(parsed).flatMap((item) => {
+    const mapped = mapDiagnostic(item, cwd);
+    return mapped === undefined ? [] : [mapped];
+  });
+}
+
+function diagnosticsOf(parsed: unknown): unknown[] {
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+  if (isRecord(parsed) && Array.isArray(parsed.diagnostics)) {
+    return parsed.diagnostics;
+  }
+  return [];
+}
+
+function mapDiagnostic(raw: unknown, cwd: string): Violation | undefined {
+  if (!isRecord(raw)) {
+    return undefined;
+  }
+  const category = typeof raw.category === "string" ? raw.category : undefined;
+  if (category === undefined) {
+    return undefined;
+  }
+  const loc = locationOf(raw, cwd);
+  return {
+    ruleId: category,
+    severity: severityOf(raw.severity),
+    file: loc.file,
+    range: loc.range,
+    message: messageOf(raw),
+    suggestion: suggestionOf(raw),
+  };
+}
+
+function severityOf(value: unknown): "error" | "warn" {
+  if (value === "warning" || value === "warn") {
+    return "warn";
+  }
+  return "error";
+}
+
+function messageOf(raw: Record<string, unknown>): string {
+  if (typeof raw.description === "string" && raw.description.length > 0) {
+    return raw.description;
+  }
+  if (typeof raw.message === "string" && raw.message.length > 0) {
+    return raw.message;
+  }
+  if (Array.isArray(raw.message)) {
+    const text = raw.message
+      .map((piece) => (isRecord(piece) && typeof piece.content === "string" ? piece.content : ""))
+      .join("");
+    if (text.length > 0) {
+      return text;
+    }
+  }
+  return "Biome diagnostic";
+}
+
+function suggestionOf(raw: Record<string, unknown>): string {
+  const advices = raw.advices;
+  if (!isRecord(advices) || !Array.isArray(advices.advices)) {
+    return DEFAULT_SUGGESTION;
+  }
+  for (const item of advices.advices) {
+    if (!isRecord(item) || !Array.isArray(item.log)) {
+      continue;
+    }
+    const text = item.log.find((piece) => typeof piece === "string" && piece !== "info");
+    if (typeof text === "string" && text.length > 0 && !text.includes("\n")) {
+      return text;
+    }
+  }
+  return DEFAULT_SUGGESTION;
+}
+
+function locationOf(raw: Record<string, unknown>, cwd: string): { file: string; range: Range } {
+  const loc = raw.location;
+  const origin = { line: 1, column: 1 };
+  if (!isRecord(loc)) {
+    return { file: ".", range: { start: origin, end: origin } };
+  }
+  const file = displayPath(cwd, pathOf(loc.path));
+  if (isRecord(loc.start) && typeof loc.start.line === "number") {
+    const start = coords(loc.start);
+    const end = isRecord(loc.end) ? coords(loc.end) : start;
+    return { file, range: { start, end } };
+  }
+  if (Array.isArray(loc.span) && typeof loc.sourceCode === "string") {
+    const startOffset = typeof loc.span[0] === "number" ? loc.span[0] : 0;
+    const endOffset = typeof loc.span[1] === "number" ? loc.span[1] : startOffset;
+    return {
+      file,
+      range: {
+        start: offsetToCoords(loc.sourceCode, startOffset),
+        end: offsetToCoords(loc.sourceCode, endOffset),
+      },
+    };
+  }
+  return { file, range: { start: origin, end: origin } };
+}
+
+function pathOf(value: unknown): string {
+  if (typeof value === "string" && value.length > 0) {
+    return value;
+  }
+  if (isRecord(value) && typeof value.file === "string" && value.file.length > 0) {
+    return value.file;
+  }
+  return ".";
+}
+
+function coords(value: Record<string, unknown>): { line: number; column: number } {
+  const line = typeof value.line === "number" ? value.line : 1;
+  const column = typeof value.column === "number" ? value.column : 1;
+  return { line: line < 1 ? 1 : line, column: column < 1 ? 1 : column };
+}
+
+function offsetToCoords(source: string, offset: number): { line: number; column: number } {
+  let line = 1;
+  let column = 1;
+  const end = Math.min(Math.max(offset, 0), source.length);
+  for (let i = 0; i < end; i += 1) {
+    if (source[i] === "\n") {
+      line += 1;
+      column = 1;
+    } else {
+      column += 1;
+    }
+  }
+  return { line, column };
+}
+
+function displayPath(cwd: string, file: string): string {
+  const abs = resolve(cwd, file);
+  const rel = relative(cwd, abs);
+  return (rel === "" ? file : rel).split(sep).join("/");
+}
+
+type CommandResult = {
+  code: number | null;
+  stdout: string;
+  stderr: string;
+  timedOut: boolean;
+  error?: string;
+};
+
+function spawnBiome(
+  bin: string,
+  args: string[],
+  cwd: string,
+  timeoutMs: number,
+): Promise<CommandResult> {
+  return new Promise((ok) => {
+    let settled = false;
+    const finish = (result: CommandResult) => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      ok(result);
+    };
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(bin, args, { cwd });
+    } catch (e) {
+      finish({
+        code: null,
+        stdout: "",
+        stderr: "",
+        timedOut: false,
+        error: e instanceof Error ? e.message : String(e),
+      });
+      return;
+    }
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, timeoutMs);
+    child.stdout?.setEncoding("utf8");
+    child.stderr?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk: string) => {
+      stdout += chunk;
+    });
+    child.stderr?.on("data", (chunk: string) => {
+      stderr += chunk;
+    });
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      finish({
+        code: null,
+        stdout,
+        stderr,
+        timedOut,
+        error: e.message,
+      });
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      finish({ code, stdout, stderr, timedOut });
+    });
+  });
+}

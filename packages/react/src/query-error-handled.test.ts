@@ -36,6 +36,7 @@ function enabledConfig() {
   return JSON.stringify({
     plugins: [reactDist],
     rules: { "react/query-error-handled": "error" },
+    biome: false,
   });
 }
 

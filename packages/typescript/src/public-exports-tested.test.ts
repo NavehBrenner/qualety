@@ -38,6 +38,7 @@ function enabledConfig(extra: Record<string, unknown> = {}) {
   return JSON.stringify({
     plugins: [pluginDist],
     rules: { "ts/public-exports-tested": "error" },
+    biome: false,
     ...extra,
   });
 }
@@ -125,6 +126,7 @@ test("loading the plugin without enabling the rule is an empty path", async () =
     "qualety.config.json": JSON.stringify({
       plugins: [pluginDist],
       rules: {},
+      biome: false,
     }),
     "src/foo.ts": "export const foo = 1;\n",
   });

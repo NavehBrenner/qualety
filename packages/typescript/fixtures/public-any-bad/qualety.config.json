@@ -2,5 +2,6 @@
   "plugins": ["../../dist/index.js"],
   "rules": {
     "ts/no-public-any": "error"
-  }
+  },
+  "biome": false
 }

@@ -53,6 +53,35 @@ test("defineConfig is exported and returns the same reference", () => {
   expect(rootVitestConfig).toBeDefined();
 });
 
+test("validateConfig accepts biome false and rules overlay", () => {
+  expect(validateConfig({ ...valid, biome: false })).toEqual({ ...valid, biome: false });
+  expect(
+    validateConfig({
+      ...valid,
+      biome: {
+        rules: {
+          "complexity/noExcessiveCognitiveComplexity": ["error", { maxAllowedComplexity: 15 }],
+        },
+        format: true,
+      },
+    }).biome,
+  ).toEqual({
+    rules: {
+      "complexity/noExcessiveCognitiveComplexity": ["error", { maxAllowedComplexity: 15 }],
+    },
+    format: true,
+  });
+});
+
+test("validateConfig rejects invalid biome contributions", () => {
+  expect(() => validateConfig({ ...valid, biome: { rules: { noSlash: "error" } } })).toThrow(
+    /expected group\/name/,
+  );
+  expect(() => validateConfig({ ...valid, biome: { files: [] } })).toThrow(
+    /Unknown biome key: files/,
+  );
+});
+
 test("validateConfig rejects unknown keys", () => {
   expect(() => validateConfig({ ...valid, architecture: {} })).toThrow(
     /Unknown config key: architecture/,

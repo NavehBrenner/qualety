@@ -37,6 +37,11 @@ const plugin: Plugin = {
       },
     },
   },
+  biome: {
+    rules: {
+      "nursery/noUnsafeTypeAssertion": "error",
+    },
+  },
 };
 
 export default plugin;

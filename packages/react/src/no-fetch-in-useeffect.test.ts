@@ -36,6 +36,7 @@ function enabledConfig() {
   return JSON.stringify({
     plugins: [reactDist],
     rules: { "react/no-fetch-in-useeffect": "error" },
+    biome: false,
   });
 }
 

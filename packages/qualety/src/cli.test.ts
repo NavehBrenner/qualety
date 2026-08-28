@@ -66,6 +66,7 @@ async function pingTree(
     "qualety.config.json": JSON.stringify({
       plugins: ["./plugin.mjs", "./other.mjs"],
       rules,
+      biome: false,
     }),
     "src/hello.ts": "export const n = 1;\n",
     ...extra,
@@ -84,6 +85,7 @@ test("check with empty rules object is honest", async () => {
     "qualety.config.json": JSON.stringify({
       plugins: [],
       rules: {},
+      biome: false,
     }),
   });
   const lines: string[] = [];
@@ -104,6 +106,8 @@ test("--help lists filter flags", async () => {
   expect(text).toMatch(/--rule <id>/);
   expect(text).toMatch(/--diff-worktree/);
   expect(text).toMatch(/--diff /);
+  expect(text).toMatch(/qualety init/);
+  expect(text).toMatch(/qualety doctor/);
 });
 
 test("unknown flag exits 2", async () => {
@@ -215,6 +219,58 @@ test("--diff-worktree without rules does not invoke git", async () => {
     0,
   );
   expect(lines.join("\n")).toMatch(/No rules configured — nothing to check/);
+});
+
+test("init writes generated Biome config", async () => {
+  const dir = await writeTree({
+    "qualety.config.json": JSON.stringify({ plugins: [], rules: {} }),
+  });
+  const lines: string[] = [];
+  expect(await run(["init"], (m) => lines.push(String(m)), silent, dir)).toBe(0);
+  expect(lines.join("\n")).toMatch(/\.qualety\/biome\.json/);
+});
+
+test("init without config exits 2", async () => {
+  const dir = await writeTree({});
+  const errors: string[] = [];
+  expect(await run(["init"], silent, (m) => errors.push(String(m)), dir)).toBe(2);
+  expect(errors.join("\n")).toMatch(/No qualety config found/);
+});
+
+test("doctor reports biome off without config", async () => {
+  const dir = await writeTree({});
+  const lines: string[] = [];
+  expect(await run(["doctor"], (m) => lines.push(String(m)), silent, dir)).toBe(0);
+  expect(lines.join("\n")).toMatch(/biome: off \(no qualety config\)/);
+});
+
+test("doctor reports biome on with version and binary", async () => {
+  const dir = await writeTree({
+    "qualety.config.json": JSON.stringify({ plugins: [], rules: {} }),
+  });
+  const lines: string[] = [];
+  expect(await run(["doctor"], (m) => lines.push(String(m)), silent, dir)).toBe(0);
+  const text = lines.join("\n");
+  expect(text).toMatch(/biome: on/);
+  expect(text).toMatch(/version:/);
+  expect(text).toMatch(/binary:/);
+});
+
+test("name filters skip the Biome phase", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": pingPlugin,
+    "qualety.config.json": JSON.stringify({
+      plugins: ["./plugin.mjs"],
+      rules: { "fixture/ping": "error" },
+    }),
+    "src/hello.ts": "debugger;\n",
+  });
+  const lines: string[] = [];
+  expect(
+    await run(["check", "--rule", "fixture/ping"], (m) => lines.push(String(m)), silent, dir),
+  ).toBe(1);
+  expect(lines.join("\n")).toMatch(/fixture\/ping/);
+  expect(lines.join("\n")).not.toMatch(/noDebugger/);
 });
 
 test("unknown command exits 2", async () => {

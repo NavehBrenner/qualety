@@ -2,5 +2,6 @@
   "plugins": ["../../dist/index.js"],
   "rules": {
     "react/query-error-handled": "error"
-  }
+  },
+  "biome": false
 }
