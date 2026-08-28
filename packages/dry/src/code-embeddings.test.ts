@@ -81,6 +81,68 @@ test("cache hit skips embed", async () => {
   expect(calls).toBe(firstCalls);
 });
 
+test("dispose runs after successful embed build", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "ci-embed-build-"));
+  const cacheDir = await mkdtemp(join(tmpdir(), "ci-embed-cache-"));
+  await mkdir(join(dir, "src"), { recursive: true });
+  await writeFile(join(dir, "src/a.ts"), sampleFn);
+  const ts = await typescriptArtifact(dir);
+  let disposed = 0;
+  const embedder = {
+    id: "stub",
+    revision: "1",
+    dims: 4,
+    async embed(texts: string[]) {
+      return texts.map(() => new Float32Array([1, 0, 0, 0]));
+    },
+    dispose() {
+      disposed += 1;
+    },
+  };
+  await buildCodeEmbeddingsIndex({
+    cwd: dir,
+    files: ["src/a.ts"],
+    exclude: [],
+    requiredBy: ["dry/no-semantic-duplicate"],
+    getArtifact: (id: string) => (id === "typescript" ? ts : undefined),
+    embedder,
+    cacheDir,
+  });
+  expect(disposed).toBe(1);
+});
+
+test("dispose runs if embed throws", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "ci-embed-build-"));
+  const cacheDir = await mkdtemp(join(tmpdir(), "ci-embed-cache-"));
+  await mkdir(join(dir, "src"), { recursive: true });
+  await writeFile(join(dir, "src/a.ts"), sampleFn);
+  const ts = await typescriptArtifact(dir);
+  let disposed = 0;
+  const embedder = {
+    id: "stub",
+    revision: "1",
+    dims: 4,
+    async embed() {
+      throw new Error("embed failed");
+    },
+    dispose() {
+      disposed += 1;
+    },
+  };
+  await expect(
+    buildCodeEmbeddingsIndex({
+      cwd: dir,
+      files: ["src/a.ts"],
+      exclude: [],
+      requiredBy: ["dry/no-semantic-duplicate"],
+      getArtifact: (id: string) => (id === "typescript" ? ts : undefined),
+      embedder,
+      cacheDir,
+    }),
+  ).rejects.toThrow(/embed failed/);
+  expect(disposed).toBe(1);
+});
+
 test("corrupt cache entry is re-embedded", async () => {
   const dir = await mkdtemp(join(tmpdir(), "ci-embed-build-"));
   const cacheDir = await mkdtemp(join(tmpdir(), "ci-embed-cache-"));

@@ -79,7 +79,8 @@ export interface ArtifactBuildContext {
   requiredBy: readonly string[];
   /**
    * Artifacts already built in this check. Missing id → `undefined` (no throw).
-   * Language artifacts (`python`, `typescript`) are built before other ids.
+   * Language artifacts (`python`, `typescript`) are built before other ids;
+   * `"code-embeddings"` is built last among required ids.
    */
   getArtifact(id: string): unknown;
 }

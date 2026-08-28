@@ -9,7 +9,7 @@ import {
   firstArgIdentifier,
   functionLikeName,
   isFunctionLike,
-  isJsonParseCall,
+  isPropertyParseCall,
   isPropertyUse,
   isSchemaParseCall,
   unknownParamNames,
@@ -17,6 +17,7 @@ import {
 
 const PARSE_SUGGESTION =
   "Call schema.safeParse(...) or schema.parse(...) on this value before reading its properties.";
+const JSON_PARSE_NAMES = new Set(["parse"]);
 
 export const zodBoundary = defineRule({
   meta: {
@@ -36,7 +37,7 @@ export const zodBoundary = defineRule({
         if (isFunctionLike(node)) {
           scanBoundary(node, abs, context);
         }
-        if (isJsonParseCall(node)) {
+        if (isPropertyParseCall(node, JSON_PARSE_NAMES, true)) {
           scanJsonParse(node, abs, context);
         }
       });

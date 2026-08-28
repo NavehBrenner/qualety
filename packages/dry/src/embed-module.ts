@@ -13,6 +13,12 @@ export type EmbedModule = {
   revision: string;
   dims: number;
   embed(texts: string[]): Promise<Float32Array[]>;
+  dispose?: () => void | Promise<void>;
+};
+
+type LoadedPipeline = {
+  embed(texts: string[], options: Record<string, unknown>): unknown;
+  dispose?: () => unknown;
 };
 
 export async function resolveEmbedModule(
@@ -62,7 +68,7 @@ async function loadMiniLmModule(dir: string): Promise<EmbedModule> {
   const transformers = await importTransformers();
   transformers.env.allowRemoteModels = false;
   transformers.env.allowLocalModels = true;
-  let extractor: (texts: string[], options: Record<string, unknown>) => Promise<unknown>;
+  let extractor: LoadedPipeline | undefined;
   try {
     extractor = await transformers.pipeline("feature-extraction", dir, { dtype: "q8" });
   } catch (e) {
@@ -73,8 +79,19 @@ async function loadMiniLmModule(dir: string): Promise<EmbedModule> {
     revision: MINILM_REVISION,
     dims: MINILM_DIMS,
     embed: async (texts) => {
-      const output = await extractor(texts, { pooling: "mean", normalize: true });
+      const current = extractor;
+      if (current === undefined) {
+        return [];
+      }
+      const output = await current.embed(texts, { pooling: "mean", normalize: true });
       return vectorsFromTensor(output, texts.length, MINILM_DIMS);
+    },
+    dispose: async () => {
+      const current = extractor;
+      extractor = undefined;
+      if (typeof current?.dispose === "function") {
+        await current.dispose();
+      }
     },
   };
 }
@@ -84,7 +101,7 @@ async function importTransformers(): Promise<{
     task: string,
     model: string,
     options?: Record<string, unknown>,
-  ) => Promise<(texts: string[], options: Record<string, unknown>) => Promise<unknown>>;
+  ) => Promise<LoadedPipeline>;
   env: Record<string, unknown>;
 }> {
   try {
@@ -100,7 +117,11 @@ async function importTransformers(): Promise<{
         if (typeof extractor !== "function") {
           throw new Error("pipeline did not return a function");
         }
-        return (texts, extractOptions) => Promise.resolve(extractor(texts, extractOptions));
+        const method = Reflect.get(extractor, "dispose");
+        return {
+          embed: (texts, extractOptions) => extractor(texts, extractOptions),
+          dispose: typeof method === "function" ? () => method.call(extractor) : undefined,
+        };
       },
       env,
     };

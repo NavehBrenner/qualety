@@ -58,32 +58,27 @@ export function unknownParamNames(node: FunctionLike): string[] {
   return names;
 }
 
-export function isSchemaParseCall(node: Node): node is CallExpression {
+const SCHEMA_PARSE_NAMES = new Set(["parse", "safeParse"]);
+
+export function isPropertyParseCall(
+  node: Node,
+  names: ReadonlySet<string>,
+  wantJson: boolean,
+): node is CallExpression {
   if (!Node.isCallExpression(node)) {
     return false;
   }
   const expr = node.getExpression();
-  if (!Node.isPropertyAccessExpression(expr)) {
-    return false;
-  }
-  const name = expr.getName();
-  if (name !== "parse" && name !== "safeParse") {
+  if (!Node.isPropertyAccessExpression(expr) || !names.has(expr.getName())) {
     return false;
   }
   const obj = expr.getExpression();
-  return !(Node.isIdentifier(obj) && obj.getText() === "JSON");
+  const isJson = Node.isIdentifier(obj) && obj.getText() === "JSON";
+  return wantJson === isJson;
 }
 
-export function isJsonParseCall(node: Node): node is CallExpression {
-  if (!Node.isCallExpression(node)) {
-    return false;
-  }
-  const expr = node.getExpression();
-  if (!Node.isPropertyAccessExpression(expr) || expr.getName() !== "parse") {
-    return false;
-  }
-  const obj = expr.getExpression();
-  return Node.isIdentifier(obj) && obj.getText() === "JSON";
+export function isSchemaParseCall(node: Node): node is CallExpression {
+  return isPropertyParseCall(node, SCHEMA_PARSE_NAMES, false);
 }
 
 export function firstArgIdentifier(node: Node): string | undefined {

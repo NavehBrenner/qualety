@@ -12,7 +12,7 @@ import {
   functionLikeName,
   isFunctionLike,
   isHandGuardCall,
-  isJsonParseCall,
+  isPropertyParseCall,
   isPropertyUse,
   isSchemaParseCall,
   isTypeofObjectGuard,
@@ -43,7 +43,7 @@ test("plugin exports zod-boundary and recommended includes it", () => {
   expect(functionLikeName).toEqual(expect.any(Function));
   expect(isFunctionLike).toEqual(expect.any(Function));
   expect(isHandGuardCall).toEqual(expect.any(Function));
-  expect(isJsonParseCall).toEqual(expect.any(Function));
+  expect(isPropertyParseCall).toEqual(expect.any(Function));
   expect(isPropertyUse).toEqual(expect.any(Function));
   expect(isSchemaParseCall).toEqual(expect.any(Function));
   expect(isTypeofObjectGuard).toEqual(expect.any(Function));
