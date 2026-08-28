@@ -30,7 +30,7 @@ export const noSpawnInCreate = defineRule({
         "Do not spawn processes from a rule create function; providers own binaries via provides.build.",
     },
   },
-  create(context) {
+  create: (context) => {
     const sources = context.getArtifact("typescript").sources;
     for (const unit of sources.values()) {
       if (unit instanceof SourceFile) {

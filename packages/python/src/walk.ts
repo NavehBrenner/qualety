@@ -278,11 +278,7 @@ function collectImport(
     if (alias.asname === undefined && alias.name.includes(".")) {
       continue;
     }
-    const local = typeof alias.asname === "string" ? alias.asname : alias.name;
-    const target = resolveModuleFile(unit.file, alias.name, 0, unit.packageDir, sources);
-    if (target !== undefined) {
-      modules.set(local, target);
-    }
+    bindModuleAlias(alias, unit, 0, sources, modules);
   }
 }
 

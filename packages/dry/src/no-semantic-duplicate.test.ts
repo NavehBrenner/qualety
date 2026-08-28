@@ -108,7 +108,7 @@ test("unrelated vectors are silent", () => {
 test("cosineSimilarity is 1 for identical unit vectors", () => {
   const vector = new Float32Array([0, 1, 0]);
   expect(cosineSimilarity(vector, vector)).toBe(1);
-  expect(COSINE_THRESHOLD).toBeGreaterThan(0.9);
+  expect(COSINE_THRESHOLD).toBe(0.9);
 });
 
 test("TS near-dupe pair exits 1 with concrete suggestion", async () => {

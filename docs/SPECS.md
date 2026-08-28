@@ -308,7 +308,7 @@ Implemented in `@qualety/dry` as **`dry/no-semantic-duplicate`**. Complements st
 | Chunks | Functions, methods, and classes. Not sliding windows / whole-file-only. TS from `"typescript"`; Python from `"python"`. |
 | Min-size | Skip if non-blank lines < 5 or whitespace tokens < 20. |
 | Skip | Same family as structural dry (TS: `.d.ts`, `*.test.*` / `*.spec.*`, `__tests__` / `fixtures`; Python: `test_*.py` / `*_test.py` / `*.test.py` / `*.spec.py`, `conftest.py`, `.pyi`, `tests` / `__tests__` / `fixtures` / `__pycache__`). |
-| Similarity | Cosine on MiniLM vectors. Threshold **0.95**. Union-find; one violation per cluster ≥ 2. Primary = first by `(path, name)`. |
+| Similarity | Cosine on MiniLM vectors. Threshold **0.90**. Union-find; one violation per cluster ≥ 2. Primary = first by `(path, name)`. |
 | Model | Internal `EmbedModule`; v1 module id `minilm-l6-local`, revision `onnx-quantized-1`, 384-d quantized ONNX. No hosted API. `QUALETY_EMBEDDINGS_MODEL` / `QUALETY_EMBEDDINGS_MODULE` overrides. |
 | Cache | `$XDG_CACHE_HOME/qualety/code-embeddings/` (default `~/.cache/qualety/code-embeddings/`). Override `QUALETY_EMBEDDINGS_CACHE`. Key `modelId/revision/sha256(normalized)`. |
 | Fail closed | Model load failure with ≥1 embeddable chunk → exit 2 naming `dry/no-semantic-duplicate` and `code-embeddings`. Zero chunks → success, do not load the model. Per-chunk embed miss → omit that chunk. |

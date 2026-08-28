@@ -11,7 +11,7 @@ export const preferDefineRule = defineRule({
       description: "Prefer defineRule over a bare Rule object on a plugin rules map.",
     },
   },
-  create(context) {
+  create: (context) => {
     const sources = context.getArtifact("typescript").sources;
     for (const [abs, unit] of sources) {
       if (unit instanceof SourceFile && !abs.endsWith(".d.ts")) {

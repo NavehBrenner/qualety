@@ -32,7 +32,7 @@ Behavior is locked in [SPECS.md](../SPECS.md) §3 R4 and Semantic DRY. Summary:
 - **Artifact:** `"code-embeddings"` (dry `provides`). Builds after `python` / `typescript`. Normalize: trim, collapse blank-line runs; keep identifiers and comments.
 - **Model:** module id `minilm-l6-local`, revision `onnx-quantized-1`, 384-d quantized ONNX (Xenova all-MiniLM-L6-v2 via `@huggingface/transformers`, `allowRemoteModels: false`). Weights: `.tools/minilm-l6/` (`scripts/install-minilm.sh`) or `QUALETY_EMBEDDINGS_MODEL`. Test stub: `QUALETY_EMBEDDINGS_MODULE`.
 - **Cache:** `$XDG_CACHE_HOME/qualety/code-embeddings/` (default `~/.cache/qualety/code-embeddings/`). Override `QUALETY_EMBEDDINGS_CACHE`. Key `modelId/revision/sha256(normalized)`. Corrupt entries re-embed.
-- **Report:** cosine threshold **0.95**. One violation per cluster ≥ 2. Primary = first by `(path, name)`; siblings named as `path:line`. Must not say “in this file”. Concrete suggestion to extract a shared helper or reuse a sibling. Never `NO_SUGGESTION`. Independent of structural dry.
+- **Report:** cosine threshold **0.90**. One violation per cluster ≥ 2. Primary = first by `(path, name)`; siblings named as `path:line`. Must not say “in this file”. Concrete suggestion to extract a shared helper or reuse a sibling. Never `NO_SUGGESTION`. Independent of structural dry.
 - **Fail closed:** model load failure with ≥1 embeddable chunk → exit 2 naming `dry/no-semantic-duplicate` and `code-embeddings`. Zero embeddable chunks → success (do not load the model). Per-chunk vector miss → omit that chunk.
 
 ## Not planned in this plugin

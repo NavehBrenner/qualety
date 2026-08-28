@@ -1,7 +1,7 @@
 import { defineRule, type Violation } from "qualety";
 import type { CodeEmbeddingsIndex, EmbeddedChunk } from "./code-embeddings.ts";
 
-export const COSINE_THRESHOLD = 0.95;
+export const COSINE_THRESHOLD = 0.9;
 
 export const noSemanticDuplicate = defineRule({
   meta: {
