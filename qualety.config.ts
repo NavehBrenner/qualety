@@ -25,6 +25,7 @@ export default defineConfig({
     "python/require-typed-public": "error",
     "dry/no-duplicate-code": "error",
     "dry/no-duplicate-python": "error",
+    "dry/no-semantic-duplicate": "error",
     "plugin-kit/no-spawn-in-create": "error",
     "plugin-kit/prefer-define-rule": "error",
   },

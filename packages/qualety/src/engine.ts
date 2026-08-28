@@ -393,10 +393,30 @@ async function buildRequiredArtifacts(
   }
   const providers = collectProviders(plugins);
   const artifacts = new Map<string, unknown>();
-  for (const [id, rules] of requiredBy) {
-    artifacts.set(id, await buildOneArtifact(id, rules, providers, base));
+  const ids = [...requiredBy.keys()].sort(
+    (left, right) => artifactRank(left) - artifactRank(right) || left.localeCompare(right),
+  );
+  for (const id of ids) {
+    const rules = requiredBy.get(id);
+    if (rules === undefined) {
+      continue;
+    }
+    artifacts.set(
+      id,
+      await buildOneArtifact(id, rules, providers, base, (artifactId) => artifacts.get(artifactId)),
+    );
   }
   return artifacts;
+}
+
+function artifactRank(id: string): number {
+  if (id === "python") {
+    return 0;
+  }
+  if (id === "typescript") {
+    return 1;
+  }
+  return 2;
 }
 
 async function buildOneArtifact(
@@ -404,6 +424,7 @@ async function buildOneArtifact(
   rules: string[],
   providers: Map<string, ProviderEntry>,
   base: { cwd: string; files: readonly string[]; exclude: readonly string[] },
+  getArtifact: (id: string) => unknown,
 ): Promise<unknown> {
   const entry = providers.get(id);
   if (entry === undefined) {
@@ -415,6 +436,7 @@ async function buildOneArtifact(
       files: base.files,
       exclude: base.exclude,
       requiredBy: rules,
+      getArtifact,
     });
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e);

@@ -43,9 +43,9 @@ These decisions are considered stable unless a major new constraint appears:
 
     **React plugin — what we own:** `react/no-fetch-in-useeffect` and `react/query-error-handled` (R1-lite). TanStack stays inside `@qualety/react` (detectors only). **R3 semantic tokens → future `@qualety/tailwind` (or DS), not react.**
 
-    **DRY plugin — what we own:** `dry/no-duplicate-code` (structural R4: dupehound whole-function path plus ts-morph fragment windows) and `dry/no-duplicate-python` (Arm F whole-function twin). We wrap the dupehound CLI for whole-function fingerprints and plugin config; we do not re-own its winnowing / Jaccard. Fragment clones are exact structural hashes on statement windows (TypeScript only). Embeddings / Slopo-style semantic near-dupes remain later. Architecture fitness only if we add something ArchUnit / dependency-cruiser do not already cover.
+    **DRY plugin — what we own:** `dry/no-duplicate-code` (structural R4: dupehound whole-function path plus ts-morph fragment windows), `dry/no-duplicate-python` (Arm F whole-function twin), and `dry/no-semantic-duplicate` (Type-4 near-dupes via check-time `code-embeddings`, not `qualety index`). We wrap the dupehound CLI for whole-function fingerprints and plugin config; we do not re-own its winnowing / Jaccard. Fragment clones are exact structural hashes on statement windows (TypeScript only). Architecture fitness only if we add something ArchUnit / dependency-cruiser do not already cover.
 
-     **Python plugin — what we own:** `python/no-unnecessary-def` (package-local ≤1-use pass-through / small-flat defs), `python/no-unnecessary-class` (package-local ≤1-use thin / pass-through classes), `python/public-exports-tested` (static test-presence for package `__all__` / `__init__` re-exports), `python/no-mutable-default` (mutable default args), `python/require-typed-public` (annotation presence on public callables). Not a Ruff clone.
+    **Python plugin — what we own:** `python/no-unnecessary-def` (package-local ≤1-use pass-through / small-flat defs), `python/no-unnecessary-class` (package-local ≤1-use thin / pass-through classes), `python/public-exports-tested` (static test-presence for package `__all__` / `__init__` re-exports), `python/no-mutable-default` (mutable default args), `python/require-typed-public` (annotation presence on public callables). Not a Ruff clone.
 
    **What we do not own** (use Biome, ESLint, or dependency-cruiser): circular imports; max relative import depth; simple path bans (`dist/`, `generated/`, …); deep-import / internal-module bans; generic layer charts those tools already do well.
 
@@ -56,11 +56,11 @@ These decisions are considered stable unless a major new constraint appears:
 
    **Who provides:** one map. Start empty → register every `provides` entry from loaded **plugin modules** (collision → exit 2, names **both owners**) → for each id in the **default registry** still missing, fill with `owner: "default"`. Defaults only fill gaps; they never replace a plugin-provided id. A plugin `provides.typescript` **wins** (default skipped for that id). v1 default registry is `as const` with `"typescript"` → today’s `ParsedProject`. Default providers are compiled-in trusted factories (`DEFAULT_PROVIDERS` / `createTypeScriptProvider`), gap-filled after plugin `provides`, and are **not** loaded through `pluginSchema`.     `dupehound` stays in `@qualety/dry`. `python` stays in `@qualety/python` (not a default). Multi-team shared providers load as **ruleless plugins** via `plugins[]`. There is **no** `config.languages` and **no** reserved-id category.
 
-   **Engine:** collect all providers into one map → union `requires` from enabled rules → **build each id once** (`await provider.build(context)`) → `create` every rule once with the same context. One include/exclude file pass; extension filtering lives **inside** each language provider’s `build` (typescript: `.ts`/`.tsx`/`.mts`/`.cts`; python plugin: `.py`, not `.pyi`). Default include lists `**/*.py`. Empty sources after filter is success, not an error.
+    **Engine:** collect all providers into one map → union `requires` from enabled rules → **build each id once** (`await provider.build(context)`) → `create` every rule once with the same context. Required `python` then `typescript` build before any other id; `ArtifactBuildContext.getArtifact` returns already-built artifacts only (missing → `undefined`). One include/exclude file pass; extension filtering lives **inside** each language provider’s `build` (typescript: `.ts`/`.tsx`/`.mts`/`.cts`; python plugin: `.py`, not `.pyi`). Default include lists `**/*.py`. Empty sources after filter is success, not an error.
 
    **Fail closed (exit 2, name rule ids):** malformed plugin / rule / provider at load; invalid `requires`; missing provider (provider-neutral copy, not “No plugin provides…”); duplicate provider id; build throw; `getArtifact` for an id not in that rule’s `requires`. Do not silently skip.
 
-   Not a vector store. `qualety index` CLI stays unimplemented. Dupehound (structural fingerprints / winnowing, **not** embeddings) is provided by `@qualety/dry` as artifact id `"dupehound"`.
+    Not a vector store. `qualety index` CLI stays unimplemented. Dupehound (structural fingerprints / winnowing, **not** embeddings) is provided by `@qualety/dry` as artifact id `"dupehound"`. Check-time `"code-embeddings"` (also dry-provided) backs `dry/no-semantic-duplicate`; it is not a product index.
 
    This avoids both the precision loss of a lowest-common-denominator IR and the cost of re-parsing for every rule.
 
@@ -124,13 +124,13 @@ These decisions are considered stable unless a major new constraint appears:
 └────────────────────────────┬────────────────────────────────┘
                              │
               ┌──────────────▼──────────────┐
-               │   Artifact providers        │
-               │   default: "typescript" →   │
-               │     ParsedProject           │
-               │   dry: "dupehound"          │
-               │   python: "python"          │
-               │   embeddings later          │
-              └─────────────────────────────┘
+                │   Artifact providers        │
+                │   default: "typescript" →   │
+                │     ParsedProject           │
+                │   dry: "dupehound",         │
+                │        "code-embeddings"    │
+                │   python: "python"          │
+               └─────────────────────────────┘
 ```
 
 ### Core concepts
@@ -141,9 +141,9 @@ These decisions are considered stable unless a major new constraint appears:
 
   `NO_SUGGESTION = "No suggestion available for this rule."`
 
-    Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-code`, `dry/no-duplicate-python`, `python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
+    Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-code`, `dry/no-duplicate-python`, `dry/no-semantic-duplicate`, `python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
 - **Plugin**: A package that exports `name` plus optional `rules` and/or `provides`. Ruleless plugins (`name` + `provides` only) are shared providers.
-- **Artifact**: Opaque value built once per check when an enabled rule `requires` its id. One provider map: plugin `provides` first, then default registry gap-fill (`"typescript"` → `ParsedProject`; `"dupehound"` in `@qualety/dry`; `"python"` in `@qualety/python`). Vector / embedding index is still future.
+- **Artifact**: Opaque value built once per check when an enabled rule `requires` its id. One provider map: plugin `provides` first, then default registry gap-fill (`"typescript"` → `ParsedProject`; `"dupehound"` and `"code-embeddings"` in `@qualety/dry`; `"python"` in `@qualety/python`). `"code-embeddings"` is a check-time artifact, not `qualety index`.
 
 ## 2. Plugin contract (explicit)
 
@@ -169,6 +169,7 @@ export interface ArtifactBuildContext {
   files: readonly string[];     // display paths, stable order
   exclude: readonly string[];
   requiredBy: readonly string[]; // enabled rule ids that require this artifact
+  getArtifact(id: string): unknown; // already-built only; missing → undefined
 }
 
 export interface Rule {
@@ -277,7 +278,7 @@ Implemented in `@qualety/dry` as **`dry/no-duplicate-code`** (renamed from `dry/
 | Topic | Decision |
 |--------|----------|
 | Engine | **Hybrid, one `ruleId`.** **Arm F** = dupehound whole-function path (`provides.dupehound`, pin **v0.1.2**, `min_tokens`, `--exclude-tests`). **Arm W** = ts-morph consecutive-statement windows. Merged reporting under `dry/no-duplicate-code`. |
-| Out | Embeddings, Slopo, `query --similar`, auto-merge / codemods, type/interface/type-alias clone detection, near-miss fragment reorder, options / `meta.schema`, a second rule id. Incremental `dupehound check --diff` is later (`--diff` / WP-015). |
+| Out | Semantic near-dupes (`dry/no-semantic-duplicate`, not Arm F/W), Slopo as a product, `query --similar`, auto-merge / codemods, type/interface/type-alias clone detection, near-miss fragment reorder, options / `meta.schema`, a second structural rule id. Incremental `dupehound check --diff` is later (`--diff` / WP-015). |
 | Arm W unit | Consecutive statements in the same block (function body or nested `if`/`else`/`try`/`catch`/`for`/`while`/`switch` clause). Do not flatten nested function-likes. Module-level type/interface/alias clones are never windows. |
 | Arm W eligible | ≥ 3 non-blank lines of the span’s text (`split(/\n/)`, trim, drop empty). A single multi-line statement can qualify. |
 | Arm W hash | Exact structural: emit `SyntaxKind`; **hole** local binding identifiers; **keep** property names and literals; stop at nested function-likes. Type-2 on bindings only. No Jaccard / near-miss. |
@@ -295,6 +296,23 @@ Implemented in `@qualety/dry` as **`dry/no-duplicate-code`** (renamed from `dry/
 **Python twin (`dry/no-duplicate-python`):** same plugin, separate id (locked #8). Arm F only (`requires: ["dupehound"]`, pin **v0.1.2**). Does **not** `requires` `python` and does **not** copy Arm W. Keep `.py` members (drop `.pyi`); drop the cluster if fewer than 2 remain. Same Arm F report gate, message, and suggestion. Skip `test_*.py` / `*_test.py` / `*.test.py` / `*.spec.py` and path segments `tests` / `__tests__` / `fixtures` / `__pycache__`. Fail closed (exit 2) naming this rule. Mixed TS+Python clusters are quiet after each rule keeps only its language. Arm F of `dry/no-duplicate-code` keeps only `.ts` / `.tsx` / `.mts` / `.cts` members so Python never reports under the TS id. `configs.recommended.rules["dry/no-duplicate-python"] = "error"`.
 
 See [docs/rulesets/dry.md](./rulesets/dry.md).
+
+### Semantic DRY (`dry/no-semantic-duplicate`)
+
+Implemented in `@qualety/dry` as **`dry/no-semantic-duplicate`**. Complements structural DRY; does not replace it. Overlap is OK. One rule id for TypeScript and Python (exception to locked #8 “two languages ⇒ two rules”: embeddings are language-agnostic after chunk text).
+
+`defineRule` with `requires: ["code-embeddings", "typescript", "python"]`. Dry `provides` `"code-embeddings"` (and still `"dupehound"`). The rule only reads `getArtifact("code-embeddings")`. Enabling it needs `@qualety/python` in `plugins[]` even for TS-only trees (python provider no-ops with no `.py`). Not `qualety index`.
+
+| Topic | Decision |
+|--------|----------|
+| Chunks | Functions, methods, and classes. Not sliding windows / whole-file-only. TS from `"typescript"`; Python from `"python"`. |
+| Min-size | Skip if non-blank lines < 5 or whitespace tokens < 20. |
+| Skip | Same family as structural dry (TS: `.d.ts`, `*.test.*` / `*.spec.*`, `__tests__` / `fixtures`; Python: `test_*.py` / `*_test.py` / `*.test.py` / `*.spec.py`, `conftest.py`, `.pyi`, `tests` / `__tests__` / `fixtures` / `__pycache__`). |
+| Similarity | Cosine on MiniLM vectors. Threshold **0.90**. Union-find; one violation per cluster ≥ 2. Primary = first by `(path, name)`. |
+| Model | Internal `EmbedModule`; v1 module id `minilm-l6-local`, revision `onnx-quantized-1`, 384-d quantized ONNX. No hosted API. `QUALETY_EMBEDDINGS_MODEL` / `QUALETY_EMBEDDINGS_MODULE` overrides. |
+| Cache | `$XDG_CACHE_HOME/qualety/code-embeddings/` (default `~/.cache/qualety/code-embeddings/`). Override `QUALETY_EMBEDDINGS_CACHE`. Key `modelId/revision/sha256(normalized)`. |
+| Fail closed | Model load failure with ≥1 embeddable chunk → exit 2 naming `dry/no-semantic-duplicate` and `code-embeddings`. Zero chunks → success, do not load the model. Per-chunk embed miss → omit that chunk. |
+| Recommended | `configs.recommended.rules["dry/no-semantic-duplicate"] = "error"`. |
 
 ### R5 — Test presence (static)
 
@@ -359,8 +377,7 @@ Do **not** own classic eslint-plugin-react / react-hooks / jsx-a11y, TanStack es
 |------|--------|
 | `dry/no-duplicate-code` | Implemented (this section; structural R4, hybrid + report gate) |
 | `dry/no-duplicate-python` | Implemented (R4 twin; Arm F whole-function only) |
-
-Embeddings / semantic near-dupes are **not** this plugin.
+| `dry/no-semantic-duplicate` | Implemented (this section; Type-4 near-dupes, TS+Python, `code-embeddings`) |
 
 ### v1 Python plugin catalog
 
@@ -428,7 +445,7 @@ Thin wrapper exposing at least: `check_file`, `check_diff`, `query_similar`, `li
 |-------------------------------|------------|--------|
 | AST compositional rules       | Primary    | First slice (`python/no-unnecessary-def`) |
 | Semantic style / tokens       | Primary    | Later   |
-| Semantic DRY (embeddings)     | Yes        | Yes     |
+| Semantic DRY (embeddings)     | Yes (`dry/no-semantic-duplicate`) | Yes (`dry/no-semantic-duplicate`) |
 | Structural clone detection    | Yes        | Yes     |
 | Test-presence                 | Yes        | Yes     |
 | Architecture fitness          | Yes        | Yes     |

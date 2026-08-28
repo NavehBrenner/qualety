@@ -43,7 +43,7 @@ export const noUnnecessaryClass = defineRule({
         "Do not keep a local class that does not pay for its indirection (thin or pass-through).",
     },
   },
-  create(context) {
+  create: (context) => {
     const cwd = context.getCwd();
     const artifact = context.getArtifact("python");
     if (!(artifact.sources instanceof Map)) {
@@ -63,7 +63,7 @@ function scanClasses(group: readonly PythonSource[], context: Pick<RuleContext, 
   const sources = new Map(group.map((unit) => [unit.file, unit]));
   for (const unit of group) {
     binds.set(unit.file, collectImports(unit, sources));
-    collectClasses(unit.tree, unit, false, classes);
+    collectClasses(unit, classes);
   }
   const byKey = new Map(classes.map((item) => [classKey(item), item]));
   const useCounts = new Map<string, number>();
@@ -101,24 +101,23 @@ function considerClass(
   });
 }
 
-function collectClasses(node: PythonNode, unit: PythonSource, inFn: boolean, classes: ClassInfo[]) {
-  if (node._type === "FunctionDef" || node._type === "AsyncFunctionDef") {
-    for (const child of childNodes(node)) {
-      collectClasses(child, unit, true, classes);
+function collectClasses(unit: PythonSource, classes: ClassInfo[]) {
+  const stack: PythonNode[] = [unit.tree];
+  const inFnAt: boolean[] = [false];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    const inFn = inFnAt.pop() === true;
+    if (node === undefined) {
+      continue;
     }
-    return;
-  }
-  if (node._type === "ClassDef") {
-    if (!inFn && typeof node.name === "string") {
+    const nested = node._type === "FunctionDef" || node._type === "AsyncFunctionDef";
+    if (node._type === "ClassDef" && !inFn && typeof node.name === "string") {
       classes.push({ file: unit.file, name: node.name, node, text: unit.text });
     }
     for (const child of childNodes(node)) {
-      collectClasses(child, unit, inFn, classes);
+      stack.push(child);
+      inFnAt.push(inFn || nested);
     }
-    return;
-  }
-  for (const child of childNodes(node)) {
-    collectClasses(child, unit, inFn, classes);
   }
 }
 

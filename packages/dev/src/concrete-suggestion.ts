@@ -11,7 +11,7 @@ export const concreteSuggestion = defineRule({
       description: "In-repo product rules must not report the NO_SUGGESTION sentinel.",
     },
   },
-  create(context) {
+  create: (context) => {
     const sources = context.getArtifact("typescript").sources;
     for (const [abs, unit] of sources) {
       if (!isProductPluginPath(abs) || isTestPath(abs) || !isSourceFile(unit)) {

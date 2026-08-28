@@ -36,54 +36,42 @@ function scanFunction(
   context: Pick<RuleContext, "report">,
   reported: Set<string>,
 ) {
+  const hits: ConstantHit[] = [];
   for (const cond of conditionNodes(fn)) {
     const hit = diagnoseConstant(fn, cond, sourceFile);
     if (hit !== undefined) {
-      emit(context, file, hit, reported);
+      hits.push(hit);
     }
   }
   for (const node of secondParseNodes(fn)) {
-    emit(
-      context,
-      file,
-      {
-        polarity: "true",
-        reason: "prior-parse",
-        suggestion: "Remove the second parse; reuse the first parse result (.data).",
-        reportAt: node,
-      },
-      reported,
-    );
+    hits.push({
+      polarity: "true",
+      reason: "prior-parse",
+      suggestion: "Remove the second parse; reuse the first parse result (.data).",
+      reportAt: node,
+    });
   }
   for (const cond of conditionNodes(fn)) {
-    for (const hit of mixedHitsForCondition(fn, cond, sourceFile)) {
-      emit(context, file, hit, reported);
+    hits.push(...mixedHitsForCondition(fn, cond, sourceFile));
+  }
+  for (const hit of hits) {
+    const at = hit.reportAt.getSourceFile();
+    const range = {
+      start: at.getLineAndColumnAtPos(hit.reportAt.getStart()),
+      end: at.getLineAndColumnAtPos(hit.reportAt.getEnd()),
+    };
+    const key = `${file}:${range.start.line}:${range.start.column}:${range.end.line}:${range.end.column}`;
+    if (reported.has(key)) {
+      continue;
     }
+    reported.add(key);
+    const reasonText = REASON[hit.reason] ?? hit.reason;
+    context.report({
+      severity: "error",
+      file,
+      range,
+      message: hit.message ?? `Condition is always ${hit.polarity} here given ${reasonText}.`,
+      suggestion: hit.suggestion,
+    });
   }
-}
-
-function emit(
-  context: Pick<RuleContext, "report">,
-  file: string,
-  hit: ConstantHit,
-  reported: Set<string>,
-) {
-  const sourceFile = hit.reportAt.getSourceFile();
-  const range = {
-    start: sourceFile.getLineAndColumnAtPos(hit.reportAt.getStart()),
-    end: sourceFile.getLineAndColumnAtPos(hit.reportAt.getEnd()),
-  };
-  const key = `${file}:${range.start.line}:${range.start.column}:${range.end.line}:${range.end.column}`;
-  if (reported.has(key)) {
-    return;
-  }
-  reported.add(key);
-  const reasonText = REASON[hit.reason] ?? hit.reason;
-  context.report({
-    severity: "error",
-    file,
-    range,
-    message: hit.message ?? `Condition is always ${hit.polarity} here given ${reasonText}.`,
-    suggestion: hit.suggestion,
-  });
 }

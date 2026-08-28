@@ -84,6 +84,7 @@ function loadOpts(
     files,
     exclude: [],
     requiredBy: ["dry/no-duplicate-code"],
+    getArtifact: () => undefined,
     env: { [DUPEHOUND_ENV]: stub, PATH: "" },
   };
 }
@@ -264,6 +265,7 @@ test("buildDupehoundIndex fails closed when the binary is missing", async () => 
       files: ["src/a.ts"],
       exclude: [],
       requiredBy: ["dry/no-duplicate-code"],
+      getArtifact: () => undefined,
       env: { PATH: "/nonexistent" },
     }),
   ).rejects.toThrow(/dupehound is not installed|dry\/no-duplicate-code/);

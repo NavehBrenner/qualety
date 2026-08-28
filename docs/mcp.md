@@ -16,7 +16,7 @@ Expose the same engine as the CLI so coding agents can check code, list rules, a
 | `list_rules` | List enabled/available rules and severities from config |
 | `get_rule_docs` | Return description + examples for one rule id |
 
-Structural duplicates flow through `check` (`dry/no-duplicate-code`). Optional later: `query_similar` (semantic DRY), `index` (rebuild vector index).
+Structural and semantic duplicates flow through `check` (`dry/no-duplicate-code`, `dry/no-semantic-duplicate`). Optional later: `query_similar`, `index` (rebuild a product vector index — not the check-time `code-embeddings` artifact).
 
 ## Design notes
 

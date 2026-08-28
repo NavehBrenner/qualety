@@ -1,6 +1,6 @@
-import { basename, relative, resolve } from "node:path";
 import { defineRule, type Violation } from "qualety";
 import { Node, SourceFile, type Statement, SyntaxKind } from "ts-morph";
+import { displayFile, skipTypeScriptPath } from "./chunks.ts";
 import type { DupehoundIndex } from "./dupehound.ts";
 
 const MIN_WINDOW_LINES = 3;
@@ -108,7 +108,7 @@ export function reportsFromIndex(index: DupehoundIndex): Omit<Violation, "ruleId
 function clustersFromWindows(sources: ReadonlyMap<string, unknown>, cwd: string): CloneCluster[] {
   const buckets = new Map<string, CloneSpan[]>();
   for (const [abs, unit] of sources) {
-    if (!(unit instanceof SourceFile) || skipFile(abs, cwd)) {
+    if (!(unit instanceof SourceFile) || skipTypeScriptPath(abs, cwd)) {
       continue;
     }
     const file = displayFile(cwd, abs);
@@ -341,24 +341,6 @@ function hostName(node: Node): string {
     current = current.getParent();
   }
   return "<anonymous>";
-}
-
-function skipFile(abs: string, cwd: string): boolean {
-  const relativePath = displayFile(cwd, abs);
-  const base = basename(relativePath);
-  const parts = relativePath.split("/");
-  return (
-    /\.d\.(?:ts|mts|cts)$/.test(base) ||
-    /\.(?:test|spec)\./.test(base) ||
-    parts.includes("__tests__") ||
-    parts.includes("fixtures")
-  );
-}
-
-function displayFile(cwd: string, file: string): string {
-  const abs = resolve(cwd, file);
-  const rel = relative(cwd, abs);
-  return (rel === "" ? file : rel).split("\\").join("/");
 }
 
 function reportsFromClusters(clusters: CloneCluster[]): CloneReport[] {
