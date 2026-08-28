@@ -184,7 +184,7 @@ export interface Rule {
 
 export interface RuleContext<Requires extends readonly string[] = readonly string[]> {
   id: string;
-  options: unknown;             // not applied until an options WP; schema stored only
+  options: unknown;             // validated object when `[severity, options]`; undefined if omitted
   report(violation: Omit<Violation, "ruleId">): void;
   getCwd(): string;
   getFiles(): readonly string[]; // one include/exclude pass, display paths
@@ -208,7 +208,7 @@ export function defineRule<const Requires extends readonly string[] = []>(rule: 
 }): typeof rule;
 ```
 
-Runtime schemas (engine `safeParse` at load; do **not** replace the TypeScript interfaces above): `requiresSchema`, `ruleMetaSchema`, `functionSchema`, `ruleSchema`, `artifactProviderSchema`, `pluginProvidesSchema`, `pluginSchema`. Those schemas (and siblings) re-exported from core `index` are supported surface for authors who want to parse; `userConfigSchema` stays on the config module (already exported). `defineRule` is a typed identity and does **not** parse — JS / fixture plugins skip it, so the engine must validate the advertised catalog anyway (malformed rule → exit 2 even if that rule is `"off"`). `meta.schema` is stored only; it is not applied until an options WP. Parsed output is not substituted for the original object (`create` / `build` identity stays).
+Runtime schemas (engine `safeParse` at load; do **not** replace the TypeScript interfaces above): `requiresSchema`, `ruleMetaSchema`, `functionSchema`, `ruleSchema`, `artifactProviderSchema`, `pluginProvidesSchema`, `pluginSchema`. Those schemas (and siblings) re-exported from core `index` are supported surface for authors who want to parse; `userConfigSchema` stays on the config module (already exported). `defineRule` is a typed identity and does **not** parse — JS / fixture plugins skip it, so the engine must validate the advertised catalog anyway (malformed rule → exit 2 even if that rule is `"off"`). `config.rules[id]` is `"error" | "warn" | "off"` or `[severity, options]` (`options` is a JSON object). No bare options object. `"off"` with options → exit 2. Severity-only → `context.options` is `undefined` (not `{}`). When options are present, core compiles `meta.schema` (JSON Schema **subset**) to Zod and `safeParse`s at load/select for every configured non-off entry, including ids later filtered by `--rule` / `--plugin`. Subset: `type: "object"` with `properties`, optional `required`, `additionalProperties` (`false` → strict); `type: "number"` with `minimum` / `maximum` / `exclusiveMinimum` / `exclusiveMaximum` (draft-6 **number** form). Unlisted object properties are optional. Unsupported type or keyword, unknown keys, type mismatch, or options when the rule has no `meta.schema` → exit 2 naming the rule id. If the user passed no options, do not compile `meta.schema`. Parsed plugin output is not substituted for the original object (`create` / `build` identity stays).
 
 `create` is invoked once per enabled rule, not once per file. Rules never touch the filesystem or the CLI; they only receive their context and call `context.report`. TypeScript consumers: `requires: ["typescript"]` and `getArtifact("typescript")` (typed as `ParsedProject` via `ArtifactMap`; `.project` / `.sources`). Core `ParsedProject.sources` stays `unknown`; plugins kill `as SourceFile` with `instanceof` / type guards (locked #3). A plugin `provides.build` function **may** spawn tools; rules must not. Duplicate artifact id fails closed (both owners named). Defaults only fill gaps — a plugin `provides.typescript` wins. This keeps rules testable and isolatable.
 
@@ -308,7 +308,7 @@ Implemented in `@qualety/dry` as **`dry/no-semantic-duplicate`**. Complements st
 | Chunks | Functions, methods, and classes. Not sliding windows / whole-file-only. TS from `"typescript"`; Python from `"python"`. |
 | Min-size | Skip if non-blank lines < 5 or whitespace tokens < 20. |
 | Skip | Same family as structural dry (TS: `.d.ts`, `*.test.*` / `*.spec.*`, `__tests__` / `fixtures`; Python: `test_*.py` / `*_test.py` / `*.test.py` / `*.spec.py`, `conftest.py`, `.pyi`, `tests` / `__tests__` / `fixtures` / `__pycache__`). |
-| Similarity | Cosine on MiniLM vectors. Threshold **0.90**. Union-find; one violation per cluster ≥ 2. Primary = first by `(path, name)`. |
+| Similarity | Cosine on MiniLM vectors. Default threshold **0.90** (`COSINE_THRESHOLD`). Optional `{ threshold }` (`number`, exclusiveMinimum `0`, maximum `1`) via `["error", { threshold }]`. Omit options → 0.90. Union-find; one violation per cluster ≥ 2. Primary = first by `(path, name)`. |
 | Model | Internal `EmbedModule`; v1 module id `minilm-l6-local`, revision `onnx-quantized-1`, 384-d quantized ONNX. No hosted API. `QUALETY_EMBEDDINGS_MODEL` / `QUALETY_EMBEDDINGS_MODULE` overrides. |
 | Cache | `$XDG_CACHE_HOME/qualety/code-embeddings/` (default `~/.cache/qualety/code-embeddings/`). Override `QUALETY_EMBEDDINGS_CACHE`. Key `modelId/revision/sha256(normalized)`. |
 | Fail closed | Model load failure with ≥1 embeddable chunk → exit 2 naming `dry/no-semantic-duplicate` and `code-embeddings`. Zero chunks → success, do not load the model. Per-chunk embed miss → omit that chunk. |
@@ -433,6 +433,8 @@ export default defineConfig({
 ```
 
 `defineConfig` is a typed identity (same policy as `defineRule`). Runtime validation is load-time Zod only (`validateConfig` / `readConfigFile`).
+
+`config.rules[id]` is `"error" | "warn" | "off"` or `[severity, options]` where `options` is a JSON object. No bare options object. No `"off"` with options. Invalid options fail closed (exit 2, name the rule). Recommended presets stay severity-only unless a rule truly needs options in recommended.
 
 **Do not exclude test paths** (`**/*.test.*`, `**/*.spec.*`, `__tests__/**`) when `ts/public-exports-tested` is enabled. The rule only sees files in the TypeScript artifact; wiping tests from the set makes every public export fail. Keep tests in `include`. Default exclude is `node_modules` and `dist` only.
 

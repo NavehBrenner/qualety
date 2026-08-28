@@ -10,9 +10,24 @@ export const noSemanticDuplicate = defineRule({
       description:
         "No semantic near-duplicate functions, methods, or classes in included non-test TypeScript and Python sources.",
     },
+    schema: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        threshold: { type: "number", exclusiveMinimum: 0, maximum: 1 },
+      },
+    },
   },
   create(context) {
-    for (const item of reportsFromEmbeddings(context.getArtifact("code-embeddings"))) {
+    const options = context.options;
+    const threshold =
+      typeof options === "object" &&
+      options !== null &&
+      "threshold" in options &&
+      typeof options.threshold === "number"
+        ? options.threshold
+        : COSINE_THRESHOLD;
+    for (const item of reportsFromEmbeddings(context.getArtifact("code-embeddings"), threshold)) {
       if (item.message.length > 0) {
         context.report(item);
       }
@@ -20,8 +35,11 @@ export const noSemanticDuplicate = defineRule({
   },
 });
 
-export function reportsFromEmbeddings(index: CodeEmbeddingsIndex): Omit<Violation, "ruleId">[] {
-  const clusters = clusterChunks(index.chunks, COSINE_THRESHOLD);
+export function reportsFromEmbeddings(
+  index: CodeEmbeddingsIndex,
+  threshold = COSINE_THRESHOLD,
+): Omit<Violation, "ruleId">[] {
+  const clusters = clusterChunks(index.chunks, threshold);
   const reports: Omit<Violation, "ruleId">[] = [];
   for (const cluster of clusters) {
     const report = reportFromCluster(cluster);

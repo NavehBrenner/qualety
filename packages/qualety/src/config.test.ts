@@ -71,6 +71,54 @@ test("validateConfig rejects invalid severity", () => {
   ).toThrow(/Invalid severity for "ts\/public-exports-tested"/);
 });
 
+test("validateConfig accepts [severity, options]", () => {
+  expect(
+    validateConfig({
+      plugins: [],
+      rules: { "dry/no-semantic-duplicate": ["error", { threshold: 0.8 }] },
+    }),
+  ).toEqual({
+    plugins: [],
+    rules: { "dry/no-semantic-duplicate": ["error", { threshold: 0.8 }] },
+  });
+});
+
+test("validateConfig rejects bare options object", () => {
+  expect(() =>
+    validateConfig({ ...valid, rules: { "dry/no-semantic-duplicate": { threshold: 0.8 } } }),
+  ).toThrow(/dry\/no-semantic-duplicate/);
+  expect(() =>
+    validateConfig({ ...valid, rules: { "dry/no-semantic-duplicate": { threshold: 0.8 } } }),
+  ).toThrow(/options require a severity/);
+});
+
+test("validateConfig rejects extra tuple slots and one-element arrays", () => {
+  expect(() =>
+    validateConfig({
+      ...valid,
+      rules: { "dry/no-semantic-duplicate": ["error", { threshold: 0.8 }, "extra"] },
+    }),
+  ).toThrow(/expected \[severity, options\]/);
+  expect(() =>
+    validateConfig({ ...valid, rules: { "dry/no-semantic-duplicate": ["error"] } }),
+  ).toThrow(/expected \[severity, options\]/);
+});
+
+test("validateConfig rejects non-object options slot", () => {
+  expect(() =>
+    validateConfig({ ...valid, rules: { "dry/no-semantic-duplicate": ["error", 0.8] } }),
+  ).toThrow(/Invalid options for "dry\/no-semantic-duplicate"/);
+});
+
+test("validateConfig rejects off with options", () => {
+  expect(() =>
+    validateConfig({
+      ...valid,
+      rules: { "dry/no-semantic-duplicate": ["off", { threshold: 0.8 }] },
+    }),
+  ).toThrow(/Rule "dry\/no-semantic-duplicate" is "off"/);
+});
+
 test("validateConfig requires plugins and rules", () => {
   expect(() => validateConfig({})).toThrow(/must include "plugins" and "rules"/);
   expect(() => validateConfig({ plugins: [] })).toThrow(/must include "plugins" and "rules"/);

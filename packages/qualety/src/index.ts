@@ -26,7 +26,7 @@ export interface Violation {
   suggestion: string;
 }
 
-/** Stored on `meta.schema` only; not applied until an options WP. */
+/** JSON Schema subset on `meta.schema`; applied to `config.rules` options. */
 export type JSONSchema = Record<string, unknown>;
 
 /**
@@ -54,7 +54,7 @@ export interface RuleMeta {
 
 export interface RuleContext<Requires extends readonly string[] = readonly string[]> {
   id: string;
-  /** Not applied until an options WP; `meta.schema` is stored only. */
+  /** Validated object when config used `[severity, options]`; `undefined` if omitted. */
   options: unknown;
   report(violation: Omit<Violation, "ruleId">): void;
   getCwd(): string;

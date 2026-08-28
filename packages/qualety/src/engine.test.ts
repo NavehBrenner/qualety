@@ -210,7 +210,7 @@ async function writeTree(files: Record<string, string>): Promise<string> {
   return dir;
 }
 
-function config(rules: Record<string, string>, extra: Record<string, unknown> = {}) {
+function config(rules: Record<string, unknown>, extra: Record<string, unknown> = {}) {
   return JSON.stringify({
     plugins: ["./plugin.mjs"],
     rules,
@@ -1348,6 +1348,140 @@ test("--diff expands catalog companion into plugin entry", async () => {
   expect(out).toMatch(/listed:docs\/rulesets\/dev\.md\|packages\/dev\/src\/index\.ts/);
   expect(out).not.toMatch(/src\/unrelated\.ts/);
   expect(out).toMatch(/sources:1/);
+});
+
+const optionsPlugin = `export default {
+  name: "fixture",
+  rules: {
+    ping: {
+      meta: { docs: { description: "no schema" } },
+      create(context) {
+        context.report({
+          severity: "error",
+          file: context.getFiles()[0] ?? ".",
+          range: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+          message: context.options === undefined ? "none" : JSON.stringify(context.options),
+        });
+      },
+    },
+    tuned: {
+      meta: {
+        docs: { description: "has schema" },
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            threshold: { type: "number", exclusiveMinimum: 0, maximum: 1 },
+          },
+        },
+      },
+      create(context) {
+        context.report({
+          severity: "error",
+          file: context.getFiles()[0] ?? ".",
+          range: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+          message: context.options === undefined ? "none" : JSON.stringify(context.options),
+        });
+      },
+    },
+  },
+};
+`;
+
+test("validated options reach create", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": optionsPlugin,
+    "qualety.config.json": config({ "fixture/tuned": ["error", { threshold: 0.8 }] }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(1);
+  expect(lines.join("\n")).toMatch(/\{"threshold":0\.8\}/);
+});
+
+test("severity-only leaves options undefined", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": optionsPlugin,
+    "qualety.config.json": config({ "fixture/tuned": "error" }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(1);
+  expect(lines.join("\n")).toMatch(/\snone$/m);
+});
+
+test("invalid options exit 2 naming the rule", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": optionsPlugin,
+    "qualety.config.json": config({ "fixture/tuned": ["error", { threshold: 0 }] }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const errors: string[] = [];
+  expect(await check(dir, silent, (m) => errors.push(String(m)))).toBe(2);
+  expect(errors.join("\n")).toMatch(/fixture\/tuned/);
+});
+
+test("option type mismatch exits 2 naming the rule", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": optionsPlugin,
+    "qualety.config.json": config({ "fixture/tuned": ["error", { threshold: "high" }] }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const errors: string[] = [];
+  expect(await check(dir, silent, (m) => errors.push(String(m)))).toBe(2);
+  expect(errors.join("\n")).toMatch(/fixture\/tuned/);
+});
+
+test("unknown option key exits 2 naming the rule", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": optionsPlugin,
+    "qualety.config.json": config({ "fixture/tuned": ["error", { extra: true }] }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const errors: string[] = [];
+  expect(await check(dir, silent, (m) => errors.push(String(m)))).toBe(2);
+  expect(errors.join("\n")).toMatch(/fixture\/tuned/);
+});
+
+test("options without meta.schema exit 2", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": optionsPlugin,
+    "qualety.config.json": config({ "fixture/ping": ["error", { threshold: 0.8 }] }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const errors: string[] = [];
+  expect(await check(dir, silent, (m) => errors.push(String(m)))).toBe(2);
+  expect(errors.join("\n")).toMatch(/Rule "fixture\/ping" does not accept options/);
+});
+
+test("off with options exits 2", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": optionsPlugin,
+    "qualety.config.json": config({ "fixture/tuned": ["off", { threshold: 0.8 }] }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const errors: string[] = [];
+  expect(await check(dir, silent, (m) => errors.push(String(m)))).toBe(2);
+  expect(errors.join("\n")).toMatch(/Rule "fixture\/tuned" is "off"/);
+});
+
+test("invalid options exit 2 even when --rule filters that id out", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": optionsPlugin,
+    "qualety.config.json": config({
+      "fixture/ping": "error",
+      "fixture/tuned": ["error", { extra: true }],
+    }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const errors: string[] = [];
+  expect(
+    await check(dir, silent, (m) => errors.push(String(m)), {
+      ...noFilters,
+      rules: ["fixture/ping"],
+    }),
+  ).toBe(2);
+  expect(errors.join("\n")).toMatch(/fixture\/tuned/);
 });
 
 test("--diff expands plugin entry companion into catalog", async () => {

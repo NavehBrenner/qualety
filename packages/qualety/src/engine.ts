@@ -16,6 +16,7 @@ import {
   type Violation,
 } from "./index.ts";
 import { isRecord } from "./record.ts";
+import { compileRuleOptions } from "./rule-options.ts";
 import { pluginSchema } from "./schemas.ts";
 import { expandTypeScriptClosure } from "./typescript-frontend.ts";
 
@@ -58,6 +59,7 @@ type Enabled = {
   id: string;
   severity: Exclude<Severity, "off">;
   rule: Rule;
+  options: unknown;
 };
 
 type ProviderEntry = {
@@ -145,7 +147,7 @@ function collectViolations(
     }
     item.rule.create({
       id: item.id,
-      options: undefined,
+      options: item.options,
       getCwd: () => cwd,
       getFiles: () => displayPaths,
       getArtifact,
@@ -347,7 +349,7 @@ async function listCheckFiles(
   }
 }
 
-function resolveEnabledRules(plugins: Plugin[], rules: Record<string, Severity>): Enabled[] {
+function resolveEnabledRules(plugins: Plugin[], rules: UserConfig["rules"]): Enabled[] {
   const catalog = new Map<string, Rule>();
   for (const plugin of plugins) {
     for (const [name, rule] of Object.entries(plugin.rules ?? {})) {
@@ -361,17 +363,42 @@ function resolveEnabledRules(plugins: Plugin[], rules: Record<string, Severity>)
     );
   }
   const enabled: Enabled[] = [];
-  for (const [id, severity] of Object.entries(rules)) {
-    if (severity === "off") {
-      continue;
+  for (const [id, setting] of Object.entries(rules)) {
+    const entry = enableRule(id, setting, catalog.get(id));
+    if (entry !== undefined) {
+      enabled.push(entry);
     }
-    const rule = catalog.get(id);
-    if (rule === undefined) {
-      throw new ConfigError(`Unknown rule id: ${id}. No loaded plugin defines this rule.`);
-    }
-    enabled.push({ id, severity, rule });
   }
   return enabled;
+}
+
+function enableRule(
+  id: string,
+  setting: UserConfig["rules"][string],
+  rule: Rule | undefined,
+): Enabled | undefined {
+  if (setting === "off") {
+    return undefined;
+  }
+  if (rule === undefined) {
+    throw new ConfigError(`Unknown rule id: ${id}. No loaded plugin defines this rule.`);
+  }
+  const severity = typeof setting === "string" ? setting : setting[0];
+  const rawOptions = typeof setting === "string" ? undefined : setting[1];
+  if (rawOptions === undefined) {
+    return { id, severity, rule, options: undefined };
+  }
+  if (rule.meta.schema === undefined) {
+    throw new ConfigError(`Rule "${id}" does not accept options.`);
+  }
+  const parsed = compileRuleOptions(rule.meta.schema, id).safeParse(rawOptions);
+  if (parsed.success) {
+    return { id, severity, rule, options: parsed.data };
+  }
+  const issue = parsed.error.issues[0];
+  const path = issue === undefined || issue.path.length === 0 ? "options" : issue.path.join(".");
+  const detail = issue === undefined ? "invalid" : issue.message;
+  throw new ConfigError(`Invalid options for "${id}": ${path}: ${detail}`);
 }
 
 function requiresOf(item: Enabled): readonly string[] {
