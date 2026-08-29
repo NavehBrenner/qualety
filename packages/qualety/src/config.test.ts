@@ -84,6 +84,31 @@ test("validateConfig rejects invalid biome contributions", () => {
   );
 });
 
+test("validateConfig accepts ruff false and rules overlay", () => {
+  expect(validateConfig({ ...valid, ruff: false })).toEqual({ ...valid, ruff: false });
+  expect(
+    validateConfig({
+      ...valid,
+      ruff: {
+        rules: { UP: "error", E501: "off" },
+        format: true,
+      },
+    }).ruff,
+  ).toEqual({
+    rules: { UP: "error", E501: "off" },
+    format: true,
+  });
+});
+
+test("validateConfig rejects invalid ruff contributions", () => {
+  expect(() => validateConfig({ ...valid, ruff: { rules: { "ruff/E501": "error" } } })).toThrow(
+    /expected a Ruff code or prefix/,
+  );
+  expect(() => validateConfig({ ...valid, ruff: { files: [] } })).toThrow(
+    /Unknown ruff key: files/,
+  );
+});
+
 test("validateConfig rejects unknown keys", () => {
   expect(() => validateConfig({ ...valid, architecture: {} })).toThrow(
     /Unknown config key: architecture/,

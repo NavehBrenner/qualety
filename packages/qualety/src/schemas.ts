@@ -54,6 +54,31 @@ export const userBiomeSchema = z
   })
   .strict();
 
+const ruffRuleIdSchema = z
+  .string()
+  .regex(/^[A-Z]+[0-9]*$/, "Ruff rule id must be a code or prefix")
+  .refine((id) => id !== "ALL", "Ruff rule id must be a code or prefix");
+
+const ruffRuleSettingSchema = z.union([
+  z.enum(["off", "warn", "error"]),
+  z.tuple([z.enum(["off", "warn", "error"]), z.record(z.string(), z.unknown())]),
+]);
+
+const ruffRulesSchema = z.record(ruffRuleIdSchema, ruffRuleSettingSchema);
+
+const pluginRuffSchema = z
+  .object({
+    rules: ruffRulesSchema.optional(),
+  })
+  .strict();
+
+export const userRuffSchema = z
+  .object({
+    rules: ruffRulesSchema.optional(),
+    format: z.boolean().optional(),
+  })
+  .strict();
+
 export const pluginSchema = z.object({
   name: z.string().min(1),
   version: z.string().optional(),
@@ -69,4 +94,5 @@ export const pluginSchema = z.object({
     })
     .optional(),
   biome: pluginBiomeSchema.optional(),
+  ruff: pluginRuffSchema.optional(),
 });

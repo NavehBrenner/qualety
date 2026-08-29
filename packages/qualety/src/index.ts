@@ -124,6 +124,16 @@ export interface Plugin {
       "off" | "warn" | "error" | ["off" | "warn" | "error", Record<string, unknown>]
     >;
   };
+  /**
+   * Recommended Ruff lint settings (native codes / prefixes). Not product rules.
+   * Merged into the generated Ruff config; Ruff owns the engine.
+   */
+  ruff?: {
+    rules?: Record<
+      string,
+      "off" | "warn" | "error" | ["off" | "warn" | "error", Record<string, unknown>]
+    >;
+  };
 }
 
 /** Opaque to core; default TypeScript provider uses ts-morph Project + SourceFiles. */

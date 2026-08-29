@@ -74,7 +74,7 @@ jobs:
           echo "$err" | grep -F './nope.mjs'
           echo "$err" | grep -F 'npm i qualety'
           if command -v python3 >/dev/null 2>&1; then
-            printf '%s\n' '{"plugins":["@qualety/python"],"rules":{"python/no-unnecessary-def":"error"}}' > "$tmp/qualety.config.json"
+            printf '%s\n' '{"plugins":["@qualety/python"],"rules":{"python/no-unnecessary-def":"error"},"ruff":false}' > "$tmp/qualety.config.json"
             printf '%s\n' 'x = 1' > "$tmp/src/hello.py"
             (cd "$tmp" && "$bin" check)
           fi

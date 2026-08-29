@@ -67,6 +67,7 @@ async function pingTree(
       plugins: ["./plugin.mjs", "./other.mjs"],
       rules,
       biome: false,
+      ruff: false,
     }),
     "src/hello.ts": "export const n = 1;\n",
     ...extra,
@@ -86,6 +87,7 @@ test("check with empty rules object is honest", async () => {
       plugins: [],
       rules: {},
       biome: false,
+      ruff: false,
     }),
   });
   const lines: string[] = [];
@@ -228,6 +230,17 @@ test("init writes generated Biome config", async () => {
   const lines: string[] = [];
   expect(await run(["init"], (m) => lines.push(String(m)), silent, dir)).toBe(0);
   expect(lines.join("\n")).toMatch(/\.qualety\/biome\.json/);
+  expect(lines.join("\n")).toMatch(/\.qualety\/ruff\.toml/);
+});
+
+test("init skips ruff.toml when ruff is false", async () => {
+  const dir = await writeTree({
+    "qualety.config.json": JSON.stringify({ plugins: [], rules: {}, ruff: false }),
+  });
+  const lines: string[] = [];
+  expect(await run(["init"], (m) => lines.push(String(m)), silent, dir)).toBe(0);
+  expect(lines.join("\n")).toMatch(/\.qualety\/biome\.json/);
+  expect(lines.join("\n")).not.toMatch(/ruff\.toml/);
 });
 
 test("init without config exits 2", async () => {
@@ -242,6 +255,7 @@ test("doctor reports biome off without config", async () => {
   const lines: string[] = [];
   expect(await run(["doctor"], (m) => lines.push(String(m)), silent, dir)).toBe(0);
   expect(lines.join("\n")).toMatch(/biome: off \(no qualety config\)/);
+  expect(lines.join("\n")).toMatch(/ruff: off \(no qualety config\)/);
 });
 
 test("doctor reports biome on with version and binary", async () => {
@@ -252,8 +266,19 @@ test("doctor reports biome on with version and binary", async () => {
   expect(await run(["doctor"], (m) => lines.push(String(m)), silent, dir)).toBe(0);
   const text = lines.join("\n");
   expect(text).toMatch(/biome: on/);
+  expect(text).toMatch(/ruff: on/);
   expect(text).toMatch(/version:/);
   expect(text).toMatch(/binary:/);
+  expect(text).toMatch(/\.qualety\/ruff\.toml/);
+});
+
+test("doctor reports ruff off when ruff is false", async () => {
+  const dir = await writeTree({
+    "qualety.config.json": JSON.stringify({ plugins: [], rules: {}, ruff: false }),
+  });
+  const lines: string[] = [];
+  expect(await run(["doctor"], (m) => lines.push(String(m)), silent, dir)).toBe(0);
+  expect(lines.join("\n")).toMatch(/ruff: off \(ruff: false\)/);
 });
 
 test("name filters skip the Biome phase", async () => {

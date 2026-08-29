@@ -12,6 +12,7 @@ import {
   ruleSchema,
   ruleSettingSchema,
   userBiomeSchema,
+  userRuffSchema,
 } from "./schemas.ts";
 import { createTypeScriptProvider } from "./typescript-frontend.ts";
 
@@ -26,6 +27,10 @@ test("core helpers and schemas are exported", () => {
   expect(ruleSettingSchema).toBeDefined();
   expect(userBiomeSchema.safeParse({ format: true }).success).toBe(true);
   expect(userBiomeSchema.safeParse({ files: [] }).success).toBe(false);
+  expect(userRuffSchema.safeParse({ format: true }).success).toBe(true);
+  expect(userRuffSchema.safeParse({ files: [] }).success).toBe(false);
+  expect(userRuffSchema.safeParse({ rules: { UP: "error" } }).success).toBe(true);
+  expect(userRuffSchema.safeParse({ rules: { ALL: "error" } }).success).toBe(false);
 });
 
 test("pluginSchema accepts a ruleless provider module", () => {

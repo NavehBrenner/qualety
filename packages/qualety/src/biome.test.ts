@@ -128,6 +128,7 @@ test("biome: false skips the Biome phase", async () => {
       plugins: [],
       rules: {},
       biome: false,
+      ruff: false,
     }),
     "src/debug.ts": "debugger;\n",
   });
@@ -157,6 +158,7 @@ test("python-only file list skips Biome without failing", async () => {
       plugins: [],
       rules: {},
       include: ["**/*.py"],
+      ruff: false,
     }),
     "src/hello.py": "x = 1\n",
   });

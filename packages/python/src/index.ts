@@ -30,6 +30,11 @@ const plugin: Plugin = {
     "no-sys-path-hack": noSysPathHack,
     "no-public-any": noPublicAny,
   },
+  ruff: {
+    rules: {
+      UP: "error",
+    },
+  },
   configs: {
     recommended: {
       rules: {
