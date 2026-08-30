@@ -3,7 +3,6 @@ import { defineRule, type RuleContext } from "qualety";
 import type { PythonNode, PythonSource } from "./python.ts";
 import {
   childNodes,
-  collectImports,
   collectLoadKeys,
   containsPos,
   type FileBinds,
@@ -12,10 +11,8 @@ import {
   isPassThrough,
   isPythonNode,
   isSmallAndFlat,
-  isTestLoader,
-  mergePathLoads,
   nameRange,
-  silencedTargets,
+  scanPathLoadUses,
 } from "./walk.ts";
 
 const FUNCTION_SUGGESTION =
@@ -62,33 +59,16 @@ function scanPackageGroup(
   context: Pick<RuleContext, "report">,
 ) {
   const defs: Def[] = [];
-  const binds = new Map<string, FileBinds>();
-  const sources = new Map(group.map((unit) => [unit.file, unit]));
-  const loadTargets = new Set<string>();
-  const boundFiles = new Set<string>();
   for (const unit of group) {
     const quiet = basename(unit.file) === "__init__.py";
-    const fileBinds = collectImports(unit, sources);
-    mergePathLoads(unit, sources, fileBinds, loadTargets, boundFiles);
-    binds.set(unit.file, fileBinds);
     collectDefs(unit.tree, "", unit, quiet, defs);
   }
   const callCounts = new Map<string, number>();
   const valueLoads = new Set<string>();
   const byKey = new Map(defs.map((def) => [defKey(def), def]));
-  for (const unit of group) {
-    tallyFileUses(unit, binds.get(unit.file), defs, byKey, callCounts, valueLoads);
-  }
-  const packageDir = group[0]?.packageDir;
-  for (const unit of allSources.values()) {
-    if (unit.packageDir !== packageDir || !isTestLoader(unit.file, cwd)) {
-      continue;
-    }
-    const fileBinds: FileBinds = { named: new Map(), modules: new Map() };
-    mergePathLoads(unit, sources, fileBinds, loadTargets, boundFiles);
+  const silenced = scanPathLoadUses(group, allSources, cwd, (unit, fileBinds) => {
     tallyFileUses(unit, fileBinds, defs, byKey, callCounts, valueLoads);
-  }
-  const silenced = silencedTargets(loadTargets, boundFiles);
+  });
   for (const def of defs) {
     if (!valueLoads.has(defKey(def))) {
       considerDef(def, context, callCounts, silenced);

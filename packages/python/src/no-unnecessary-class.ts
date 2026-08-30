@@ -3,7 +3,6 @@ import type { PythonNode, PythonSource } from "./python.ts";
 import {
   asNodes,
   childNodes,
-  collectImports,
   collectLoadKeys,
   containsPos,
   type FileBinds,
@@ -13,10 +12,8 @@ import {
   isPassThrough,
   isPythonNode,
   isSmallAndFlat,
-  isTestLoader,
-  mergePathLoads,
   nameRange,
-  silencedTargets,
+  scanPathLoadUses,
 } from "./walk.ts";
 
 const CLASS_OR_STATIC = new Set(["classmethod", "staticmethod"]);
@@ -68,32 +65,15 @@ function scanClasses(
   context: Pick<RuleContext, "report">,
 ) {
   const classes: ClassInfo[] = [];
-  const binds = new Map<string, FileBinds>();
-  const sources = new Map(group.map((unit) => [unit.file, unit]));
-  const loadTargets = new Set<string>();
-  const boundFiles = new Set<string>();
   for (const unit of group) {
-    const fileBinds = collectImports(unit, sources);
-    mergePathLoads(unit, sources, fileBinds, loadTargets, boundFiles);
-    binds.set(unit.file, fileBinds);
     collectClasses(unit, classes);
   }
   const byKey = new Map(classes.map((item) => [classKey(item), item]));
   const useCounts = new Map<string, number>();
   const valueLoads = new Set<string>();
-  for (const unit of group) {
-    tallyClassFile(unit, binds.get(unit.file), classes, byKey, useCounts, valueLoads);
-  }
-  const packageDir = group[0]?.packageDir;
-  for (const unit of allSources.values()) {
-    if (unit.packageDir !== packageDir || !isTestLoader(unit.file, cwd)) {
-      continue;
-    }
-    const fileBinds: FileBinds = { named: new Map(), modules: new Map() };
-    mergePathLoads(unit, sources, fileBinds, loadTargets, boundFiles);
+  const silenced = scanPathLoadUses(group, allSources, cwd, (unit, fileBinds) => {
     tallyClassFile(unit, fileBinds, classes, byKey, useCounts, valueLoads);
-  }
-  const silenced = silencedTargets(loadTargets, boundFiles);
+  });
   for (const item of classes) {
     if (!valueLoads.has(classKey(item))) {
       considerClass(item, context, useCounts, silenced);

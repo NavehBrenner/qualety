@@ -14,11 +14,6 @@ export type FileBinds = {
   modules: Map<string, string>;
 };
 
-export type PathLoads = {
-  modules: Map<string, string>;
-  targets: Set<string>;
-};
-
 type Reexport = { name: string; node: PythonNode };
 
 export function isDunder(name: string): boolean {
@@ -146,13 +141,6 @@ export function isTestPath(file: string, cwd: string): boolean {
   return /(?:^|\/)(?:tests|__tests__)(?:\/|$)/.test(rel);
 }
 
-export function isTestLoader(file: string, cwd: string): boolean {
-  if (!isTestPath(file, cwd)) {
-    return false;
-  }
-  return !/(?:^|\/)(?:fixtures|__pycache__)(?:\/|$)/.test(relativePosix(file, cwd));
-}
-
 export function isSkippedSource(file: string, cwd: string): boolean {
   const rel = relativePosix(file, cwd);
   const base = basename(rel);
@@ -237,7 +225,7 @@ export function collectImports(
 export function collectPathLoads(
   unit: PythonSource,
   groupSources: ReadonlyMap<string, PythonSource>,
-): PathLoads {
+): { modules: Map<string, string>; targets: Set<string> } {
   const modules = new Map<string, string>();
   const targets = new Set<string>();
   // ponytail: one name map per file, per-scope tables if nested rebinds collide
@@ -255,7 +243,47 @@ export function collectPathLoads(
   return { modules, targets };
 }
 
-export function mergePathLoads(
+export function scanPathLoadUses(
+  group: readonly PythonSource[],
+  allSources: ReadonlyMap<string, PythonSource>,
+  cwd: string,
+  tally: (unit: PythonSource, fileBinds: FileBinds | undefined) => void,
+): Set<string> {
+  const sources = new Map(group.map((unit) => [unit.file, unit]));
+  const binds = new Map<string, FileBinds>();
+  const loadTargets = new Set<string>();
+  const boundFiles = new Set<string>();
+  for (const unit of group) {
+    const fileBinds = collectImports(unit, sources);
+    mergePathLoads(unit, sources, fileBinds, loadTargets, boundFiles);
+    binds.set(unit.file, fileBinds);
+  }
+  for (const unit of group) {
+    tally(unit, binds.get(unit.file));
+  }
+  const packageDir = group[0]?.packageDir;
+  for (const unit of allSources.values()) {
+    if (
+      unit.packageDir !== packageDir ||
+      !isTestPath(unit.file, cwd) ||
+      /(?:^|\/)(?:fixtures|__pycache__)(?:\/|$)/.test(relativePosix(unit.file, cwd))
+    ) {
+      continue;
+    }
+    const fileBinds: FileBinds = { named: new Map(), modules: new Map() };
+    mergePathLoads(unit, sources, fileBinds, loadTargets, boundFiles);
+    tally(unit, fileBinds);
+  }
+  const silenced = new Set<string>();
+  for (const file of loadTargets) {
+    if (!boundFiles.has(file)) {
+      silenced.add(file);
+    }
+  }
+  return silenced;
+}
+
+function mergePathLoads(
   unit: PythonSource,
   groupSources: ReadonlyMap<string, PythonSource>,
   fileBinds: FileBinds,
@@ -270,19 +298,6 @@ export function mergePathLoads(
   for (const file of loads.targets) {
     loadTargets.add(file);
   }
-}
-
-export function silencedTargets(
-  loadTargets: ReadonlySet<string>,
-  boundFiles: ReadonlySet<string>,
-): Set<string> {
-  const silenced = new Set<string>();
-  for (const file of loadTargets) {
-    if (!boundFiles.has(file)) {
-      silenced.add(file);
-    }
-  }
-  return silenced;
 }
 
 function resolveModuleFile(
@@ -815,6 +830,7 @@ function pathLoadFile(
   return groupSources.has(abs) ? abs : undefined;
 }
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: path-node dispatch; splitting recreates single-use helpers
 function foldPath(
   node: PythonNode,
   pathNames: Map<string, string>,
@@ -830,13 +846,30 @@ function foldPath(
     return foldJoined(node, pathNames, unit);
   }
   if (node._type === "Name") {
-    return foldName(node, pathNames, unit);
+    if (typeof node.id !== "string") {
+      return undefined;
+    }
+    return node.id === "__file__" ? unit.file : pathNames.get(node.id);
   }
   if (node._type === "Attribute") {
-    return foldParentAttr(node, pathNames, unit);
+    if (node.attr !== "parent" || !isPythonNode(node.value)) {
+      return undefined;
+    }
+    const inner = foldPath(node.value, pathNames, unit);
+    return inner === undefined ? undefined : dirname(inner);
   }
   if (node._type === "BinOp") {
-    return foldDiv(node, pathNames, unit);
+    if (!isPythonNode(node.op) || node.op._type !== "Div") {
+      return undefined;
+    }
+    if (!isPythonNode(node.left) || !isPythonNode(node.right)) {
+      return undefined;
+    }
+    const leftPath = foldPath(node.left, pathNames, unit);
+    const rightPath = foldPath(node.right, pathNames, unit);
+    return leftPath === undefined || rightPath === undefined
+      ? undefined
+      : join(leftPath, rightPath);
   }
   if (node._type === "Subscript") {
     return foldParentsAt(node, pathNames, unit);
@@ -845,40 +878,6 @@ function foldPath(
     return foldPathCall(node, pathNames, unit);
   }
   return undefined;
-}
-
-function foldName(
-  node: PythonNode,
-  pathNames: Map<string, string>,
-  unit: PythonSource,
-): string | undefined {
-  if (typeof node.id !== "string") {
-    return undefined;
-  }
-  return node.id === "__file__" ? unit.file : pathNames.get(node.id);
-}
-
-function foldParentAttr(
-  node: PythonNode,
-  pathNames: Map<string, string>,
-  unit: PythonSource,
-): string | undefined {
-  if (node.attr !== "parent" || !isPythonNode(node.value)) {
-    return undefined;
-  }
-  const inner = foldPath(node.value, pathNames, unit);
-  return inner === undefined ? undefined : dirname(inner);
-}
-
-function foldDiv(
-  node: PythonNode,
-  pathNames: Map<string, string>,
-  unit: PythonSource,
-): string | undefined {
-  if (!isPythonNode(node.op) || node.op._type !== "Div") {
-    return undefined;
-  }
-  return foldJoinPair(node.left, node.right, pathNames, unit);
 }
 
 function foldJoined(
@@ -897,20 +896,6 @@ function foldJoined(
   return out;
 }
 
-function foldJoinPair(
-  left: unknown,
-  right: unknown,
-  pathNames: Map<string, string>,
-  unit: PythonSource,
-): string | undefined {
-  if (!isPythonNode(left) || !isPythonNode(right)) {
-    return undefined;
-  }
-  const leftPath = foldPath(left, pathNames, unit);
-  const rightPath = foldPath(right, pathNames, unit);
-  return leftPath === undefined || rightPath === undefined ? undefined : join(leftPath, rightPath);
-}
-
 function foldParentsAt(
   node: PythonNode,
   pathNames: Map<string, string>,
@@ -926,7 +911,13 @@ function foldParentsAt(
   if (!isPythonNode(node.value.value)) {
     return undefined;
   }
-  const index = intConstant(isPythonNode(node.slice) ? unwrapIndex(node.slice) : undefined);
+  const index = intConstant(
+    isPythonNode(node.slice)
+      ? node.slice._type === "Index" && isPythonNode(node.slice.value)
+        ? node.slice.value
+        : node.slice
+      : undefined,
+  );
   if (index === undefined || index < 0) {
     return undefined;
   }
@@ -1070,13 +1061,6 @@ function callArg(
     }
   }
   return undefined;
-}
-
-function unwrapIndex(node: PythonNode): PythonNode {
-  if (node._type === "Index" && isPythonNode(node.value)) {
-    return node.value;
-  }
-  return node;
 }
 
 function intConstant(node: PythonNode | undefined): number | undefined {
