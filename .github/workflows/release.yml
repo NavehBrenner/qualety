@@ -170,6 +170,8 @@ jobs:
           }
           NODE
       - name: Publish npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           pnpm --filter qualety publish --access public --provenance --no-git-checks
