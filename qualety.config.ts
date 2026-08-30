@@ -9,6 +9,11 @@ export default defineConfig({
     "@qualety/plugin-kit",
   ],
   rules: {
+    // 0.9 scores considerStatement and considerExportedFunction in
+    // explicit-public-return-types.ts as near-duplicates, but the first dispatches to
+    // the second — they read alike without being redundant. The pair measures
+    // 0.90-0.91, so 0.92 clears it with a little headroom.
+    "dry/no-semantic-duplicate": ["error", { threshold: 0.92 }],
     "dev/core-provider-boundaries": "error",
     "dev/docs-export-honesty": "error",
     "dev/no-fs-in-rules": "error",
