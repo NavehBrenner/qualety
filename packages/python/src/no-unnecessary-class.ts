@@ -13,7 +13,10 @@ import {
   isPassThrough,
   isPythonNode,
   isSmallAndFlat,
+  isTestLoader,
+  mergePathLoads,
   nameRange,
+  silencedTargets,
 } from "./walk.ts";
 
 const CLASS_OR_STATIC = new Set(["classmethod", "staticmethod"]);
@@ -52,70 +55,91 @@ export const noUnnecessaryClass = defineRule({
     }
     for (const group of groupByPackage(artifact.sources, cwd).values()) {
       if (group.length > 0) {
-        scanClasses(group, context);
+        scanClasses(group, artifact.sources, cwd, context);
       }
     }
   },
 });
 
-function scanClasses(group: readonly PythonSource[], context: Pick<RuleContext, "report">) {
+function scanClasses(
+  group: readonly PythonSource[],
+  allSources: ReadonlyMap<string, PythonSource>,
+  cwd: string,
+  context: Pick<RuleContext, "report">,
+) {
   const classes: ClassInfo[] = [];
   const binds = new Map<string, FileBinds>();
   const sources = new Map(group.map((unit) => [unit.file, unit]));
+  const loadTargets = new Set<string>();
+  const boundFiles = new Set<string>();
   for (const unit of group) {
-    binds.set(unit.file, collectImports(unit, sources));
+    const fileBinds = collectImports(unit, sources);
+    mergePathLoads(unit, sources, fileBinds, loadTargets, boundFiles);
+    binds.set(unit.file, fileBinds);
     collectClasses(unit, classes);
   }
   const byKey = new Map(classes.map((item) => [classKey(item), item]));
   const useCounts = new Map<string, number>();
   const valueLoads = new Set<string>();
-  collectClassLoads(group, binds, classes, byKey, valueLoads);
   for (const unit of group) {
-    walkClassUses(unit.tree, unit.file, (ref) => {
-      tallyClassUse(ref, binds.get(unit.file), classes, byKey, useCounts);
-    });
+    tallyClassFile(unit, binds.get(unit.file), classes, byKey, useCounts, valueLoads);
   }
+  const packageDir = group[0]?.packageDir;
+  for (const unit of allSources.values()) {
+    if (unit.packageDir !== packageDir || !isTestLoader(unit.file, cwd)) {
+      continue;
+    }
+    const fileBinds: FileBinds = { named: new Map(), modules: new Map() };
+    mergePathLoads(unit, sources, fileBinds, loadTargets, boundFiles);
+    tallyClassFile(unit, fileBinds, classes, byKey, useCounts, valueLoads);
+  }
+  const silenced = silencedTargets(loadTargets, boundFiles);
   for (const item of classes) {
     if (!valueLoads.has(classKey(item))) {
-      considerClass(item, context, useCounts);
+      considerClass(item, context, useCounts, silenced);
     }
   }
 }
 
-function collectClassLoads(
-  group: readonly PythonSource[],
-  binds: ReadonlyMap<string, FileBinds>,
+function tallyClassFile(
+  unit: PythonSource,
+  fileBinds: FileBinds | undefined,
   classes: readonly ClassInfo[],
   byKey: ReadonlyMap<string, ClassInfo>,
+  useCounts: Map<string, number>,
   valueLoads: Set<string>,
 ) {
-  for (const unit of group) {
-    const fileBinds = binds.get(unit.file);
-    collectLoadKeys(
-      unit.tree,
-      "",
-      unit.file,
-      (parent, child) => {
-        if (parent._type === "Call" && child === parent.func) {
-          return true;
-        }
-        if (parent._type !== "ClassDef") {
-          return false;
-        }
-        return asNodes(parent.bases).includes(child);
-      },
-      (ref) => resolveClass(ref, fileBinds, classes),
-      (key) => byKey.get(key)?.node,
-      valueLoads,
-    );
-  }
+  walkClassUses(unit.tree, unit.file, (ref) => {
+    tallyClassUse(ref, fileBinds, classes, byKey, useCounts);
+  });
+  collectLoadKeys(
+    unit.tree,
+    "",
+    unit.file,
+    (parent, child) => {
+      if (parent._type === "Call" && child === parent.func) {
+        return true;
+      }
+      if (parent._type !== "ClassDef") {
+        return false;
+      }
+      return asNodes(parent.bases).includes(child);
+    },
+    (ref) => resolveClass(ref, fileBinds, classes),
+    (key) => byKey.get(key)?.node,
+    valueLoads,
+  );
 }
 
 function considerClass(
   item: ClassInfo,
   context: Pick<RuleContext, "report">,
   useCounts: ReadonlyMap<string, number>,
+  silenced: ReadonlySet<string>,
 ) {
+  if (silenced.has(item.file)) {
+    return;
+  }
   if (hasNonObjectBase(item.node) || hasMetaclass(item.node) || extraDunderCount(item.node) >= 2) {
     return;
   }
