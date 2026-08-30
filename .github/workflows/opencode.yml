@@ -1,8 +1,6 @@
 name: opencode
 
 on:
-  issues:
-    types: [opened]
   pull_request:
     types: [opened]
   issue_comment:
@@ -44,19 +42,14 @@ jobs:
             "$BODY" "$id" "$id" > body.md
           gh pr edit "$PR" --body-file body.md
 
-  # Reviews never seed or trigger. Issue open by Naveh runs this job directly
-  # with `prompt` (v1.18.18 supports `issues` + `prompt`; actor is Naveh so
-  # assertPermissions passes). Deliberate `/oc` comments from Naveh
-  # (issue_comment / inline pull_request_review_comment) still run; leave
-  # `prompt` empty on those events so the comment body is not overridden.
-  # The action requires write access on github.actor — bot-authored comments
-  # fail with permission: none, so there is no bot seed path.
+  # Plan/build only via `/oc` comments (Naveh-authored), not on issue create.
+  # Reviews never seed or trigger. The action requires write access on
+  # github.actor — bot-authored comments fail with permission: none, so there
+  # is no bot seed path.
   opencode:
     if: |
-      (github.event_name == 'issues' &&
-       github.event.issue.user.login == 'NavehBrenner') ||
-      (contains(github.event.comment.body, '/oc') &&
-       github.event.comment.user.login == 'NavehBrenner')
+      contains(github.event.comment.body, '/oc') &&
+      github.event.comment.user.login == 'NavehBrenner'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
@@ -100,8 +93,7 @@ jobs:
       # Optional `model:<provider>/<id>` in the triggering comment (no space
       # after the colon; first match wins). Default is xai/grok-4.6. A token
       # that fails the pattern fails the job before the action so a typo
-      # cannot silently re-run the exhausted default. Issue-open has no
-      # comment body, so it never overrides.
+      # cannot silently re-run the exhausted default.
       - name: resolve model
         id: resolve-model
         env:
@@ -131,8 +123,5 @@ jobs:
           # ponytail: plan/build split is one expression, not two workflow files.
           # Plan is the default and implementing needs an explicit `/oc build`,
           # because the failure mode we actually hit was the agent skipping
-          # straight to a PR when asked in prose for a plan. Issue-open has no
-          # comment body, so this expression is `plan`.
+          # straight to a PR when asked in prose for a plan.
           agent: ${{ contains(github.event.comment.body, '/oc build') && 'build' || 'plan' }}
-          # Required for `issues`; empty on comments so the body is the prompt.
-          prompt: ${{ github.event_name == 'issues' && 'Plan this issue. Post the plan as a comment and stop. Do not create a branch, commit, or PR.' || '' }}
