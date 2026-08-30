@@ -14,5 +14,14 @@ export default defineConfig({
     "dev/no-fs-in-rules": "error",
     "dev/concrete-suggestion": "error",
   },
-  exclude: ["**/node_modules/**", "**/dist/**", "**/fixtures/**", "packaging/**"],
+  // standalone-wasm.ts is only ever loaded by the bun-compiled binary: it imports the
+  // "web" wasm builds and calls Bun.file, so node cannot import it and no test can
+  // reference its exports. Checking it here only produces findings nothing can act on.
+  exclude: [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/fixtures/**",
+    "packaging/**",
+    "packages/qualety/src/standalone-wasm.ts",
+  ],
 });

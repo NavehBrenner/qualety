@@ -6,6 +6,7 @@ import rootVitestConfig from "../../../vitest.config.ts";
 import {
   CONFIG_FILENAMES,
   ConfigError,
+  isStandalone,
   loadConfig,
   readConfigFile,
   userConfigSchema,
@@ -237,4 +238,11 @@ test("loadConfig rejects unknown keys in JSON", async () => {
     "qualety.config.json": JSON.stringify({ ...valid, extra: true }),
   });
   await expect(loadConfig(dir)).rejects.toThrow(/Unknown config key: extra/);
+});
+
+// Guards the split that keeps npm consumers on the native Biome CLI and the ruff
+// module resolved through @qualety/python: only the bun build defines STANDALONE,
+// so under node this must stay false or both gates would silently switch backends.
+test("isStandalone is false when STANDALONE is not defined", () => {
+  expect(isStandalone()).toBe(false);
 });

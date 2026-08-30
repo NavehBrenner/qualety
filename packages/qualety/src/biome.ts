@@ -120,17 +120,6 @@ function biomeConfigDocument(
   };
 }
 
-// wasm reports location.path as { file } and leaves sourceCode null. The shared
-// mapper wants a string path plus the source text to turn a span into line/column,
-// so fill both in here rather than teaching locationOf a second shape.
-function normalizeWasmDiagnostic(raw: unknown, file: string, source: string): unknown {
-  if (!isRecord(raw)) {
-    return raw;
-  }
-  const location = isRecord(raw.location) ? raw.location : {};
-  return { ...raw, location: { ...location, path: file, sourceCode: source } };
-}
-
 // The literal specifier is load-bearing: it is what lets bun --compile embed the
 // wasm build. Do not collapse it into a computed import.
 async function runBiomeWasmPhase(
@@ -152,7 +141,12 @@ async function runBiomeWasmPhase(
   for (const file of paths) {
     const source = await readFile(join(cwd, file), "utf8");
     for (const raw of biome.lintContent(projectKey, source, { filePath: file }).diagnostics) {
-      const mapped = mapDiagnostic(normalizeWasmDiagnostic(raw, file, source));
+      // wasm reports location.path as { file } and leaves sourceCode null; locationOf
+      // wants a string path plus the source to turn a span into line/column.
+      const mapped = mapDiagnostic({
+        ...raw,
+        location: { ...raw.location, path: file, sourceCode: source },
+      });
       if (mapped !== undefined) {
         violations.push(mapped);
       }
@@ -191,7 +185,7 @@ export async function runBiomePhase(input: {
   if (paths.length === 0) {
     return [];
   }
-  if (isStandalone() && input.bin === undefined) {
+  if (isStandalone()) {
     return runBiomeWasmPhase(input.cwd, paths, input.plugins, input.biome);
   }
   await writeGeneratedBiomeConfig(input.cwd, input.plugins, input.biome);
