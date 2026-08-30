@@ -74,3 +74,10 @@ test("thin class in test_*.py is skipped", async () => {
   expect(result.err).toBe("");
   expect(result.code).toBe(0);
 });
+
+test("registry dict of classes is quiet", async () => {
+  const result = await runFixture("class-ok-registry");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+  expect(result.out).not.toMatch(/MyHandler/);
+});

@@ -4,6 +4,7 @@ import type { PythonNode, PythonSource } from "./python.ts";
 import {
   childNodes,
   collectImports,
+  collectLoadKeys,
   containsPos,
   type FileBinds,
   groupByPackage,
@@ -15,9 +16,9 @@ import {
 } from "./walk.ts";
 
 const FUNCTION_SUGGESTION =
-  "Inline at its only call site, or keep only if the name still hides real complexity; wait for a second real call site before keeping a pass-through.";
+  "Inline at its only use, or keep only if the name still hides real complexity; wait for a second real use before keeping a pass-through.";
 const UNUSED_FN_HINT =
-  "Remove this helper, or wait for a second real call site before keeping the indirection.";
+  "Remove this helper, or wait for a second real use before keeping the indirection.";
 
 type Def = {
   file: string;
@@ -60,14 +61,27 @@ function scanPackageGroup(group: readonly PythonSource[], context: Pick<RuleCont
     collectDefs(unit.tree, "", unit, quiet, defs);
   }
   const callCounts = new Map<string, number>();
+  const valueLoads = new Set<string>();
   const byKey = new Map(defs.map((def) => [defKey(def), def]));
   for (const unit of group) {
+    const fileBinds = binds.get(unit.file);
     walkCalls(unit.tree, "", unit.file, (call) => {
-      tallyCall(call, binds.get(unit.file), defs, byKey, callCounts);
+      tallyCall(call, fileBinds, defs, byKey, callCounts);
     });
+    collectLoadKeys(
+      unit.tree,
+      "",
+      unit.file,
+      (parent, child) => parent._type === "Call" && child === parent.func,
+      (ref) => resolveCall(ref, fileBinds, defs),
+      (key) => byKey.get(key)?.node,
+      valueLoads,
+    );
   }
   for (const def of defs) {
-    considerDef(def, context, callCounts);
+    if (!valueLoads.has(defKey(def))) {
+      considerDef(def, context, callCounts);
+    }
   }
 }
 
@@ -89,8 +103,8 @@ function considerDef(
     range: nameRange(def.node),
     message:
       uses === 0
-        ? `"${def.name}" is not called and does not pay for the indirection.`
-        : `"${def.name}" is only called once and does not pay for the indirection.`,
+        ? `"${def.name}" is not used and does not pay for the indirection.`
+        : `"${def.name}" is only used once and does not pay for the indirection.`,
     suggestion: uses === 0 ? UNUSED_FN_HINT : FUNCTION_SUGGESTION,
   });
 }
