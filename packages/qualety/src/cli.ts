@@ -7,7 +7,7 @@ import {
   resolveBiomeBinary,
   writeGeneratedBiomeConfig,
 } from "./biome.ts";
-import { loadConfig } from "./config.ts";
+import { isStandalone, loadConfig } from "./config.ts";
 import { type CheckFilters, check, loadPluginsFromConfig } from "./engine.ts";
 import {
   GENERATED_RUFF_PATH,
@@ -149,6 +149,9 @@ async function runDoctor(cwd: string, out: (msg: string) => void): Promise<numbe
   }
   if (!biomeEnabled(loaded.config)) {
     out("biome: off (biome: false)");
+  } else if (isStandalone()) {
+    // the embedded wasm build exposes no version accessor, so report the backend only
+    out("biome: on\nbackend: embedded wasm");
   } else {
     const bin = resolveBiomeBinary();
     const version = await readBiomeVersion(bin, cwd);
@@ -156,6 +159,8 @@ async function runDoctor(cwd: string, out: (msg: string) => void): Promise<numbe
   }
   if (!ruffEnabled(loaded.config)) {
     out("ruff: off (ruff: false)");
+  } else if (isStandalone()) {
+    out(`ruff: on\nversion: ${await readRuffVersion()}\nbackend: embedded wasm`);
   } else {
     const bin = resolveRuffModule();
     const version = await readRuffVersion(bin);
@@ -188,11 +193,6 @@ function filtersFromValues(values: {
   };
 }
 
-declare const STANDALONE: boolean;
-
-if (
-  (typeof STANDALONE !== "undefined" && STANDALONE) ||
-  (process.argv[1] && import.meta.filename === process.argv[1])
-) {
+if (isStandalone() || (process.argv[1] && import.meta.filename === process.argv[1])) {
   process.exitCode = await run(process.argv.slice(2));
 }

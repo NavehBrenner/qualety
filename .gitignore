@@ -5,3 +5,5 @@ dist/
 .tools/
 .qualety/
 __pycache__/
+/qualety
+/qualety.exe

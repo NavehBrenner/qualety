@@ -1,7 +1,7 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, extname, join } from "node:path";
-import { ConfigError } from "./config.ts";
+import { ConfigError, isStandalone } from "./config.ts";
 import type { Plugin, Range, UserConfig, Violation } from "./index.ts";
 import { isRecord } from "./record.ts";
 import { runTimedCommand } from "./run-command.ts";
@@ -100,17 +100,77 @@ export async function writeGeneratedBiomeConfig(
   plugins: readonly Plugin[],
   userBiome: UserConfig["biome"],
 ): Promise<string> {
+  const document = biomeConfigDocument(plugins, userBiome);
+  await mkdir(join(cwd, GENERATED_DIR), { recursive: true });
+  await writeFile(join(cwd, GENERATED_BIOME_PATH), `${JSON.stringify(document, null, 2)}\n`);
+  return GENERATED_BIOME_PATH;
+}
+
+function biomeConfigDocument(
+  plugins: readonly Plugin[],
+  userBiome: UserConfig["biome"],
+): Record<string, unknown> {
   const userRules = userBiome === false || userBiome === undefined ? undefined : userBiome.rules;
-  const document = {
+  return {
     vcs: { enabled: false },
     linter: {
       enabled: true,
       rules: nestBiomeRules(mergeBiomeRules(plugins, userRules)),
     },
   };
-  await mkdir(join(cwd, GENERATED_DIR), { recursive: true });
-  await writeFile(join(cwd, GENERATED_BIOME_PATH), `${JSON.stringify(document, null, 2)}\n`);
-  return GENERATED_BIOME_PATH;
+}
+
+// The literal specifier is load-bearing: it is what lets bun --compile embed the
+// wasm build. Do not collapse it into a computed import.
+async function runBiomeWasmPhase(
+  cwd: string,
+  paths: readonly string[],
+  plugins: readonly Plugin[],
+  userBiome: UserConfig["biome"],
+): Promise<Violation[]> {
+  const { loadStandaloneBiome } = await import("./standalone-wasm.ts");
+  const Biome = await loadStandaloneBiome();
+  const biome = new Biome();
+  const { projectKey } = biome.openProject(cwd);
+  // Rules are composed from plugin contributions at runtime, so the document cannot
+  // match Configuration's static rule map. Biome validates it when the workspace opens.
+  // biome-ignore lint/nursery/noUnsafeTypeAssertion: dynamic rule map, validated on open
+  biome.applyConfiguration(projectKey, biomeConfigDocument(plugins, userBiome) as never);
+  const format = userBiome !== false && userBiome?.format === true;
+  const violations: Violation[] = [];
+  for (const file of paths) {
+    const source = await readFile(join(cwd, file), "utf8");
+    for (const raw of biome.lintContent(projectKey, source, { filePath: file }).diagnostics) {
+      // wasm reports location.path as { file } and leaves sourceCode null; locationOf
+      // wants a string path plus the source to turn a span into line/column.
+      const mapped = mapDiagnostic({
+        ...raw,
+        location: { ...raw.location, path: file, sourceCode: source },
+      });
+      if (mapped !== undefined) {
+        violations.push(mapped);
+      }
+    }
+    if (format) {
+      const formatted = biome.formatContent(projectKey, source, { filePath: file });
+      if (formatted.content !== source) {
+        violations.push(unformattedViolation(file));
+      }
+    }
+  }
+  return violations;
+}
+
+function unformattedViolation(file: string): Violation {
+  const origin = { line: 1, column: 1 };
+  return {
+    ruleId: "format",
+    severity: "error",
+    file,
+    range: { start: origin, end: origin },
+    message: "File is not formatted.",
+    suggestion: "Run `biome format --write` or apply the formatter in your editor.",
+  };
 }
 
 export async function runBiomePhase(input: {
@@ -124,6 +184,9 @@ export async function runBiomePhase(input: {
   const paths = input.files.filter((file) => BIOME_EXTENSIONS.has(extname(file)));
   if (paths.length === 0) {
     return [];
+  }
+  if (isStandalone()) {
+    return runBiomeWasmPhase(input.cwd, paths, input.plugins, input.biome);
   }
   await writeGeneratedBiomeConfig(input.cwd, input.plugins, input.biome);
   const bin = input.bin ?? resolveBiomeBinary();

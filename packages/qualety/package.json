@@ -38,6 +38,9 @@
     "zod": "^4.0.17"
   },
   "devDependencies": {
+    "@astral-sh/ruff-wasm-web": "^0.16.5",
+    "@biomejs/js-api": "^6.0.0",
+    "@biomejs/wasm-web": "2.5.10",
     "@types/node": "^26.2.0"
   }
 }

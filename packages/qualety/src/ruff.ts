@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { extname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { ConfigError } from "./config.ts";
+import { ConfigError, isStandalone } from "./config.ts";
 import type { Plugin, Range, UserConfig, Violation } from "./index.ts";
 import { isRecord } from "./record.ts";
 
@@ -167,10 +167,15 @@ export async function readRuffVersion(modulePath?: string): Promise<string> {
 }
 
 async function loadRuffWasm(modulePath?: string) {
-  const path = modulePath ?? resolveRuffModule();
   let loaded: unknown;
   try {
-    loaded = await import(pathToFileURL(path).href);
+    // The literal specifier is load-bearing: it is what lets bun --compile embed
+    // the wasm build. The resolve path stays for node, where ruff-wasm belongs to
+    // @qualety/python and must not become a hard dependency of the core package.
+    loaded =
+      isStandalone() && modulePath === undefined
+        ? await (await import("./standalone-wasm.ts")).loadStandaloneRuff()
+        : await import(pathToFileURL(modulePath ?? resolveRuffModule()).href);
   } catch (e) {
     throw new ConfigError(`Ruff is not runnable: ${e instanceof Error ? e.message : String(e)}`);
   }
