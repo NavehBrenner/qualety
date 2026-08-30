@@ -31,5 +31,5 @@ test("plugin exports name, rules, recommended, and python provider", () => {
     expect(plugin.configs?.recommended?.rules?.[id]).toBe("error");
   }
   expect(typeof plugin.provides?.python?.build).toBe("function");
-  expect(plugin.ruff).toEqual({ rules: { UP: "error" } });
+  expect(plugin.ruff).toEqual({ rules: { UP: "error", B: "error" } });
 });

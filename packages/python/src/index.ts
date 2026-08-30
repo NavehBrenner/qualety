@@ -33,6 +33,7 @@ const plugin: Plugin = {
   ruff: {
     rules: {
       UP: "error",
+      B: "error",
     },
   },
   configs: {

@@ -5,16 +5,16 @@ This is the implementation list for this plugin. Plugins stay **authored in Type
 
 The plugin **provides** artifact `"python"` (CPython `ast` via one `python3` spawn) on the same provider map as the default registry and other plugins. Core never imports Python AST types and does **not** default-provide `"python"`. Loading the plugin via `plugins[]` applies `configs.recommended` (`python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`, `python/no-bare-except`, `python/no-silent-except`, `python/no-open-without-with`, `python/no-sys-path-hack`, and `python/no-public-any` at `"error"`). Overlay user `config.rules` to `"off"` or retune.
 
-Installing `@qualety/python` pins `@astral-sh/ruff-wasm-nodejs`. With a `qualety.config.*` present, `qualety check` runs Ruff (generated `.qualety/ruff.toml` from Ruff’s own default select + plugin `ruff.rules` in `plugins[]` order + user overlay) then product rules. This plugin’s Ruff delta is `UP` (pyupgrade) at error. Native Ruff codes appear in the report (`F401`, `UP007`) — not `ruff/…` product ids. `ruff: false` turns that phase off. User `ruff.toml` / `pyproject.toml` `tool.ruff` are not auto-merged. Product `python/*` twins **keep**; they overlap some Ruff codes but are not equivalent:
+Installing `@qualety/python` pins `@astral-sh/ruff-wasm-nodejs`. With a `qualety.config.*` present, `qualety check` runs Ruff (generated `.qualety/ruff.toml` from Ruff’s own default select + plugin `ruff.rules` in `plugins[]` order + user overlay) then product rules. This plugin’s Ruff delta is `UP` (pyupgrade) and `B` (bugbear) at error. Overlay user `config.ruff.rules` (`"off"` or retune) or set `ruff: false` to skip the phase. Native Ruff codes appear in the report (`F401`, `UP007`, `B006`) — not `ruff/…` product ids. User `ruff.toml` / `pyproject.toml` `tool.ruff` are not auto-merged. Product `python/*` twins **keep**; they overlap some Ruff codes but are not equivalent:
 
-| Product | Ruff (often already default) |
-|---------|------------------------------|
-| `python/no-mutable-default` | `B006` |
-| `python/no-bare-except` | `E722` / `BLE001` |
-| `python/no-silent-except` | `S110` / `S112` |
-| `python/no-open-without-with` | `SIM115` |
-| `python/require-typed-public` | `ANN*` (not default; not a python delta) |
-| `python/no-public-any` | `ANN401` |
+| Product | Ruff |
+|---------|------|
+| `python/no-mutable-default` | `B006` (on via `B`; often already default) |
+| `python/no-bare-except` | `E722` / `BLE001` (default; not this delta) |
+| `python/no-silent-except` | `S110` / `S112` (default subset; not full `S`) |
+| `python/no-open-without-with` | `SIM115` (default; not full `SIM`) |
+| `python/require-typed-public` | `ANN*` (not a delta) |
+| `python/no-public-any` | `ANN401` (not a delta) |
 | `python/no-unnecessary-def` / `no-unnecessary-class` / `public-exports-tested` / `no-sys-path-hack` | no Ruff twin |
 
 ## Implemented

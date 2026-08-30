@@ -36,7 +36,7 @@ Keys (all `true`): `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `
 | `ts/type-narrowing-checks` | A runtime check on a value is legitimate only if the TypeScript checker shows a strict refinement of that subject on the true/success path. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/zod-boundary` | Load/parse functions with an `unknown` param (Z1) and `JSON.parse` results (Z2) must hit schema `.parse` / `.safeParse` before property access. `defineRule` / `requires: ["typescript"]` | `error` |
 
-Recommended Biome **deltas** live on this plugin’s `biome.rules` (not `ts/*` rows): `nursery/noUnsafeTypeAssertion: "error"` and `complexity/noExcessiveCognitiveComplexity` at error with `maxAllowedComplexity: 15`. `ts/no-unsafe-assertion` and `ts/no-empty-catch` stay Implemented: Biome’s `noUnsafeTypeAssertion` flags any `as T`, and empty-block rules are not catch-only.
+Recommended Biome **deltas** live on this plugin’s `biome.rules` (not `ts/*` rows). Overlay user `config.biome.rules` (`"off"` or retune) or set `biome: false` to skip the phase. Keys at error: `nursery/noUnsafeTypeAssertion`; `complexity/noExcessiveCognitiveComplexity` (`maxAllowedComplexity: 15`); `suspicious/noExplicitAny`; `style/noNonNullAssertion`; `suspicious/noTsIgnore`; `complexity/noBannedTypes`; `suspicious/noFocusedTests`; `correctness/noUnusedFunctionParameters`; `style/useThrowOnlyError`; `nursery/noImpliedEval`. `ts/no-unsafe-assertion` and `ts/no-empty-catch` stay Implemented: Biome’s `noUnsafeTypeAssertion` flags any `as T`, and empty-block rules are not catch-only.
 
 Behavior is locked in [SPECS.md](../SPECS.md) §3 R5. Summary:
 

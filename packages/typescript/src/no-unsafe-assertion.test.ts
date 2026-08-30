@@ -25,11 +25,18 @@ test("plugin exports no-unsafe-assertion and recommended includes it", () => {
   expect(noUnsafeAssertion).toBeDefined();
   expect(plugin.rules?.["no-unsafe-assertion"]).toBeDefined();
   expect(plugin.configs?.recommended?.rules?.["ts/no-unsafe-assertion"]).toBe("error");
-  expect(plugin.biome?.rules?.["nursery/noUnsafeTypeAssertion"]).toBe("error");
-  expect(plugin.biome?.rules?.["complexity/noExcessiveCognitiveComplexity"]).toEqual([
-    "error",
-    { maxAllowedComplexity: 15 },
-  ]);
+  expect(plugin.biome?.rules).toEqual({
+    "nursery/noUnsafeTypeAssertion": "error",
+    "complexity/noExcessiveCognitiveComplexity": ["error", { maxAllowedComplexity: 15 }],
+    "suspicious/noExplicitAny": "error",
+    "style/noNonNullAssertion": "error",
+    "suspicious/noTsIgnore": "error",
+    "complexity/noBannedTypes": "error",
+    "suspicious/noFocusedTests": "error",
+    "correctness/noUnusedFunctionParameters": "error",
+    "style/useThrowOnlyError": "error",
+    "nursery/noImpliedEval": "error",
+  });
 });
 
 test("as any and as unknown as T exit 1", async () => {
