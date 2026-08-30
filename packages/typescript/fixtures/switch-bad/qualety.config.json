@@ -1,0 +1,7 @@
+{
+  "plugins": ["../../dist/index.js"],
+  "rules": {
+    "ts/exhaustive-switch": "error"
+  },
+  "biome": false
+}

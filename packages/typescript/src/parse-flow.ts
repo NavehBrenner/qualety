@@ -155,11 +155,14 @@ export function isHandGuardCall(node: Node, names: ReadonlySet<string>): boolean
   return arg !== undefined && Node.isIdentifier(arg) && names.has(arg.getText());
 }
 
-function typeofTarget(node: Node): string | undefined {
+export function typeofTarget(node: Node): string | undefined {
   if (!Node.isTypeOfExpression(node)) {
     return undefined;
   }
-  const expr = node.getExpression();
+  let expr: Node = node.getExpression();
+  while (Node.isParenthesizedExpression(expr)) {
+    expr = expr.getExpression();
+  }
   return Node.isIdentifier(expr) ? expr.getText() : undefined;
 }
 

@@ -1,5 +1,5 @@
 import { defineRule, type RuleContext } from "qualety";
-import { Node, SyntaxKind } from "ts-morph";
+import { Node, SyntaxKind, type Type } from "ts-morph";
 import { unwrapParens } from "./narrowing.ts";
 import { isFunctionLike } from "./parse-flow.ts";
 import { reportAt, walkTsSources } from "./ts-source.ts";
@@ -63,8 +63,17 @@ function handlesRejection(expr: Node): boolean {
   return false;
 }
 
-function checkerSaysPromise(expr: Node): boolean {
+export function checkerSaysPromise(expr: Node): boolean {
   const type = expr.getType();
+  if (!type.isAny()) {
+    if (typeIsPromise(type)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function typeIsPromise(type: Type): boolean {
   if (type.isAny() || type.isUnknown() || type.isUnion() || type.isIntersection()) {
     return false;
   }
@@ -91,7 +100,7 @@ function peelPromiseChain(expr: Node): Node {
   return current;
 }
 
-function calleeLooksAsync(expr: Node): boolean {
+export function calleeLooksAsync(expr: Node): boolean {
   if (Node.isNewExpression(expr)) {
     const ctor = unwrapParens(expr.getExpression());
     return Node.isIdentifier(ctor) && ctor.getText() === "Promise";
@@ -102,21 +111,25 @@ function calleeLooksAsync(expr: Node): boolean {
   const symbol = unwrapParens(expr.getExpression()).getSymbol();
   const resolved = symbol?.getAliasedSymbol() ?? symbol;
   for (const decl of resolved?.getDeclarations() ?? []) {
-    if (declIsAsync(decl)) {
-      return true;
-    }
-    if (!isFunctionLike(decl)) {
-      continue;
-    }
-    const typeNode = decl.getReturnTypeNode();
-    if (typeNode !== undefined && /^Promise\b/.test(typeNode.getText().trim())) {
+    if (declReturnsPromise(decl)) {
       return true;
     }
   }
   return false;
 }
 
-function declIsAsync(decl: Node): boolean {
+export function declReturnsPromise(decl: Node): boolean {
+  if (declIsAsync(decl)) {
+    return true;
+  }
+  if (!isFunctionLike(decl)) {
+    return false;
+  }
+  const typeNode = decl.getReturnTypeNode();
+  return typeNode !== undefined && /^Promise\b/.test(typeNode.getText().trim());
+}
+
+export function declIsAsync(decl: Node): boolean {
   if (isFunctionLike(decl)) {
     return decl.isAsync();
   }

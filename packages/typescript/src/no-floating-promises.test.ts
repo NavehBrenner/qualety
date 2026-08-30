@@ -4,7 +4,14 @@ import { expect, test } from "vitest";
 import { check } from "../../qualety/src/engine.ts";
 import { NO_SUGGESTION } from "../../qualety/src/index.ts";
 import plugin from "./index.ts";
-import { noFloatingPromises } from "./no-floating-promises.ts";
+import {
+  calleeLooksAsync,
+  checkerSaysPromise,
+  declIsAsync,
+  declReturnsPromise,
+  noFloatingPromises,
+  typeIsPromise,
+} from "./no-floating-promises.ts";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const fixtures = join(here, "../fixtures");
@@ -23,6 +30,11 @@ async function runFixture(name: string) {
 
 test("plugin exports no-floating-promises and recommended includes it", () => {
   expect(noFloatingPromises).toBeDefined();
+  expect(checkerSaysPromise).toEqual(expect.any(Function));
+  expect(calleeLooksAsync).toEqual(expect.any(Function));
+  expect(declIsAsync).toEqual(expect.any(Function));
+  expect(declReturnsPromise).toEqual(expect.any(Function));
+  expect(typeIsPromise).toEqual(expect.any(Function));
   expect(plugin.rules?.["no-floating-promises"]).toBeDefined();
   expect(plugin.configs?.recommended?.rules?.["ts/no-floating-promises"]).toBe("error");
 });

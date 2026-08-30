@@ -82,7 +82,7 @@ export function forEachPythonSource(
   sources: unknown,
   cwd: string,
   visit: (unit: PythonSource) => void,
-) {
+): void {
   if (!(sources instanceof Map)) {
     return;
   }
@@ -94,7 +94,7 @@ export function forEachPythonSource(
   }
 }
 
-export function walkNodes(node: PythonNode, visit: (node: PythonNode) => void) {
+export function walkNodes(node: PythonNode, visit: (node: PythonNode) => void): void {
   visit(node);
   for (const child of childNodes(node)) {
     walkNodes(child, visit);
@@ -316,7 +316,7 @@ export function walkCallables(
   className: string,
   inFn: boolean,
   visit: (fn: PythonNode, className: string, nested: boolean) => void,
-) {
+): void {
   if (node._type === "FunctionDef" || node._type === "AsyncFunctionDef") {
     visit(node, className, inFn);
     for (const child of childNodes(node)) {

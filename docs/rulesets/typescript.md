@@ -3,7 +3,7 @@
 Honest catalog for **`@qualety/typescript`** (`Plugin.name: "ts"`).  
 This is the implementation list for this plugin. [typescript-baseline.md](./typescript-baseline.md) and [typescript-nice-to-have.md](./typescript-nice-to-have.md) are research inventories, **not** an implementation backlog.
 
-Core has no built-in rule bag. Rules exist only on this plugin’s `rules` map. Loading the plugin via `plugins[]` applies `configs.recommended` (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `ts/no-unsafe-assertion`, `ts/no-empty-catch`, `ts/no-floating-promises`, and `ts/no-public-any` at `"error"`). Overlay user `config.rules` to `"off"` or retune. `biome: false` skips the Biome phase.
+Core has no built-in rule bag. Rules exist only on this plugin’s `rules` map. Loading the plugin via `plugins[]` applies `configs.recommended` (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `ts/no-unsafe-assertion`, `ts/no-empty-catch`, `ts/no-floating-promises`, `ts/no-misused-promises`, `ts/exhaustive-switch`, `ts/explicit-public-return-types`, `ts/no-non-null-assertion`, `ts/no-export-star`, and `ts/no-public-any` at `"error"`). Overlay user `config.rules` to `"off"` or retune. `biome: false` skips the Biome phase.
 
 ## Compiler defaults
 
@@ -22,8 +22,13 @@ Keys (all `true`): `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `
 | ID | Intent | Default in recommended |
 |----|--------|------------------------|
 | `ts/no-constant-condition` | Do not branch on a condition the analyzer can prove always true or always false (param type, prior narrowing, prior parse, same-file call-site facts, cheap literals). `defineRule` / `requires: ["typescript"]` | `error` |
+| `ts/exhaustive-switch` | Switch on a finite union or enum must handle every member or use a never-typed default. `defineRule` / `requires: ["typescript"]` | `error` |
+| `ts/explicit-public-return-types` | Exported functions and public class methods must have an explicit return type. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/no-empty-catch` | Do not use a catch clause whose body is empty or only comments. `defineRule` / `requires: ["typescript"]` | `error` |
+| `ts/no-export-star` | Do not use `export *` or `export * as ns`; name the public surface. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/no-floating-promises` | Do not leave a Promise as an expression statement without `await`, `return`, `void`, or a rejection handler. `defineRule` / `requires: ["typescript"]` | `error` |
+| `ts/no-misused-promises` | Do not pass a Promise-returning function where a sync void callback is expected. `defineRule` / `requires: ["typescript"]` | `error` |
+| `ts/no-non-null-assertion` | Do not use a non-null assertion (`expr!`) on an expression. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/no-public-any` | Public value exports must not be annotated as `any` or `any[]`. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/no-unnecessary-abstraction` | Do not keep a local abstraction that does not pay for its indirection: package-local ≤1-use pass-through / small-flat helpers and ≤1-use type aliases. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/no-unsafe-assertion` | Do not use `as any` or `as unknown as T` assertions that erase type safety. `defineRule` / `requires: ["typescript"]` | `error` |
@@ -90,7 +95,7 @@ Do not keep a local abstraction that does not pay for its indirection. **Underap
 
 ### `ts/no-unsafe-assertion`
 
-Flag `expr as any` and `expr as unknown as T` (once, on the outer assertion). Skip `.d.ts`, `*.test.*` / `*.spec.*`, `__tests__`. Do not flag `as const`, lone `as unknown`, or other `as T`. Non-null `expr!` and angle-bracket `<any>x` are deferred.
+Flag `expr as any` and `expr as unknown as T` (once, on the outer assertion). Skip `.d.ts`, `*.test.*` / `*.spec.*`, `__tests__`. Do not flag `as const`, lone `as unknown`, or other `as T`. Non-null `expr!` lives on `ts/no-non-null-assertion`. Angle-bracket `<any>x` is deferred.
 
 ### `ts/no-empty-catch`
 
@@ -105,6 +110,26 @@ Promise signal is underapprox (default provider skips lib files): checker type n
 ### `ts/no-public-any`
 
 Exported declarations only (`export function` / `export const|let|var` / `export default` function or binding). Flag explicit `: any` / `: any[]` on params, returns, and bindings, and initializer `as any` on that export. Skip type-only, `export *`, `export =`, `.d.ts`, test paths. Silence `export { x }` / `export { x } from`. Do not infer unannotated internals. Do not flag `unknown`. Public `Function` / `Object` deferred.
+
+### `ts/no-misused-promises`
+
+Flag a Promise-returning / `async` function in a **sync void** consumer position. Stacks with `ts/no-floating-promises` (expression-statement floats vs callback / assignment). Checker: call argument whose matching parameter is a function returning void / undefined and not `Promise` (silence `any` / `unknown` / error / mixed overloads); assignment / annotated binding whose target is that same void function type. Structural fallback: `.forEach(` callback that is `async` or Promise-returning (lib-less `Array.forEach` is otherwise silent). Do not structural-flag `map` / `filter` / `reduce`. Suggestion: `void` the work, hoist to an outer `async`, `.catch`, or do not pass `async`. Same skip set.
+
+### `ts/exhaustive-switch`
+
+Flag `switch` on a finite unit union / enum when a member has no `case` and there is no exhaustive default. Finite = every constituent is a string / number / boolean literal, enum member, `null`, `undefined`, or `never`. Silence wide `string` / `number` / `any` / `unknown` / unresolved / object. Empty fallthrough counts. Bare `default:` does not; a default with `const _exhaustive: never = …` or a `return` of a never-typed binding does. Suggestion: add missing case(s) or `const _exhaustive: never = …`. Same skip set.
+
+### `ts/explicit-public-return-types`
+
+Exported functions / methods need an explicit **return** type (params not in v1). Scan: `export function` / `export async function` / `export default function`; `export const|let|var` whose initializer is function-like (annotation on the function **or** a function-type on the binding counts); `export default` of a function-like; public methods / getters on `export class` / `export default class`. Skip type-only, `export { x }` / `export { x } from` / `export *`, constructors, private / protected / `#private`, setters, object-literal methods on exported consts, test / `.d.ts`. Suggestion: add `): T` (checker inferred text when cheap).
+
+### `ts/no-non-null-assertion`
+
+Flag `SyntaxKind.NonNullExpression` (`expr!`, including `obj.prop!` / `arr[i]!`). Skip definite assignment on fields (`foo!: T`). Skip test / `.d.ts`. Product rule even if Biome also flags `!`. Suggestion: narrow, default, or throw.
+
+### `ts/no-export-star`
+
+Flag `export * from "…"` and `export * as ns from "…"`. Skip test / `.d.ts`. Suggestion: explicit `export { A, B } from "…"`.
 
 ### Split (A vs B vs `ts/zod-boundary`)
 

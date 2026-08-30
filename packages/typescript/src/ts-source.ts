@@ -4,7 +4,7 @@ import { type Node, SourceFile } from "ts-morph";
 export function walkTsSources(
   sources: ReadonlyMap<string, unknown>,
   visit: (sourceFile: SourceFile, file: string) => void,
-) {
+): void {
   for (const [abs, unit] of sources) {
     const path = abs.split("\\").join("/");
     const base = path.slice(path.lastIndexOf("/") + 1);
@@ -26,7 +26,7 @@ export function reportAt(
   node: Node,
   message: string,
   suggestion: string,
-) {
+): void {
   const sourceFile = node.getSourceFile();
   context.report({
     severity: "error",
