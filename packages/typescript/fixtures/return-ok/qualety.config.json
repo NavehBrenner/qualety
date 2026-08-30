@@ -1,0 +1,7 @@
+{
+  "plugins": ["../../dist/index.js"],
+  "rules": {
+    "ts/explicit-public-return-types": "error"
+  },
+  "biome": false
+}

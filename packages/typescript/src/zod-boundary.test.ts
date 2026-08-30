@@ -16,6 +16,7 @@ import {
   isPropertyUse,
   isSchemaParseCall,
   isTypeofObjectGuard,
+  typeofTarget,
   unknownParamNames,
 } from "./parse-flow.ts";
 import { zodBoundary } from "./zod-boundary.ts";
@@ -48,6 +49,7 @@ test("plugin exports zod-boundary and recommended includes it", () => {
   expect(isPropertyUse).toEqual(expect.any(Function));
   expect(isSchemaParseCall).toEqual(expect.any(Function));
   expect(isTypeofObjectGuard).toEqual(expect.any(Function));
+  expect(typeofTarget).toEqual(expect.any(Function));
   expect(unknownParamNames).toEqual(expect.any(Function));
   expect(plugin.rules?.["zod-boundary"]).toBeDefined();
   expect(plugin.configs?.recommended?.rules?.["ts/zod-boundary"]).toBe("error");

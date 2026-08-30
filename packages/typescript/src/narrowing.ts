@@ -13,6 +13,7 @@ import {
   firstArgIdentifier,
   isFunctionLike,
   isSchemaParseCall,
+  typeofTarget,
 } from "./parse-flow.ts";
 
 export type CheckCandidate = {
@@ -205,7 +206,7 @@ function classifyBinary(node: Node): CheckCandidate | undefined {
   if (op === "instanceof" && Node.isIdentifier(left)) {
     return { node, subject: left.getText(), kind: "instanceof" };
   }
-  const typeofId = typeofOperand(left) ?? typeofOperand(right);
+  const typeofId = typeofTarget(left) ?? typeofTarget(right);
   const lit = stringLit(left) ?? stringLit(right);
   if (
     typeofId !== undefined &&
@@ -790,14 +791,6 @@ function returnTypeNode(decl: Node): TypeNode | undefined {
     return decl.getReturnTypeNode();
   }
   return undefined;
-}
-
-function typeofOperand(node: Node): string | undefined {
-  if (!Node.isTypeOfExpression(node)) {
-    return undefined;
-  }
-  const expr = unwrapParens(node.getExpression());
-  return Node.isIdentifier(expr) ? expr.getText() : undefined;
 }
 
 function stringLit(node: Node): string | undefined {

@@ -1,0 +1,7 @@
+{
+  "plugins": ["../../dist/index.js"],
+  "rules": {
+    "ts/no-misused-promises": "error"
+  },
+  "biome": false
+}
