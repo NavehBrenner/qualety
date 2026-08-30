@@ -4,6 +4,7 @@ import {
   childNodes,
   clearReexports,
   collectImports,
+  collectLoadKeys,
   collectModuleAliases,
   containsPos,
   forEachPythonSource,
@@ -29,6 +30,7 @@ test("walk helpers", () => {
   expect(isDunder("__init__")).toBe(true);
   expect(isInitModule("/pkg/__init__.py")).toBe(true);
   expect(isPythonNode({ _type: "Name" })).toBe(true);
+  expect(collectLoadKeys).toBeTypeOf("function");
   expect(asNodes([{ _type: "Pass" }])).toHaveLength(1);
   expect(childNodes({ _type: "Module", body: [{ _type: "Pass" }] })).toHaveLength(1);
   expect(isTestPath("/repo/tests/test_a.py", "/repo")).toBe(true);

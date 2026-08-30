@@ -31,6 +31,83 @@ export function isPythonNode(value: unknown): value is PythonNode {
   return "_type" in value && typeof value._type === "string";
 }
 
+export type LoadRef = {
+  file: string;
+  name: string;
+  owner: string | undefined;
+  className: string;
+  lineno: number;
+};
+
+export function collectLoadKeys(
+  node: PythonNode,
+  className: string,
+  file: string,
+  skip: (parent: PythonNode, child: PythonNode) => boolean,
+  resolve: (ref: LoadRef) => string | undefined,
+  nodeForKey: (key: string) => PythonNode | undefined,
+  keys: Set<string>,
+): void {
+  walkLoadRefs(node, className, file, skip, (ref) => {
+    const key = resolve(ref);
+    if (key === undefined) {
+      return;
+    }
+    const target = nodeForKey(key);
+    if (target !== undefined) {
+      if (containsPos(target, ref.lineno)) {
+        return;
+      }
+    }
+    keys.add(key);
+  });
+}
+
+function walkLoadRefs(
+  node: PythonNode,
+  className: string,
+  file: string,
+  skip: (parent: PythonNode, child: PythonNode) => boolean,
+  visit: (ref: LoadRef) => void,
+): void {
+  const nextClass =
+    node._type === "ClassDef" && typeof node.name === "string" ? node.name : className;
+  emitLoadRef(node, nextClass, file, visit);
+  for (const child of childNodes(node)) {
+    if (!skip(node, child)) {
+      walkLoadRefs(child, nextClass, file, skip, visit);
+    }
+  }
+}
+
+function emitLoadRef(
+  node: PythonNode,
+  className: string,
+  file: string,
+  visit: (ref: LoadRef) => void,
+): void {
+  if (!isPythonNode(node.ctx) || node.ctx._type !== "Load") {
+    return;
+  }
+  const lineno = typeof node.lineno === "number" ? node.lineno : 1;
+  if (node._type === "Name") {
+    if (typeof node.id === "string") {
+      visit({ file, name: node.id, owner: undefined, className, lineno });
+    }
+    return;
+  }
+  if (node._type !== "Attribute" || typeof node.attr !== "string") {
+    return;
+  }
+  if (!isPythonNode(node.value)) {
+    return;
+  }
+  if (node.value._type !== "Name" || typeof node.value.id !== "string") {
+    return;
+  }
+  visit({ file, name: node.attr, owner: node.value.id, className, lineno });
+}
+
 export function asNodes(value: unknown): PythonNode[] {
   if (!Array.isArray(value)) {
     return [];

@@ -38,11 +38,11 @@ Shared skip (unless a rule tightens): `.pyi`, `test_*.py` / `*_test.py`, path se
 
 ### `python/no-unnecessary-def`
 
-Do not keep a local def that does not pay for its indirection. **Underapproximate** — silence when uncertain. Multiplicity is **package-local** (nearest `pyproject.toml` walking up, stop at cwd; none → cwd is the one package), not monorepo-wide. Report when the package-local **call-site** count is **≤ 1** (0 or 1). Functions / methods only — no types arm.
+Do not keep a local def that does not pay for its indirection. **Underapproximate** — silence when uncertain. Multiplicity is **package-local** (nearest `pyproject.toml` walking up, stop at cwd; none → cwd is the one package), not monorepo-wide. Report when the package-local **call-site** count is **≤ 1** (0 or 1) **and** there is no resolved value-position Load. Functions / methods only — no types arm.
 
 **Quiet:** all defs in `__init__.py` (barrel analog). Dunder methods `/^__\w+__$/`. No `package.exports` / React port. No framework decorator allowlist (known over-flag).
 
-**Calls:** package-local call sites only (not import-only / re-export-only; self-calls and the name node do not count). Same-module `Name`; `from … import` / `import mod` + `mod.fn` resolved to a source in that package; `self.` / `cls.` methods on the enclosing class. Underapproximate elsewhere (over-flag), same hole as TS dynamics. `from x import *` is a known miss.
+**Uses:** package-local call sites (same-module `Name`; `from … import` / `import mod` + `mod.fn` resolved to a source in that package; `self.` / `cls.` methods on the enclosing class) **and** Load-context `Name` / `mod.fn` / `self.` / `cls.` references that resolve to the def (registries, callbacks, `key=f`, `partial(f)`, assignment RHS, return, decorator). Import-only / re-export-only / `__all__` strings / Store / the def body do not count. `Call.func` is a call, not a value-load. ≥1 resolved value-load → silence (multiplicity through a container is unknown). Call-only ≤ 1 still reports when shape gates hold. Unresolved / dynamic → not a use. `from x import *` is a known miss.
 
 **Shape:** pass-through (body is one call / `return` of one call; unwrap await / parens) **or** small + flat: ≤ 10 non-blank body lines and no nested `if` / `for` / `while` / `try` / `match`. `async def` included. Lambdas out. Zero callers are unnecessary (full YAGNI).
 
@@ -50,9 +50,9 @@ Do not keep a local def that does not pay for its indirection. **Underapproximat
 
 ### `python/no-unnecessary-class`
 
-Mirror YAGNI for **classes**. Package-local. Report when **use count ≤ 1** (0 or 1) **and** at least one shape gate holds.
+Mirror YAGNI for **classes**. Package-local. Report when **use count ≤ 1** (0 or 1) **and** at least one shape gate holds **and** there is no resolved value-position Load.
 
-**Uses:** instantiation `Call` whose callee resolves to the class; `ClassDef.bases` that resolve to the class. Import-only / re-export-only do not count. The class’s own body does not count as external use. Unresolved / dynamic → not a use.
+**Uses:** instantiation `Call` whose callee resolves to the class; `ClassDef.bases` that resolve to the class; **and** Load-context `Name` / `mod.Cls` references that resolve to the class (registries, callbacks, passing the class as a value). Import-only / re-export-only do not count. The class’s own body does not count as external use. `Call.func` and `ClassDef.bases` are already instantiate/subclass uses, not value-loads. ≥1 resolved value-load → silence. Unresolved / dynamic → not a use.
 
 **Shape — thin / namespace bag:** class body is only function defs, simple `Assign`/`AnnAssign`, `Pass`, docstring. `__init__` absent or pass/ellipsis/docstring-only.
 
