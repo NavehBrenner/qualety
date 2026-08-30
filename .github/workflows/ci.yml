@@ -36,6 +36,29 @@ jobs:
             echo "$out" | grep -q LICENSE
             echo "$out" | grep -q dist/
           done
+      # `pnpm qualety` runs dist/cli.js by path, so nothing exercised the bin symlink
+      # npm actually installs. That gap shipped v0.1.0 as a silent no-op under npx.
+      - name: CLI bin entrypoint smoke
+        run: |
+          set -euo pipefail
+          pnpm --filter qualety pack --pack-destination /tmp
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+          mkdir -p "$tmp/src"
+          (cd "$tmp" && npm init -y >/dev/null && npm install --silent /tmp/qualety-*.tgz)
+          printf '%s\n' '{"plugins":[],"rules":{}}' > "$tmp/qualety.config.json"
+          printf '%s\n' 'debugger;' > "$tmp/src/hello.ts"
+          set +e
+          out=$(cd "$tmp" && ./node_modules/.bin/qualety check 2>&1)
+          code=$?
+          set -e
+          if [[ "$code" -ne 1 ]]; then
+            echo "expected exit 1 from the bin entrypoint, got $code" >&2
+            echo "$out" >&2
+            exit 1
+          fi
+          echo "$out" | grep -F 'lint/suspicious/noDebugger'
+
       - name: Pip wrapper smoke
         run: |
           set -euo pipefail

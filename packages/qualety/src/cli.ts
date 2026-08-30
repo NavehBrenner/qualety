@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { realpathSync } from "node:fs";
 import { parseArgs } from "node:util";
 import {
   biomeEnabled,
@@ -193,6 +194,21 @@ function filtersFromValues(values: {
   };
 }
 
-if (isStandalone() || (process.argv[1] && import.meta.filename === process.argv[1])) {
+// npm links a bin entry as a symlink, so argv[1] is the link path while
+// import.meta.filename is its target. Comparing them raw made the CLI a silent
+// no-op under `npx qualety` and `./node_modules/.bin/qualety` — exit 0, no output.
+function invokedDirectly(): boolean {
+  const entry = process.argv[1];
+  if (entry === undefined) {
+    return false;
+  }
+  try {
+    return realpathSync(entry) === import.meta.filename;
+  } catch {
+    return false;
+  }
+}
+
+if (isStandalone() || invokedDirectly()) {
   process.exitCode = await run(process.argv.slice(2));
 }
