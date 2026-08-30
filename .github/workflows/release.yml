@@ -60,7 +60,8 @@ jobs:
           printf '%s\n' '{"plugins":["@qualety/typescript"],"rules":{"ts/no-constant-condition":"error"}}' > "$tmp/qualety.config.json"
           mkdir -p "$tmp/src"
           printf '%s\n' 'const n = 1;' > "$tmp/src/hello.ts"
-          (cd "$tmp" && "$bin" check)
+          note=$(cd "$tmp" && "$bin" check 2>&1)
+          echo "$note" | grep -F 'standalone binary cannot run'
           printf '%s\n' '{"plugins":["./nope.mjs"],"rules":{"ts/no-constant-condition":"error"}}' > "$tmp/qualety.config.json"
           set +e
           err=$(cd "$tmp" && "$bin" check 2>&1)
@@ -74,7 +75,7 @@ jobs:
           echo "$err" | grep -F './nope.mjs'
           echo "$err" | grep -F 'npm i qualety'
           if command -v python3 >/dev/null 2>&1; then
-            printf '%s\n' '{"plugins":["@qualety/python"],"rules":{"python/no-unnecessary-def":"error"},"ruff":false}' > "$tmp/qualety.config.json"
+            printf '%s\n' '{"plugins":["@qualety/python"],"rules":{"python/no-unnecessary-def":"error"}}' > "$tmp/qualety.config.json"
             printf '%s\n' 'x = 1' > "$tmp/src/hello.py"
             (cd "$tmp" && "$bin" check)
           fi

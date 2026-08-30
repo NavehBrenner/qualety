@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, extname, join } from "node:path";
-import { ConfigError } from "./config.ts";
+import { ConfigError, isStandalone } from "./config.ts";
 import type { Plugin, Range, UserConfig, Violation } from "./index.ts";
 import { isRecord } from "./record.ts";
 import { runTimedCommand } from "./run-command.ts";
@@ -32,7 +32,7 @@ export type BiomeRuleSetting =
   | ["off" | "warn" | "error", Record<string, unknown>];
 
 export function biomeEnabled(config: UserConfig): boolean {
-  return config.biome !== false;
+  return !isStandalone() && config.biome !== false;
 }
 
 export function resolveBiomeBinary(): string {

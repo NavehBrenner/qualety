@@ -3,7 +3,7 @@ import { basename, dirname, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { biomeEnabled, runBiomePhase } from "./biome.ts";
 import { expandCompanions } from "./companion-closure.ts";
-import { CONFIG_FILENAMES, ConfigError, loadConfig } from "./config.ts";
+import { CONFIG_FILENAMES, ConfigError, isStandalone, loadConfig } from "./config.ts";
 import { DEFAULT_PROVIDERS } from "./default-providers.ts";
 import { listGitSeed } from "./git-seed.ts";
 import {
@@ -22,9 +22,9 @@ import { compileRuleOptions } from "./rule-options.ts";
 import { pluginSchema } from "./schemas.ts";
 import { expandTypeScriptClosure } from "./typescript-frontend.ts";
 
-declare const STANDALONE: boolean;
-
 const NOTHING_TO_CHECK = "No rules configured — nothing to check.";
+const STANDALONE_GATES_OFF =
+  "note: the standalone binary cannot run the Biome or Ruff gates; install with `npm i qualety` to enable them.";
 const NO_RULES_MATCHED = "No rules matched filters.";
 const DEFAULT_INCLUDE = ["**/*.ts", "**/*.tsx", "**/*.mts", "**/*.cts", "**/*.py"];
 const DEFAULT_EXCLUDE = ["**/node_modules/**", "**/dist/**"];
@@ -69,6 +69,15 @@ type ProviderEntry = {
   owner: string;
 };
 
+// The standalone build silently drops both composed gates, so say so once
+// rather than letting a stock config look like it passed a full check.
+function standaloneNotice(config: UserConfig, filters: CheckFilters): string | undefined {
+  if (!isStandalone() || hasNameFilters(filters)) {
+    return undefined;
+  }
+  return config.biome !== false || config.ruff !== false ? STANDALONE_GATES_OFF : undefined;
+}
+
 export async function check(
   cwd: string,
   out: (msg: string) => void,
@@ -92,6 +101,10 @@ export async function check(
     const composed = hasNameFilters(filters)
       ? { biome: false, ruff: false }
       : { biome: biomeEnabled(config), ruff: ruffEnabled(config) };
+    const notice = standaloneNotice(config, filters);
+    if (notice !== undefined) {
+      err(notice);
+    }
     if (selected.length === 0 && !composed.biome && !composed.ruff) {
       out(hasNameFilters(filters) ? NO_RULES_MATCHED : NOTHING_TO_CHECK);
       return 0;
@@ -260,7 +273,7 @@ async function loadPluginModule(spec: string, fromDir: string): Promise<unknown>
   if (loadOfficial !== undefined) {
     return loadOfficial();
   }
-  if (typeof STANDALONE !== "undefined" && STANDALONE) {
+  if (isStandalone()) {
     throw new ConfigError(
       `Standalone binary cannot load plugin "${spec}". Custom plugins need npm: npm i qualety`,
     );

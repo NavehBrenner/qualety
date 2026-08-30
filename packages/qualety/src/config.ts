@@ -18,6 +18,15 @@ export const userConfigSchema = z
 
 export type UserConfig = z.infer<typeof userConfigSchema>;
 
+declare const STANDALONE: boolean;
+
+// ponytail: bun --compile embeds no node_modules, so the standalone build can
+// resolve neither the Biome binary nor the Ruff wasm module. Gate the two
+// composed tools off here rather than letting resolve throw at check time.
+export function isStandalone(): boolean {
+  return typeof STANDALONE !== "undefined" && STANDALONE;
+}
+
 export const CONFIG_FILENAMES = [
   "qualety.config.ts",
   "qualety.config.mts",

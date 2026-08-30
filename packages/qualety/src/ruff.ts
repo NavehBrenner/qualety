@@ -2,7 +2,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { extname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { ConfigError } from "./config.ts";
+import { ConfigError, isStandalone } from "./config.ts";
 import type { Plugin, Range, UserConfig, Violation } from "./index.ts";
 import { isRecord } from "./record.ts";
 
@@ -19,7 +19,7 @@ export type RuffRuleSetting =
   | ["off" | "warn" | "error", Record<string, unknown>];
 
 export function ruffEnabled(config: UserConfig): boolean {
-  return config.ruff !== false;
+  return !isStandalone() && config.ruff !== false;
 }
 
 export function resolveRuffModule(): string {

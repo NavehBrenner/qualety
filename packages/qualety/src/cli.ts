@@ -7,7 +7,7 @@ import {
   resolveBiomeBinary,
   writeGeneratedBiomeConfig,
 } from "./biome.ts";
-import { loadConfig } from "./config.ts";
+import { isStandalone, loadConfig } from "./config.ts";
 import { type CheckFilters, check, loadPluginsFromConfig } from "./engine.ts";
 import {
   GENERATED_RUFF_PATH,
@@ -148,14 +148,14 @@ async function runDoctor(cwd: string, out: (msg: string) => void): Promise<numbe
     return 0;
   }
   if (!biomeEnabled(loaded.config)) {
-    out("biome: off (biome: false)");
+    out(isStandalone() ? "biome: off (standalone binary)" : "biome: off (biome: false)");
   } else {
     const bin = resolveBiomeBinary();
     const version = await readBiomeVersion(bin, cwd);
     out(`biome: on\nversion: ${version}\nbinary: ${bin}\nconfig: ${GENERATED_BIOME_PATH}`);
   }
   if (!ruffEnabled(loaded.config)) {
-    out("ruff: off (ruff: false)");
+    out(isStandalone() ? "ruff: off (standalone binary)" : "ruff: off (ruff: false)");
   } else {
     const bin = resolveRuffModule();
     const version = await readRuffVersion(bin);
@@ -188,11 +188,6 @@ function filtersFromValues(values: {
   };
 }
 
-declare const STANDALONE: boolean;
-
-if (
-  (typeof STANDALONE !== "undefined" && STANDALONE) ||
-  (process.argv[1] && import.meta.filename === process.argv[1])
-) {
+if (isStandalone() || (process.argv[1] && import.meta.filename === process.argv[1])) {
   process.exitCode = await run(process.argv.slice(2));
 }
