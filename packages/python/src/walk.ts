@@ -222,6 +222,84 @@ export function collectImports(
   return { named, modules };
 }
 
+export function collectPathLoads(
+  unit: PythonSource,
+  groupSources: ReadonlyMap<string, PythonSource>,
+): { modules: Map<string, string>; targets: Set<string> } {
+  const modules = new Map<string, string>();
+  const targets = new Set<string>();
+  // ponytail: one name map per file, per-scope tables if nested rebinds collide
+  const pathNames = new Map<string, string>();
+  const specAndLoaderFiles = new Map<string, string>();
+  walkNodes(unit.tree, (node) => {
+    if (node._type === "Call") {
+      const file = pathLoadFile(node, pathNames, unit, groupSources);
+      if (file !== undefined) {
+        targets.add(file);
+      }
+    }
+    bindPathAssign(node, pathNames, specAndLoaderFiles, modules, unit, groupSources);
+  });
+  return { modules, targets };
+}
+
+export function scanPathLoadUses(
+  group: readonly PythonSource[],
+  allSources: ReadonlyMap<string, PythonSource>,
+  cwd: string,
+  tally: (unit: PythonSource, fileBinds: FileBinds | undefined) => void,
+): Set<string> {
+  const sources = new Map(group.map((unit) => [unit.file, unit]));
+  const binds = new Map<string, FileBinds>();
+  const loadTargets = new Set<string>();
+  const boundFiles = new Set<string>();
+  for (const unit of group) {
+    const fileBinds = collectImports(unit, sources);
+    mergePathLoads(unit, sources, fileBinds, loadTargets, boundFiles);
+    binds.set(unit.file, fileBinds);
+  }
+  for (const unit of group) {
+    tally(unit, binds.get(unit.file));
+  }
+  const packageDir = group[0]?.packageDir;
+  for (const unit of allSources.values()) {
+    if (
+      unit.packageDir !== packageDir ||
+      !isTestPath(unit.file, cwd) ||
+      /(?:^|\/)(?:fixtures|__pycache__)(?:\/|$)/.test(relativePosix(unit.file, cwd))
+    ) {
+      continue;
+    }
+    const fileBinds: FileBinds = { named: new Map(), modules: new Map() };
+    mergePathLoads(unit, sources, fileBinds, loadTargets, boundFiles);
+    tally(unit, fileBinds);
+  }
+  const silenced = new Set<string>();
+  for (const file of loadTargets) {
+    if (!boundFiles.has(file)) {
+      silenced.add(file);
+    }
+  }
+  return silenced;
+}
+
+function mergePathLoads(
+  unit: PythonSource,
+  groupSources: ReadonlyMap<string, PythonSource>,
+  fileBinds: FileBinds,
+  loadTargets: Set<string>,
+  boundFiles: Set<string>,
+) {
+  const loads = collectPathLoads(unit, groupSources);
+  for (const [alias, file] of loads.modules) {
+    fileBinds.modules.set(alias, file);
+    boundFiles.add(file);
+  }
+  for (const file of loads.targets) {
+    loadTargets.add(file);
+  }
+}
+
 function resolveModuleFile(
   fromFile: string,
   module: string | undefined,
@@ -655,4 +733,345 @@ function pushAliasReexport(stmt: PythonNode, out: Reexport[]) {
   if (isPythonNode(stmt.value) && stmt.value._type === "Name") {
     out.push({ name: target.id, node: target });
   }
+}
+
+function bindPathAssign(
+  node: PythonNode,
+  pathNames: Map<string, string>,
+  specAndLoaderFiles: Map<string, string>,
+  modules: Map<string, string>,
+  unit: PythonSource,
+  groupSources: ReadonlyMap<string, PythonSource>,
+) {
+  const name = assignedName(node);
+  if (name === undefined || !isPythonNode(node.value)) {
+    return;
+  }
+  const folded = foldPath(node.value, pathNames, unit);
+  if (folded !== undefined) {
+    pathNames.set(name, folded);
+  }
+  const file = pathLoadFile(node.value, pathNames, unit, groupSources);
+  const callee = callName(node.value);
+  if (
+    file !== undefined &&
+    (callee === "spec_from_file_location" || callee === "SourceFileLoader")
+  ) {
+    specAndLoaderFiles.set(name, file);
+    return;
+  }
+  const loaded = moduleFromLoad(node.value, specAndLoaderFiles, pathNames, unit, groupSources);
+  if (loaded !== undefined) {
+    modules.set(name, loaded);
+  }
+}
+
+function moduleFromLoad(
+  value: PythonNode,
+  specAndLoaderFiles: Map<string, string>,
+  pathNames: Map<string, string>,
+  unit: PythonSource,
+  groupSources: ReadonlyMap<string, PythonSource>,
+): string | undefined {
+  if (value._type !== "Call" || !isPythonNode(value.func)) {
+    return undefined;
+  }
+  const callee = callName(value);
+  if (callee === "module_from_spec") {
+    const spec = callArg(value, 0, ["spec"]);
+    if (!isPythonNode(spec)) {
+      return undefined;
+    }
+    if (spec._type === "Name" && typeof spec.id === "string") {
+      return specAndLoaderFiles.get(spec.id);
+    }
+    return pathLoadFile(spec, pathNames, unit, groupSources);
+  }
+  if (
+    callee !== "load_module" ||
+    value.func._type !== "Attribute" ||
+    !isPythonNode(value.func.value)
+  ) {
+    return undefined;
+  }
+  const loader = value.func.value;
+  if (loader._type === "Name" && typeof loader.id === "string") {
+    return specAndLoaderFiles.get(loader.id);
+  }
+  return pathLoadFile(loader, pathNames, unit, groupSources);
+}
+
+function pathLoadFile(
+  node: PythonNode,
+  pathNames: Map<string, string>,
+  unit: PythonSource,
+  groupSources: ReadonlyMap<string, PythonSource>,
+): string | undefined {
+  if (node._type !== "Call") {
+    return undefined;
+  }
+  const callee = callName(node);
+  const pathNode =
+    callee === "spec_from_file_location"
+      ? callArg(node, 1, ["location"])
+      : callee === "SourceFileLoader"
+        ? callArg(node, 1, ["path"])
+        : callee === "run_path"
+          ? callArg(node, 0, ["path", "path_name"])
+          : undefined;
+  if (pathNode === undefined) {
+    return undefined;
+  }
+  const folded = foldPath(pathNode, pathNames, unit);
+  if (folded === undefined) {
+    return undefined;
+  }
+  const abs = resolve(dirname(unit.file), folded);
+  return groupSources.has(abs) ? abs : undefined;
+}
+
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: path-node dispatch; splitting recreates single-use helpers
+function foldPath(
+  node: PythonNode,
+  pathNames: Map<string, string>,
+  unit: PythonSource,
+): string | undefined {
+  if (node._type === "Constant" && typeof node.value === "string") {
+    return node.value;
+  }
+  if (node._type === "Str" && typeof node.s === "string") {
+    return node.s;
+  }
+  if (node._type === "JoinedStr") {
+    return foldJoined(node, pathNames, unit);
+  }
+  if (node._type === "Name") {
+    if (typeof node.id !== "string") {
+      return undefined;
+    }
+    return node.id === "__file__" ? unit.file : pathNames.get(node.id);
+  }
+  if (node._type === "Attribute") {
+    if (node.attr !== "parent" || !isPythonNode(node.value)) {
+      return undefined;
+    }
+    const inner = foldPath(node.value, pathNames, unit);
+    return inner === undefined ? undefined : dirname(inner);
+  }
+  if (node._type === "BinOp") {
+    if (!isPythonNode(node.op) || node.op._type !== "Div") {
+      return undefined;
+    }
+    if (!isPythonNode(node.left) || !isPythonNode(node.right)) {
+      return undefined;
+    }
+    const leftPath = foldPath(node.left, pathNames, unit);
+    const rightPath = foldPath(node.right, pathNames, unit);
+    return leftPath === undefined || rightPath === undefined
+      ? undefined
+      : join(leftPath, rightPath);
+  }
+  if (node._type === "Subscript") {
+    return foldParentsAt(node, pathNames, unit);
+  }
+  if (node._type === "Call") {
+    return foldPathCall(node, pathNames, unit);
+  }
+  return undefined;
+}
+
+function foldJoined(
+  node: PythonNode,
+  pathNames: Map<string, string>,
+  unit: PythonSource,
+): string | undefined {
+  let out = "";
+  for (const part of asNodes(node.values)) {
+    const bit = foldPath(part, pathNames, unit);
+    if (bit === undefined) {
+      return undefined;
+    }
+    out += bit;
+  }
+  return out;
+}
+
+function foldParentsAt(
+  node: PythonNode,
+  pathNames: Map<string, string>,
+  unit: PythonSource,
+): string | undefined {
+  if (
+    !isPythonNode(node.value) ||
+    node.value._type !== "Attribute" ||
+    node.value.attr !== "parents"
+  ) {
+    return undefined;
+  }
+  if (!isPythonNode(node.value.value)) {
+    return undefined;
+  }
+  const index = intConstant(
+    isPythonNode(node.slice)
+      ? node.slice._type === "Index" && isPythonNode(node.slice.value)
+        ? node.slice.value
+        : node.slice
+      : undefined,
+  );
+  if (index === undefined || index < 0) {
+    return undefined;
+  }
+  const inner = foldPath(node.value.value, pathNames, unit);
+  if (inner === undefined) {
+    return undefined;
+  }
+  let out = inner;
+  for (let step = 0; step <= index; step += 1) {
+    out = dirname(out);
+  }
+  return out;
+}
+
+function foldPathCall(
+  node: PythonNode,
+  pathNames: Map<string, string>,
+  unit: PythonSource,
+): string | undefined {
+  const callee = callName(node);
+  if (callee === "join" || callee === "joinpath") {
+    return foldJoinCall(node, pathNames, unit, callee === "joinpath");
+  }
+  if (callee === "dirname") {
+    return foldOne(callArg(node, 0, []), pathNames, unit, dirname);
+  }
+  if (callee === "abspath" || callee === "realpath") {
+    return foldOne(callArg(node, 0, []), pathNames, unit, (path) => path);
+  }
+  if (callee === "resolve" || callee === "absolute") {
+    return foldReceiver(node, pathNames, unit);
+  }
+  if (callee === "Path") {
+    return foldJoinCall(node, pathNames, unit, false);
+  }
+  if (callee === "str") {
+    return foldOne(callArg(node, 0, []), pathNames, unit, (path) => path);
+  }
+  return undefined;
+}
+
+function foldJoinCall(
+  node: PythonNode,
+  pathNames: Map<string, string>,
+  unit: PythonSource,
+  withReceiver: boolean,
+): string | undefined {
+  const parts: string[] = [];
+  if (withReceiver) {
+    const base = foldReceiver(node, pathNames, unit);
+    if (base === undefined) {
+      return undefined;
+    }
+    parts.push(base);
+  }
+  for (const arg of asNodes(node.args)) {
+    if (arg._type === "Starred") {
+      return undefined;
+    }
+    const next = foldPath(arg, pathNames, unit);
+    if (next === undefined) {
+      return undefined;
+    }
+    parts.push(next);
+  }
+  return parts.length === 0 ? undefined : join(...parts);
+}
+
+function foldReceiver(
+  node: PythonNode,
+  pathNames: Map<string, string>,
+  unit: PythonSource,
+): string | undefined {
+  if (
+    !isPythonNode(node.func) ||
+    node.func._type !== "Attribute" ||
+    !isPythonNode(node.func.value)
+  ) {
+    return undefined;
+  }
+  return foldPath(node.func.value, pathNames, unit);
+}
+
+function foldOne(
+  node: PythonNode | undefined,
+  pathNames: Map<string, string>,
+  unit: PythonSource,
+  then: (path: string) => string,
+): string | undefined {
+  if (node === undefined) {
+    return undefined;
+  }
+  const inner = foldPath(node, pathNames, unit);
+  return inner === undefined ? undefined : then(inner);
+}
+
+function assignedName(node: PythonNode): string | undefined {
+  if (node._type === "Assign") {
+    const targets = asNodes(node.targets);
+    const target = targets[0];
+    if (targets.length === 1 && target?._type === "Name" && typeof target.id === "string") {
+      return target.id;
+    }
+  }
+  if (node._type === "AnnAssign" && isPythonNode(node.target)) {
+    if (node.target._type === "Name" && typeof node.target.id === "string") {
+      return node.target.id;
+    }
+  }
+  return undefined;
+}
+
+function callName(node: PythonNode): string | undefined {
+  const func = node._type === "Call" && isPythonNode(node.func) ? node.func : node;
+  if (func._type === "Name" && typeof func.id === "string") {
+    return func.id;
+  }
+  if (func._type === "Attribute" && typeof func.attr === "string") {
+    return func.attr;
+  }
+  return undefined;
+}
+
+function callArg(
+  node: PythonNode,
+  index: number,
+  names: readonly string[],
+): PythonNode | undefined {
+  const args = asNodes(node.args);
+  const positional = args[index];
+  if (positional !== undefined && positional._type !== "Starred") {
+    return positional;
+  }
+  for (const keyword of asNodes(node.keywords)) {
+    if (
+      typeof keyword.arg === "string" &&
+      names.includes(keyword.arg) &&
+      isPythonNode(keyword.value)
+    ) {
+      return keyword.value;
+    }
+  }
+  return undefined;
+}
+
+function intConstant(node: PythonNode | undefined): number | undefined {
+  if (node === undefined) {
+    return undefined;
+  }
+  if (node._type === "Constant" && typeof node.value === "number") {
+    return node.value;
+  }
+  if (node._type === "Num" && typeof node.n === "number") {
+    return node.n;
+  }
+  return undefined;
 }

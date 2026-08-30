@@ -81,3 +81,10 @@ test("registry dict of classes is quiet", async () => {
   expect(result.code).toBe(0);
   expect(result.out).not.toMatch(/MyHandler/);
 });
+
+test("static spec_from_file_location alias instantiate is quiet", async () => {
+  const result = await runFixture("class-ok-path-load");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+  expect(result.out).not.toMatch(/LoadedBag/);
+});

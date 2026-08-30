@@ -6,6 +6,7 @@ import {
   collectImports,
   collectLoadKeys,
   collectModuleAliases,
+  collectPathLoads,
   containsPos,
   forEachPythonSource,
   groupByPackage,
@@ -22,6 +23,7 @@ import {
   nodeRange,
   publicInitNames,
   readDunderAll,
+  scanPathLoadUses,
   walkCallables,
   walkNodes,
 } from "./walk.ts";
@@ -37,6 +39,8 @@ test("walk helpers", () => {
   expect(isSkippedSource("/repo/fixtures/a.py", "/repo")).toBe(true);
   expect(groupByPackage).toBeTypeOf("function");
   expect(collectImports).toBeTypeOf("function");
+  expect(collectPathLoads).toBeTypeOf("function");
+  expect(scanPathLoadUses).toBeTypeOf("function");
   expect(isPassThrough({ _type: "FunctionDef", body: [] })).toBe(false);
   expect(isSmallAndFlat({ _type: "FunctionDef", body: [], lineno: 1, end_lineno: 1 }, "x")).toBe(
     true,

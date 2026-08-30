@@ -93,3 +93,26 @@ test("callback arg use is quiet", async () => {
   expect(result.out).not.toMatch(/sort_key/);
   expect(result.out).not.toMatch(/mapped/);
 });
+
+test("static spec_from_file_location alias use is quiet", async () => {
+  const result = await runFixture("def-ok-path-load");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+  expect(result.out).not.toMatch(/per_axis_r/);
+});
+
+test("non-static path load still reports the single in-file use", async () => {
+  const result = await runFixture("def-bad-path-load-dynamic");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/python\/no-unnecessary-def/);
+  expect(result.out).toMatch(/"wrap" is only used once and does not pay for the indirection/);
+});
+
+test("static path outside the package group does not silence", async () => {
+  const result = await runFixture("def-bad-path-load-outside");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/python\/no-unnecessary-def/);
+  expect(result.out).toMatch(/"wrap" is only used once and does not pay for the indirection/);
+});

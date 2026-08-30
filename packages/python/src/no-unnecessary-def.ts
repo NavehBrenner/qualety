@@ -3,7 +3,6 @@ import { defineRule, type RuleContext } from "qualety";
 import type { PythonNode, PythonSource } from "./python.ts";
 import {
   childNodes,
-  collectImports,
   collectLoadKeys,
   containsPos,
   type FileBinds,
@@ -13,6 +12,7 @@ import {
   isPythonNode,
   isSmallAndFlat,
   nameRange,
+  scanPathLoadUses,
 } from "./walk.ts";
 
 const FUNCTION_SUGGESTION =
@@ -42,55 +42,69 @@ export const noUnnecessaryDef = defineRule({
     if (!(artifact.sources instanceof Map)) {
       return;
     }
-    const scannedByPackage = groupByPackage(artifact.sources, context.getCwd());
+    const cwd = context.getCwd();
+    const scannedByPackage = groupByPackage(artifact.sources, cwd);
     for (const group of scannedByPackage.values()) {
       if (group.length > 0) {
-        scanPackageGroup(group, context);
+        scanPackageGroup(group, artifact.sources, cwd, context);
       }
     }
   },
 });
 
-function scanPackageGroup(group: readonly PythonSource[], context: Pick<RuleContext, "report">) {
+function scanPackageGroup(
+  group: readonly PythonSource[],
+  allSources: ReadonlyMap<string, PythonSource>,
+  cwd: string,
+  context: Pick<RuleContext, "report">,
+) {
   const defs: Def[] = [];
-  const binds = new Map<string, FileBinds>();
-  const sources = new Map(group.map((unit) => [unit.file, unit]));
   for (const unit of group) {
     const quiet = basename(unit.file) === "__init__.py";
-    binds.set(unit.file, collectImports(unit, sources));
     collectDefs(unit.tree, "", unit, quiet, defs);
   }
   const callCounts = new Map<string, number>();
   const valueLoads = new Set<string>();
   const byKey = new Map(defs.map((def) => [defKey(def), def]));
-  for (const unit of group) {
-    const fileBinds = binds.get(unit.file);
-    walkCalls(unit.tree, "", unit.file, (call) => {
-      tallyCall(call, fileBinds, defs, byKey, callCounts);
-    });
-    collectLoadKeys(
-      unit.tree,
-      "",
-      unit.file,
-      (parent, child) => parent._type === "Call" && child === parent.func,
-      (ref) => resolveCall(ref, fileBinds, defs),
-      (key) => byKey.get(key)?.node,
-      valueLoads,
-    );
-  }
+  const silenced = scanPathLoadUses(group, allSources, cwd, (unit, fileBinds) => {
+    tallyFileUses(unit, fileBinds, defs, byKey, callCounts, valueLoads);
+  });
   for (const def of defs) {
     if (!valueLoads.has(defKey(def))) {
-      considerDef(def, context, callCounts);
+      considerDef(def, context, callCounts, silenced);
     }
   }
+}
+
+function tallyFileUses(
+  unit: PythonSource,
+  fileBinds: FileBinds | undefined,
+  defs: readonly Def[],
+  byKey: ReadonlyMap<string, Def>,
+  callCounts: Map<string, number>,
+  valueLoads: Set<string>,
+) {
+  walkCalls(unit.tree, "", unit.file, (call) => {
+    tallyCall(call, fileBinds, defs, byKey, callCounts);
+  });
+  collectLoadKeys(
+    unit.tree,
+    "",
+    unit.file,
+    (parent, child) => parent._type === "Call" && child === parent.func,
+    (ref) => resolveCall(ref, fileBinds, defs),
+    (key) => byKey.get(key)?.node,
+    valueLoads,
+  );
 }
 
 function considerDef(
   def: Def,
   context: Pick<RuleContext, "report">,
   callCounts: ReadonlyMap<string, number>,
+  silenced: ReadonlySet<string>,
 ) {
-  if (def.quiet || isDunder(def.name)) {
+  if (def.quiet || isDunder(def.name) || silenced.has(def.file)) {
     return;
   }
   const uses = callCounts.get(defKey(def)) ?? 0;
