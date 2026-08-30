@@ -32,10 +32,10 @@ test("pass-through and small+flat one call exit 1", async () => {
   expect(result.err).toBe("");
   expect(result.code).toBe(1);
   expect(result.out).toMatch(/python\/no-unnecessary-def/);
-  expect(result.out).toMatch(/"wrap" is only called once and does not pay for the indirection/);
+  expect(result.out).toMatch(/"wrap" is only used once and does not pay for the indirection/);
   expect(result.out).toMatch(/"add"/);
   expect(result.out).toMatch(/"small_flat"/);
-  expect(result.out).toMatch(/Inline at its only call site/);
+  expect(result.out).toMatch(/Inline at its only use/);
   expect(result.out).not.toMatch(/in this file/);
   expect(result.out).not.toMatch(NO_SUGGESTION);
 });
@@ -45,9 +45,9 @@ test("one other-file caller and unused def exit 1", async () => {
   expect(result.err).toBe("");
   expect(result.code).toBe(1);
   expect(result.out).toMatch(/python\/no-unnecessary-def/);
-  expect(result.out).toMatch(/"wrap" is only called once and does not pay for the indirection/);
-  expect(result.out).toMatch(/"unused_fn" is not called and does not pay for the indirection/);
-  expect(result.out).toMatch(/Inline at its only call site/);
+  expect(result.out).toMatch(/"wrap" is only used once and does not pay for the indirection/);
+  expect(result.out).toMatch(/"unused_fn" is not used and does not pay for the indirection/);
+  expect(result.out).toMatch(/Inline at its only use/);
   expect(result.out).toMatch(/Remove this helper/);
   expect(result.out).not.toMatch(/in this file/);
   expect(result.out).not.toMatch(NO_SUGGESTION);
@@ -75,4 +75,21 @@ test("pass-through in test_*.py is quiet", async () => {
   const result = await runFixture("def-ok-test");
   expect(result.err).toBe("");
   expect(result.code).toBe(0);
+});
+
+test("registry dict of functions is quiet", async () => {
+  const result = await runFixture("def-ok-registry");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+  expect(result.out).not.toMatch(/predict_style_average/);
+  expect(result.out).not.toMatch(/predict_numerics_only/);
+  expect(result.out).not.toMatch(/predict_text_and_numerics/);
+});
+
+test("callback arg use is quiet", async () => {
+  const result = await runFixture("def-ok-callback");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+  expect(result.out).not.toMatch(/sort_key/);
+  expect(result.out).not.toMatch(/mapped/);
 });

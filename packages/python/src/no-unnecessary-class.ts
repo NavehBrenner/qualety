@@ -4,6 +4,7 @@ import {
   asNodes,
   childNodes,
   collectImports,
+  collectLoadKeys,
   containsPos,
   type FileBinds,
   groupByPackage,
@@ -67,13 +68,46 @@ function scanClasses(group: readonly PythonSource[], context: Pick<RuleContext, 
   }
   const byKey = new Map(classes.map((item) => [classKey(item), item]));
   const useCounts = new Map<string, number>();
+  const valueLoads = new Set<string>();
+  collectClassLoads(group, binds, classes, byKey, valueLoads);
   for (const unit of group) {
     walkClassUses(unit.tree, unit.file, (ref) => {
       tallyClassUse(ref, binds.get(unit.file), classes, byKey, useCounts);
     });
   }
   for (const item of classes) {
-    considerClass(item, context, useCounts);
+    if (!valueLoads.has(classKey(item))) {
+      considerClass(item, context, useCounts);
+    }
+  }
+}
+
+function collectClassLoads(
+  group: readonly PythonSource[],
+  binds: ReadonlyMap<string, FileBinds>,
+  classes: readonly ClassInfo[],
+  byKey: ReadonlyMap<string, ClassInfo>,
+  valueLoads: Set<string>,
+) {
+  for (const unit of group) {
+    const fileBinds = binds.get(unit.file);
+    collectLoadKeys(
+      unit.tree,
+      "",
+      unit.file,
+      (parent, child) => {
+        if (parent._type === "Call" && child === parent.func) {
+          return true;
+        }
+        if (parent._type !== "ClassDef") {
+          return false;
+        }
+        return asNodes(parent.bases).includes(child);
+      },
+      (ref) => resolveClass(ref, fileBinds, classes),
+      (key) => byKey.get(key)?.node,
+      valueLoads,
+    );
   }
 }
 
