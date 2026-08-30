@@ -24,7 +24,12 @@ export const explicitPublicReturnTypes = defineRule({
 });
 
 function considerStatement(stmt: Node, file: string, context: Pick<RuleContext, "report">) {
-  if (considerExportedFunction(stmt, file, context) || considerExportedVars(stmt, file, context)) {
+  if (Node.isFunctionDeclaration(stmt) && stmt.hasExportKeyword() && !stmt.hasDeclareKeyword()) {
+    const name = stmt.isDefaultExport() ? "default" : (stmt.getName() ?? "default");
+    considerFn(stmt, name, file, context);
+    return;
+  }
+  if (considerExportedVars(stmt, file, context)) {
     return;
   }
   if (Node.isClassDeclaration(stmt) && stmt.hasExportKeyword() && !stmt.hasDeclareKeyword()) {
@@ -37,21 +42,6 @@ function considerStatement(stmt: Node, file: string, context: Pick<RuleContext, 
       considerFn(expr, "default", file, context);
     }
   }
-}
-
-function considerExportedFunction(
-  stmt: Node,
-  file: string,
-  context: Pick<RuleContext, "report">,
-): boolean {
-  if (Node.isFunctionDeclaration(stmt)) {
-    if (stmt.hasExportKeyword() && !stmt.hasDeclareKeyword()) {
-      const name = stmt.isDefaultExport() ? "default" : (stmt.getName() ?? "default");
-      considerFn(stmt, name, file, context);
-      return true;
-    }
-  }
-  return false;
 }
 
 function considerExportedVars(
