@@ -42,8 +42,9 @@ Code style and TypeScript hygiene will be enforced by the tool itself as it matu
 
 **Plan before you build. Always.**
 
-- Opening an issue auto-runs you in `plan` mode. So does any `/oc …` comment
-  (issue thread or inline review comment). PR review summaries never start a run.
+- Plan/build only via `/oc` comments (Naveh); opening an issue does not start a run.
+  `/oc` comments (issue thread or inline review comment) still run. PR review
+  summaries never start a run.
 - `/oc` comments must come from a user with write access (`NavehBrenner`); the
   action asserts that on the comment author.
 - When planning or implementing a PR fix-up, read the latest PR review(s).
@@ -51,7 +52,7 @@ Code style and TypeScript hygiene will be enforced by the tool itself as it matu
 - Implement only when a comment says `/oc build`. That is the approval; prose asking you to "go ahead" in a plan run is not.
 - Optional `model:<provider>/<id>` in the triggering comment (no space after
   the colon; first match) overrides the default `xai/grok-4.6`. Invalid
-  tokens fail closed. Issue-open never overrides.
+  tokens fail closed.
 - A plan states: files touched, the SPECS sections it honours, what gets tested, and what is deliberately out of scope.
 
 PR **title**: imperative, specific. PR **body is** the squash commit body (GitHub squash uses title + body). Thin one-liners or a one-paragraph “rationale” are **not** enough. Write for a human reading the squash commit months later — enough context without opening the diff. Do **not** put OpenCode trigger tokens in the PR body.
