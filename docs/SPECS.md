@@ -105,7 +105,7 @@ These decisions are considered stable unless a major new constraint appears:
 
      **Compile:** `bun build --compile` (CI). Local dev stays pnpm/Node. Binary/pip config path is `qualety.config.json`; `defineConfig` / TS/JS config remain npm.
 
-     **Surfaces ship on tag `v*`** (GitHub Release binaries + npm provenance + PyPI trusted publish). Merging to main does not publish.
+     **Surfaces ship on tag `v*`** (GitHub Release binaries + npm provenance + PyPI trusted publish). Merging to main does not publish. Comment `/release` / `/release patch|minor|major|X.Y.Z` as Naveh on any issue/PR to tag **main HEAD**.
 
      **This train does not:** embed a JS runtime; add a WASM/RPC plugin protocol; author plugins in Python; vendor dupehound or CPython (PATH / `QUALETY_DUPEHOUND`; `python3` on PATH for Python rules). Custom plugins stay Node/npm.
 
