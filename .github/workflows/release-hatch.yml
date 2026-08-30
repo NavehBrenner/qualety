@@ -1,0 +1,113 @@
+name: release hatch
+
+# `/release` on an issue or PR comment tags main HEAD (next or exact vX.Y.Z).
+# Does not commit version bumps — release.yml stamps versions from the tag.
+#
+# Default GITHUB_TOKEN tag pushes do not start other workflows, so this mints
+# the OpenCode App token (same as opencode.yml) and pushes with that — otherwise
+# release.yml stays silent.
+
+on:
+  issue_comment:
+    types: [created]
+
+jobs:
+  tag:
+    if: |
+      startsWith(github.event.comment.body, '/release') &&
+      github.event.comment.user.login == 'NavehBrenner'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-hatch
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      issues: write
+      actions: read
+    steps:
+      - uses: actions/create-github-app-token@v3
+        id: app-token
+        with:
+          app-id: ${{ secrets.OPENCODE_APP_ID }}
+          private-key: ${{ secrets.OPENCODE_APP_PRIVATE_KEY }}
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          token: ${{ steps.app-token.outputs.token }}
+      - env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_REPO: ${{ github.repository }}
+          ISSUE: ${{ github.event.issue.number }}
+          COMMENT: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          git config user.name 'opencode-agent[bot]'
+          git config user.email 'opencode-agent[bot]@users.noreply.github.com'
+          git fetch --tags origin
+
+          reply() {
+            gh issue comment "$ISSUE" --body "$1"
+          }
+          fail() {
+            reply "$1"
+            exit 1
+          }
+
+          first="${COMMENT%%$'\n'*}"
+          first="${first%$'\r'}"
+          read -r cmd bump rest <<< "$first"
+          if [ "$cmd" != "/release" ] || [ -n "${rest:-}" ]; then
+            fail "could not parse \`/release\` args from: \`$first\` — use \`/release\`, \`/release patch|minor|major\`, or \`/release X.Y.Z\`"
+          fi
+
+          latest=$(git tag -l 'v*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n 1 || true)
+          case "${bump:-}" in
+            '' | patch | minor | major)
+              if [ -z "$latest" ]; then
+                fail "no existing \`vX.Y.Z\` tag to bump from"
+              fi
+              ver="${latest#v}"
+              major="${ver%%.*}"
+              rest_ver="${ver#*.}"
+              minor="${rest_ver%%.*}"
+              patch="${rest_ver#*.}"
+              case "${bump:-patch}" in
+                patch) tag="v$major.$minor.$((patch + 1))" ;;
+                minor) tag="v$major.$((minor + 1)).0" ;;
+                major) tag="v$((major + 1)).0.0" ;;
+              esac
+              ;;
+            *)
+              if [[ ! "$bump" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                fail "could not parse \`/release\` args from: \`$first\` — use \`/release\`, \`/release patch|minor|major\`, or \`/release X.Y.Z\`"
+              fi
+              tag="v${bump#v}"
+              ;;
+          esac
+
+          sha=$(git rev-parse HEAD)
+          short=$(git rev-parse --short HEAD)
+
+          if git show-ref --verify --quiet "refs/tags/$tag"; then
+            fail "tag \`$tag\` already exists — not retagging"
+          fi
+
+          conclusion=$(gh run list --workflow ci.yml --commit "$sha" --status completed --limit 1 --json conclusion --jq '.[0].conclusion // empty')
+          if [ -z "$conclusion" ]; then
+            fail "no completed CI run on main \`$short\` — not tagging an unproven tip"
+          fi
+          if [ "$conclusion" != "success" ]; then
+            fail "latest completed CI on main \`$short\` is \`$conclusion\` (need success)"
+          fi
+
+          git tag -a "$tag" "$sha" -m "Release $tag"
+          git push origin "refs/tags/$tag"
+
+          release_url=$(gh run list --workflow release.yml --commit "$sha" --limit 1 --json url --jq '.[0].url // empty' || true)
+          if [ -n "$release_url" ]; then
+            follow="Release: $release_url"
+          else
+            follow="Release will run on tag push."
+          fi
+          reply "$(printf 'Tagged `%s` on main (`%s`).\n\n%s\n\nnpm / PyPI / GitHub Release follow `release.yml`.\n' "$tag" "$short" "$follow")"
