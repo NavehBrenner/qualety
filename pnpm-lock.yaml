@@ -109,6 +109,15 @@ importers:
         specifier: ^4.0.17
         version: 4.4.3
     devDependencies:
+      '@astral-sh/ruff-wasm-web':
+        specifier: ^0.16.5
+        version: 0.16.5
+      '@biomejs/js-api':
+        specifier: ^6.0.0
+        version: 6.0.0(@biomejs/wasm-bundler@2.5.10)(@biomejs/wasm-nodejs@2.5.10)(@biomejs/wasm-web@2.5.10)
+      '@biomejs/wasm-web':
+        specifier: 2.5.10
+        version: 2.5.10
       '@types/node':
         specifier: ^26.2.0
         version: 26.2.0
@@ -143,6 +152,9 @@ packages:
 
   '@astral-sh/ruff-wasm-nodejs@0.16.5':
     resolution: {integrity: sha512-61SAOrrBUCMaz7Gd9GBhGOkVWsc+kMf5yr5Con51EHnprkJR4rKQt497gBsgwSVlJDKMS5KsYHrhHioZFa+MDA==}
+
+  '@astral-sh/ruff-wasm-web@0.16.5':
+    resolution: {integrity: sha512-wgu1cCrYBCuTbiKa5HlNfIpl0YXBqyV7QS51OD758CmDhJeefBF1Qtyn4clwAgXjuxoxnNaGnCAEXZ8vZcLfbg==}
 
   '@biomejs/biome@2.5.10':
     resolution: {integrity: sha512-WRKXARA3kTuiV5sxqTpobJ/I0MVd4vk3pOL6wnp5az4LntFIhWTj1RWZq3DI9PCEN3lXcqy7p5aqUHzvq8AXyQ==}
@@ -200,6 +212,29 @@ packages:
     engines: {node: '>=14.21.3'}
     cpu: [x64]
     os: [win32]
+
+  '@biomejs/js-api@6.0.0':
+    resolution: {integrity: sha512-8HP7wexjQo5Np1J9h0B2x8L5G0GZpCacgjykxLHtvLPvF0hNqSG754oh8bxo+OSFDpVGMfSjmLO+ZY/5KbfjmQ==}
+    peerDependencies:
+      '@biomejs/wasm-bundler': ^2.5.0
+      '@biomejs/wasm-nodejs': ^2.5.0
+      '@biomejs/wasm-web': ^2.5.0
+    peerDependenciesMeta:
+      '@biomejs/wasm-bundler':
+        optional: true
+      '@biomejs/wasm-nodejs':
+        optional: true
+      '@biomejs/wasm-web':
+        optional: true
+
+  '@biomejs/wasm-bundler@2.5.10':
+    resolution: {integrity: sha512-13gbsV5eryJBAO9O2yscblVjqVh3y+5lgitaIxyriDTMmCFmP2BfNHbmlLqAj56J7bpl8dpabJZ9G48YYmuyFQ==}
+
+  '@biomejs/wasm-nodejs@2.5.10':
+    resolution: {integrity: sha512-+18kQnXOFcSbx/sY7oykWU/wuYeNpVm0/cBoI6AtXShZ3PUVk2vyPn8Qi1ZwDxiz/u2qr6DCpSEVsZdxxqdsgg==}
+
+  '@biomejs/wasm-web@2.5.10':
+    resolution: {integrity: sha512-JJBMW0SMfw5HW4V1c0ieFYMoISFV0/3yDdMrbd7fB+xBK155ckDDfumvCf9yhA0SF5WrrxFyWNE7v4Rr1Rm/Vw==}
 
   '@emnapi/runtime@1.11.3':
     resolution: {integrity: sha512-Xz4Tpyki7XyrpbUK1jR1AhdAdaXyhhY4lZ3neLodmhpuWfy2PAQN5B46sAiU4liOXGLkHypn/qU+jvfWSCYYLA==}
@@ -1226,6 +1261,8 @@ snapshots:
 
   '@astral-sh/ruff-wasm-nodejs@0.16.5': {}
 
+  '@astral-sh/ruff-wasm-web@0.16.5': {}
+
   '@biomejs/biome@2.5.10':
     optionalDependencies:
       '@biomejs/cli-darwin-arm64': 2.5.10
@@ -1260,6 +1297,20 @@ snapshots:
 
   '@biomejs/cli-win32-x64@2.5.10':
     optional: true
+
+  '@biomejs/js-api@6.0.0(@biomejs/wasm-bundler@2.5.10)(@biomejs/wasm-nodejs@2.5.10)(@biomejs/wasm-web@2.5.10)':
+    optionalDependencies:
+      '@biomejs/wasm-bundler': 2.5.10
+      '@biomejs/wasm-nodejs': 2.5.10
+      '@biomejs/wasm-web': 2.5.10
+
+  '@biomejs/wasm-bundler@2.5.10':
+    optional: true
+
+  '@biomejs/wasm-nodejs@2.5.10':
+    optional: true
+
+  '@biomejs/wasm-web@2.5.10': {}
 
   '@emnapi/runtime@1.11.3':
     dependencies:

@@ -148,14 +148,19 @@ async function runDoctor(cwd: string, out: (msg: string) => void): Promise<numbe
     return 0;
   }
   if (!biomeEnabled(loaded.config)) {
-    out(isStandalone() ? "biome: off (standalone binary)" : "biome: off (biome: false)");
+    out("biome: off (biome: false)");
+  } else if (isStandalone()) {
+    // the embedded wasm build exposes no version accessor, so report the backend only
+    out("biome: on\nbackend: embedded wasm");
   } else {
     const bin = resolveBiomeBinary();
     const version = await readBiomeVersion(bin, cwd);
     out(`biome: on\nversion: ${version}\nbinary: ${bin}\nconfig: ${GENERATED_BIOME_PATH}`);
   }
   if (!ruffEnabled(loaded.config)) {
-    out(isStandalone() ? "ruff: off (standalone binary)" : "ruff: off (ruff: false)");
+    out("ruff: off (ruff: false)");
+  } else if (isStandalone()) {
+    out(`ruff: on\nversion: ${await readRuffVersion()}\nbackend: embedded wasm`);
   } else {
     const bin = resolveRuffModule();
     const version = await readRuffVersion(bin);
