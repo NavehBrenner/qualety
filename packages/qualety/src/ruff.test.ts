@@ -12,7 +12,6 @@ import {
   resolveRuffModule,
   ruffEnabled,
   runRuffPhase,
-  serializeRuffToml,
   writeGeneratedRuffConfig,
 } from "./ruff.ts";
 import { pluginSchema } from "./schemas.ts";
@@ -83,34 +82,47 @@ test("merge rejects non-empty Ruff options", () => {
   ).toThrow(/does not accept options/);
 });
 
-test("serializeRuffToml writes extend-select and ignore without select", () => {
-  expect(serializeRuffToml({ UP: "error", E501: "off", F: "warn" })).toBe(
+test("writeGeneratedRuffConfig writes extend-select and ignore without select", async () => {
+  const dir = await writeTree({});
+  await writeGeneratedRuffConfig(dir, [bagPlugin("py", { rules: { UP: "error", F: "warn" } })], {
+    rules: { E501: "off" },
+  });
+  const written = await readFile(join(dir, GENERATED_RUFF_PATH), "utf8");
+  expect(written).toBe(
     `[lint]
 extend-select = [ "F", "UP" ]
 ignore = [ "E501" ]
 `,
   );
-  expect(serializeRuffToml({})).toBe("");
-  expect(serializeRuffToml({ UP: "error" })).not.toMatch(/^select\s*=/m);
+  expect(written).not.toMatch(/^select\s*=/m);
+  const empty = await writeTree({});
+  await writeGeneratedRuffConfig(empty, [], undefined);
+  expect(await readFile(join(empty, GENERATED_RUFF_PATH), "utf8")).toBe("");
 });
 
-test("serializeRuffToml mirrors inherited select and isort plus plugin extend-select", () => {
-  expect(
-    serializeRuffToml(
-      { UP: "error" },
-      {
-        select: ["E", "I", "RUF"],
-        isort: { "known-first-party": ["demo"] },
-      },
-    ),
-  ).toBe(`[lint]
+test("writeGeneratedRuffConfig mirrors inherited select and isort plus plugin extend-select", async () => {
+  const dir = await writeTree({
+    "pyproject.toml": `[tool.ruff.lint]
+select = ["E", "I", "RUF"]
+[tool.ruff.lint.isort]
+known-first-party = ["demo"]
+`,
+  });
+  await writeGeneratedRuffConfig(dir, [bagPlugin("py", { rules: { UP: "error" } })], undefined);
+  expect(await readFile(join(dir, GENERATED_RUFF_PATH), "utf8")).toBe(`[lint]
 select = [ "E", "I", "RUF" ]
 extend-select = [ "UP" ]
 
 [lint.isort]
 known-first-party = [ "demo" ]
 `);
-  expect(serializeRuffToml({}, { isort: { "known-first-party": ["demo"] } })).toBe(`[lint.isort]
+  const isortOnly = await writeTree({
+    "ruff.toml": `[lint.isort]
+known-first-party = ["demo"]
+`,
+  });
+  await writeGeneratedRuffConfig(isortOnly, [], undefined);
+  expect(await readFile(join(isortOnly, GENERATED_RUFF_PATH), "utf8")).toBe(`[lint.isort]
 known-first-party = [ "demo" ]
 `);
 });

@@ -102,21 +102,21 @@ type ProjectRuffSlice = {
   isort?: Record<string, unknown>;
 };
 
-export function serializeRuffToml(
-  merged: Record<string, RuffRuleSetting>,
-  project?: ProjectRuffSlice,
-): string {
-  const lint = ruffLintSettings(merged, project);
-  return Object.keys(lint).length === 0 ? "" : stringify({ lint });
-}
-
 export async function writeGeneratedRuffConfig(
   cwd: string,
   plugins: readonly Plugin[],
   userRuff: UserConfig["ruff"],
+  project?: ProjectRuffSlice,
 ): Promise<string> {
   const userRules = userRuff === false || userRuff === undefined ? undefined : userRuff.rules;
-  return writeRuffToml(cwd, mergeRuffRules(plugins, userRules), await loadProjectRuffSlice(cwd));
+  const slice = project ?? (await loadProjectRuffSlice(cwd));
+  await mkdir(join(cwd, GENERATED_DIR), { recursive: true });
+  const lint = ruffLintSettings(mergeRuffRules(plugins, userRules), slice);
+  await writeFile(
+    join(cwd, GENERATED_RUFF_PATH),
+    Object.keys(lint).length === 0 ? "" : stringify({ lint }),
+  );
+  return GENERATED_RUFF_PATH;
 }
 
 export async function runRuffPhase(input: {
@@ -140,13 +140,22 @@ export async function runRuffPhase(input: {
   try {
     workspace = wasm.open(workspaceSettings(merged, project));
   } catch (error) {
-    if (project === undefined || !hasInheritedFields(project)) {
+    if (
+      project === undefined ||
+      !(
+        project.select !== undefined ||
+        (project.extendSelect !== undefined && project.extendSelect.length > 0) ||
+        (project.ignore !== undefined && project.ignore.length > 0) ||
+        (project.extendIgnore !== undefined && project.extendIgnore.length > 0) ||
+        project.isort !== undefined
+      )
+    ) {
       throw error;
     }
     usedProject = undefined;
     workspace = wasm.open(workspaceSettings(merged));
   }
-  await writeRuffToml(input.cwd, merged, usedProject);
+  await writeGeneratedRuffConfig(input.cwd, input.plugins, input.ruff, usedProject ?? {});
   try {
     const violations: Violation[] = [];
     for (const file of paths) {
@@ -256,16 +265,6 @@ function ruffLintSettings(
   return lint;
 }
 
-async function writeRuffToml(
-  cwd: string,
-  merged: Record<string, RuffRuleSetting>,
-  project: ProjectRuffSlice | undefined,
-): Promise<string> {
-  await mkdir(join(cwd, GENERATED_DIR), { recursive: true });
-  await writeFile(join(cwd, GENERATED_RUFF_PATH), serializeRuffToml(merged, project));
-  return GENERATED_RUFF_PATH;
-}
-
 async function loadProjectRuffSlice(cwd: string): Promise<ProjectRuffSlice | undefined> {
   for (const name of ["ruff.toml", ".ruff.toml"] as const) {
     const document = await readTomlDocument(join(cwd, name));
@@ -295,11 +294,14 @@ async function readTomlDocument(
   try {
     text = await readFile(path, "utf8");
   } catch (error) {
-    return isNotFound(error) ? "missing" : "invalid";
+    return isRecord(error) && error.code === "ENOENT" ? "missing" : "invalid";
   }
   try {
-    const value = parse(text);
-    return isRecord(value) ? value : "invalid";
+    const value: unknown = parse(text);
+    if (!isRecord(value)) {
+      return "invalid";
+    }
+    return value;
   } catch {
     return "invalid";
   }
@@ -307,28 +309,14 @@ async function readTomlDocument(
 
 function sliceProjectRuff(root: Record<string, unknown>): ProjectRuffSlice {
   const lint = isRecord(root.lint) ? root.lint : undefined;
-  const slice: ProjectRuffSlice = {};
-  const select = pickStringArray(lint, root, "select");
-  if (select !== undefined) {
-    slice.select = select;
-  }
-  const extendSelect = pickStringArray(lint, root, "extend-select");
-  if (extendSelect !== undefined) {
-    slice.extendSelect = extendSelect;
-  }
-  const ignore = pickStringArray(lint, root, "ignore");
-  if (ignore !== undefined) {
-    slice.ignore = ignore;
-  }
-  const extendIgnore = pickStringArray(lint, root, "extend-ignore");
-  if (extendIgnore !== undefined) {
-    slice.extendIgnore = extendIgnore;
-  }
-  const isort = pickIsortTable(lint, root);
-  if (isort !== undefined) {
-    slice.isort = isort;
-  }
-  return slice;
+  const isortSource = lint !== undefined && Object.hasOwn(lint, "isort") ? lint.isort : root.isort;
+  return {
+    select: pickStringArray(lint, root, "select"),
+    extendSelect: pickStringArray(lint, root, "extend-select"),
+    ignore: pickStringArray(lint, root, "ignore"),
+    extendIgnore: pickStringArray(lint, root, "extend-ignore"),
+    isort: isRecord(isortSource) ? isortSource : undefined,
+  };
 }
 
 function pickStringArray(
@@ -342,35 +330,11 @@ function pickStringArray(
   return stringArray(root[key]);
 }
 
-function pickIsortTable(
-  lint: Record<string, unknown> | undefined,
-  root: Record<string, unknown>,
-): Record<string, unknown> | undefined {
-  if (lint !== undefined && Object.hasOwn(lint, "isort")) {
-    return isRecord(lint.isort) ? lint.isort : undefined;
-  }
-  return isRecord(root.isort) ? root.isort : undefined;
-}
-
-function hasInheritedFields(project: ProjectRuffSlice): boolean {
-  return (
-    project.select !== undefined ||
-    (project.extendSelect !== undefined && project.extendSelect.length > 0) ||
-    (project.ignore !== undefined && project.ignore.length > 0) ||
-    (project.extendIgnore !== undefined && project.extendIgnore.length > 0) ||
-    project.isort !== undefined
-  );
-}
-
 function stringArray(value: unknown): string[] | undefined {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
     return undefined;
   }
   return value;
-}
-
-function isNotFound(error: unknown): boolean {
-  return isRecord(error) && error.code === "ENOENT";
 }
 
 async function lintPythonFile(
