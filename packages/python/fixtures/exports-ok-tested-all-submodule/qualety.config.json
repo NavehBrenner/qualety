@@ -1,0 +1,7 @@
+{
+  "plugins": ["../../dist/index.js"],
+  "rules": {
+    "python/public-exports-tested": "error"
+  },
+  "biome": false
+}
