@@ -24,6 +24,7 @@ import {
   publicInitNames,
   readDunderAll,
   scanPathLoadUses,
+  tallyResolvedUse,
   walkCallables,
   walkNodes,
 } from "./walk.ts";
@@ -50,6 +51,12 @@ test("walk helpers", () => {
   ).toBe(5);
   expect(nodeRange({ _type: "Name", lineno: 1, col_offset: 0 }).start.column).toBe(1);
   expect(containsPos({ _type: "FunctionDef", lineno: 1, end_lineno: 3 }, 2)).toBe(true);
+  const node = { _type: "ClassDef", lineno: 1, end_lineno: 5 };
+  const counts = new Map<string, number>();
+  tallyResolvedUse("k", { file: "/a.py", node }, "/a.py", 3, counts);
+  expect(counts.size).toBe(0);
+  tallyResolvedUse("k", { file: "/a.py", node }, "/b.py", 3, counts);
+  expect(counts.get("k")).toBe(1);
   expect(hasDecorator({ _type: "FunctionDef", decorator_list: [] }, new Set(["overload"]))).toBe(
     false,
   );

@@ -397,6 +397,22 @@ export function containsPos(node: PythonNode, lineno: number): boolean {
   return false;
 }
 
+export function tallyResolvedUse(
+  key: string | undefined,
+  target: { file: string; node: PythonNode } | undefined,
+  refFile: string,
+  lineno: number,
+  counts: Map<string, number>,
+): void {
+  if (key === undefined) {
+    return;
+  }
+  if (target !== undefined && refFile === target.file && containsPos(target.node, lineno)) {
+    return;
+  }
+  counts.set(key, (counts.get(key) ?? 0) + 1);
+}
+
 export function hasDecorator(fn: PythonNode, names: ReadonlySet<string>): boolean {
   for (const dec of asNodes(fn.decorator_list)) {
     if (decoratorHits(dec, names)) {
