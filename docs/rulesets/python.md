@@ -68,7 +68,7 @@ Cousin of `ts/public-exports-tested`. Public surface is **package `__init__.py` 
 
 **Public names:** if `__all__` is a single `Assign`/`AnnAssign` to a list/tuple of string constants → those names, minus `_` prefix. Dynamic / augmented / unparsable `__all__` → silence the package. Else: non-`_` top-level `ImportFrom` binds or simple `Name = Name` aliases in package `__init__.py`. No `__all__` and no clear re-exports → no report. Star-import is a known miss.
 
-**Tested:** a `test_*.py` / `*_test.py` / `tests` / `__tests__` / `conftest.py` file (same package or any test in the artifact that imports that package) references the name via resolvable import or `mod.name` attribute. Unresolved / `import *` does not satisfy. Fixture dirs are not tests. Keep tests in the Python artifact.
+**Tested:** a `test_*.py` / `*_test.py` / `tests` / `__tests__` / `conftest.py` file (same package or any test in the artifact that imports that package) references the name via resolvable import from the defining module **or** the package root (or `mod.name` on either). Unresolved / `import *` does not satisfy. Fixture dirs are not tests. Keep tests in the Python artifact.
 
 **Violation:** names the export on the `__all__` string or the `__init__` bind; suggestion: add a test import or stop exporting.
 

@@ -61,6 +61,18 @@ test("tested re-export exit 0", async () => {
   expect(result.code).toBe(0);
 });
 
+test("tested re-export via defining submodule exit 0", async () => {
+  const result = await runFixture("exports-ok-tested-submodule");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+});
+
+test("tested __all__ re-export via defining submodule exit 0", async () => {
+  const result = await runFixture("exports-ok-tested-all-submodule");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+});
+
 test("no public surface and private re-export exit 0", async () => {
   const result = await runFixture("exports-ok-quiet");
   expect(result.err).toBe("");
