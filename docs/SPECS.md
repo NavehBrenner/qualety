@@ -411,7 +411,7 @@ Do **not** own classic eslint-plugin-react / react-hooks / jsx-a11y, TanStack es
 | `python/no-mutable-default` | Implemented (mutable default args; see [python.md](./rulesets/python.md)) |
 | `python/require-typed-public` | Implemented (annotation presence on public callables; see [python.md](./rulesets/python.md)) |
 | `python/no-bare-except` | Implemented (bare `except:` / `BaseException`; not plain `Exception`; see [python.md](./rulesets/python.md)) |
-| `python/no-silent-except` | Implemented (except body only pass/ellipsis/continue/string; see [python.md](./rulesets/python.md)) |
+| `python/no-silent-except` | Implemented (no-op except bodies with fallthrough pass/ellipsis and loop-continue gates; see [python.md](./rulesets/python.md)) |
 | `python/no-open-without-with` | Implemented (unmanaged `open(...)` in the same function; see [python.md](./rulesets/python.md)) |
 | `python/no-sys-path-hack` | Implemented (`sys.path` / `sys.path_hooks` import-fix mutations; see [python.md](./rulesets/python.md)) |
 | `python/no-public-any` | Implemented (public callables must not annotate with bare `Any`; see [python.md](./rulesets/python.md)) |

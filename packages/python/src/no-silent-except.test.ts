@@ -38,7 +38,7 @@ test("except body of pass, ellipsis, continue, or string exit 1", async () => {
   expect(result.out).not.toMatch(NO_SUGGESTION);
 });
 
-test("log+raise, return, raise, and mixed pass+real stmt exit 0", async () => {
+test("gated fallthrough, log+raise, return, raise, and mixed pass+real stmt exit 0", async () => {
   const result = await runFixture("except-silent-ok");
   expect(result.err).toBe("");
   expect(result.code).toBe(0);
