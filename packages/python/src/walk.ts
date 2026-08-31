@@ -313,7 +313,11 @@ function resolveModuleFile(
     if (sibling !== undefined) {
       return sibling;
     }
-    return moduleHit(join(packageDir, ...parts), sources);
+    const fromPackage = moduleHit(join(packageDir, ...parts), sources);
+    if (fromPackage !== undefined) {
+      return fromPackage;
+    }
+    return moduleHit(join(packageDir, "src", ...parts), sources);
   }
   let dir = dirname(fromFile);
   for (let index = 1; index < level; index += 1) {
