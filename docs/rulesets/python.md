@@ -100,6 +100,19 @@ Flag `except:` (type missing) and `except BaseException` / `except BaseException
 
 Flag `except` handlers whose **every** body statement is a no-op: `pass`, `continue`, ellipsis (`Constant.value === "Ellipsis"`), or a string constant. Does **not** inspect the exception type (stacks with bare-except). Any other statement (`return`, `raise`, a call, mixed `pass` + real stmt, …) → silence.
 
+Two cheap fallthrough gates (underapprox: if the sibling check fails, keep the finding). Immediate next sibling only in the same enclosing body — no comment skip, no multi-no-op skip, no CFG.
+
+**Quiet:**
+- Pure `pass` and/or ellipsis when the immediate next sibling after the whole `try`/`except*` chain is `return`, `raise`, or simple `Assign` / `AnnAssign` **with a value**.
+- Pure `continue` when the nearest enclosing `for` / `async for` / `while` is immediately followed by `raise` or `return`.
+- Non-noop handler bodies (log+raise, in-handler `return`/`raise`, mixed `pass` + real stmt).
+
+**Still a finding:**
+- No-op handler with nothing after the chain, or a next sibling that is not one of the gated stmt types (`If`, `AugAssign`, annotation-only `AnnAssign`, …).
+- String-only body (always, even if a fallback sibling follows).
+- Pure `continue` when the loop just ends or the next sibling is not `raise`/`return`.
+- Mixed no-op-only bodies (`pass`+`continue`, etc.).
+
 **Violation:** on the handler; suggestion: log and re-raise, narrow the type, or handle with a real branch / `return` / `raise`.
 
 ### `python/no-open-without-with`
