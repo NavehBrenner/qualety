@@ -393,13 +393,20 @@ export function containsPos(node: PythonNode, lineno: number): boolean {
   return false;
 }
 
-export function containsPosInFile(
-  nodeFile: string,
-  node: PythonNode,
+export function tallyResolvedUse(
+  key: string | undefined,
+  target: { file: string; node: PythonNode } | undefined,
   refFile: string,
   lineno: number,
-): boolean {
-  return refFile === nodeFile && containsPos(node, lineno);
+  counts: Map<string, number>,
+): void {
+  if (key === undefined) {
+    return;
+  }
+  if (target !== undefined && refFile === target.file && containsPos(target.node, lineno)) {
+    return;
+  }
+  counts.set(key, (counts.get(key) ?? 0) + 1);
 }
 
 export function hasDecorator(fn: PythonNode, names: ReadonlySet<string>): boolean {

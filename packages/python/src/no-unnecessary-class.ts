@@ -4,7 +4,6 @@ import {
   asNodes,
   childNodes,
   collectLoadKeys,
-  containsPosInFile,
   type FileBinds,
   groupByPackage,
   hasDecorator,
@@ -14,6 +13,7 @@ import {
   isSmallAndFlat,
   nameRange,
   scanPathLoadUses,
+  tallyResolvedUse,
 } from "./walk.ts";
 
 const CLASS_OR_STATIC = new Set(["classmethod", "staticmethod"]);
@@ -90,7 +90,14 @@ function tallyClassFile(
   valueLoads: Set<string>,
 ) {
   walkClassUses(unit.tree, unit.file, (ref) => {
-    tallyClassUse(ref, fileBinds, classes, byKey, useCounts);
+    const key = resolveClass(ref, fileBinds, classes);
+    tallyResolvedUse(
+      key,
+      key === undefined ? undefined : byKey.get(key),
+      ref.file,
+      ref.lineno,
+      useCounts,
+    );
   });
   collectLoadKeys(
     unit.tree,
@@ -177,24 +184,6 @@ function walkClassUses(node: PythonNode, file: string, visit: (ref: ClassRef) =>
   for (const child of childNodes(node)) {
     walkClassUses(child, file, visit);
   }
-}
-
-function tallyClassUse(
-  ref: ClassRef,
-  fileBinds: FileBinds | undefined,
-  classes: readonly ClassInfo[],
-  byKey: ReadonlyMap<string, ClassInfo>,
-  counts: Map<string, number>,
-) {
-  const key = resolveClass(ref, fileBinds, classes);
-  if (key === undefined) {
-    return;
-  }
-  const item = byKey.get(key);
-  if (item !== undefined && containsPosInFile(item.file, item.node, ref.file, ref.lineno)) {
-    return;
-  }
-  counts.set(key, (counts.get(key) ?? 0) + 1);
 }
 
 function resolveClass(

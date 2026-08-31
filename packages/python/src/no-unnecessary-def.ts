@@ -4,7 +4,6 @@ import type { PythonNode, PythonSource } from "./python.ts";
 import {
   childNodes,
   collectLoadKeys,
-  containsPosInFile,
   type FileBinds,
   groupByPackage,
   isDunder,
@@ -13,6 +12,7 @@ import {
   isSmallAndFlat,
   nameRange,
   scanPathLoadUses,
+  tallyResolvedUse,
 } from "./walk.ts";
 
 const FUNCTION_SUGGESTION =
@@ -85,7 +85,14 @@ function tallyFileUses(
   valueLoads: Set<string>,
 ) {
   walkCalls(unit.tree, "", unit.file, (call) => {
-    tallyCall(call, fileBinds, defs, byKey, callCounts);
+    const key = resolveCall(call, fileBinds, defs);
+    tallyResolvedUse(
+      key,
+      key === undefined ? undefined : byKey.get(key),
+      call.file,
+      call.lineno,
+      callCounts,
+    );
   });
   collectLoadKeys(
     unit.tree,
@@ -149,24 +156,6 @@ function collectDefs(
   for (const child of childNodes(node)) {
     collectDefs(child, className, unit, quiet, defs);
   }
-}
-
-function tallyCall(
-  call: RawCall,
-  fileBinds: FileBinds | undefined,
-  defs: readonly Def[],
-  byKey: ReadonlyMap<string, Def>,
-  counts: Map<string, number>,
-) {
-  const key = resolveCall(call, fileBinds, defs);
-  if (key === undefined) {
-    return;
-  }
-  const def = byKey.get(key);
-  if (def !== undefined && containsPosInFile(def.file, def.node, call.file, call.lineno)) {
-    return;
-  }
-  counts.set(key, (counts.get(key) ?? 0) + 1);
 }
 
 type RawCall = {
