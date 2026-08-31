@@ -8,6 +8,7 @@ import {
   collectModuleAliases,
   collectPathLoads,
   containsPos,
+  containsPosInFile,
   forEachPythonSource,
   groupByPackage,
   hasDecorator,
@@ -50,6 +51,12 @@ test("walk helpers", () => {
   ).toBe(5);
   expect(nodeRange({ _type: "Name", lineno: 1, col_offset: 0 }).start.column).toBe(1);
   expect(containsPos({ _type: "FunctionDef", lineno: 1, end_lineno: 3 }, 2)).toBe(true);
+  expect(
+    containsPosInFile("/a.py", { _type: "ClassDef", lineno: 1, end_lineno: 5 }, "/a.py", 3),
+  ).toBe(true);
+  expect(
+    containsPosInFile("/a.py", { _type: "ClassDef", lineno: 1, end_lineno: 5 }, "/b.py", 3),
+  ).toBe(false);
   expect(hasDecorator({ _type: "FunctionDef", decorator_list: [] }, new Set(["overload"]))).toBe(
     false,
   );

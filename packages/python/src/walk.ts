@@ -393,6 +393,15 @@ export function containsPos(node: PythonNode, lineno: number): boolean {
   return false;
 }
 
+export function containsPosInFile(
+  nodeFile: string,
+  node: PythonNode,
+  refFile: string,
+  lineno: number,
+): boolean {
+  return refFile === nodeFile && containsPos(node, lineno);
+}
+
 export function hasDecorator(fn: PythonNode, names: ReadonlySet<string>): boolean {
   for (const dec of asNodes(fn.decorator_list)) {
     if (decoratorHits(dec, names)) {

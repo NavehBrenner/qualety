@@ -4,7 +4,7 @@ import type { PythonNode, PythonSource } from "./python.ts";
 import {
   childNodes,
   collectLoadKeys,
-  containsPos,
+  containsPosInFile,
   type FileBinds,
   groupByPackage,
   isDunder,
@@ -163,10 +163,8 @@ function tallyCall(
     return;
   }
   const def = byKey.get(key);
-  if (def !== undefined) {
-    if (containsPos(def.node, call.lineno)) {
-      return;
-    }
+  if (def !== undefined && containsPosInFile(def.file, def.node, call.file, call.lineno)) {
+    return;
   }
   counts.set(key, (counts.get(key) ?? 0) + 1);
 }

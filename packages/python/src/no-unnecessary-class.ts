@@ -4,7 +4,7 @@ import {
   asNodes,
   childNodes,
   collectLoadKeys,
-  containsPos,
+  containsPosInFile,
   type FileBinds,
   groupByPackage,
   hasDecorator,
@@ -191,7 +191,7 @@ function tallyClassUse(
     return;
   }
   const item = byKey.get(key);
-  if (item !== undefined && containsPos(item.node, ref.lineno)) {
+  if (item !== undefined && containsPosInFile(item.file, item.node, ref.file, ref.lineno)) {
     return;
   }
   counts.set(key, (counts.get(key) ?? 0) + 1);

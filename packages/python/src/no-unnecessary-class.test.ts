@@ -53,6 +53,23 @@ test("thin class in __init__.py still fires", async () => {
   expect(result.out).not.toMatch(NO_SUGGESTION);
 });
 
+test("one other-file instantiate on a colliding line is only used once", async () => {
+  const result = await runFixture("class-bad-cross-file");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/python\/no-unnecessary-class/);
+  expect(result.out).toMatch(/"OnceBag" is only used once and does not pay for the indirection/);
+  expect(result.out).not.toMatch(/not instantiated or subclassed/);
+  expect(result.out).not.toMatch(/in this file/);
+  expect(result.out).not.toMatch(NO_SUGGESTION);
+});
+
+test("two files each instantiate once on a colliding line exit 0", async () => {
+  const result = await runFixture("class-ok-cross-file");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+});
+
 test("import-only is not a use", async () => {
   const result = await runFixture("class-bad-import-only");
   expect(result.err).toBe("");
