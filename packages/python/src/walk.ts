@@ -313,7 +313,11 @@ function resolveModuleFile(
     if (sibling !== undefined) {
       return sibling;
     }
-    return moduleHit(join(packageDir, ...parts), sources);
+    const fromPackage = moduleHit(join(packageDir, ...parts), sources);
+    if (fromPackage !== undefined) {
+      return fromPackage;
+    }
+    return moduleHit(join(packageDir, "src", ...parts), sources);
   }
   let dir = dirname(fromFile);
   for (let index = 1; index < level; index += 1) {
@@ -391,6 +395,22 @@ export function containsPos(node: PythonNode, lineno: number): boolean {
     }
   }
   return false;
+}
+
+export function tallyResolvedUse(
+  key: string | undefined,
+  target: { file: string; node: PythonNode } | undefined,
+  refFile: string,
+  lineno: number,
+  counts: Map<string, number>,
+): void {
+  if (key === undefined) {
+    return;
+  }
+  if (target !== undefined && refFile === target.file && containsPos(target.node, lineno)) {
+    return;
+  }
+  counts.set(key, (counts.get(key) ?? 0) + 1);
 }
 
 export function hasDecorator(fn: PythonNode, names: ReadonlySet<string>): boolean {
