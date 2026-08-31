@@ -65,6 +65,25 @@ test("two files each call once exit 0", async () => {
   expect(result.code).toBe(0);
 });
 
+test("two src-layout files each call once via absolute import exit 0", async () => {
+  const result = await runFixture("def-ok-src-layout");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+});
+
+test("one src-layout caller and unused def exit 1", async () => {
+  const result = await runFixture("def-bad-src-layout");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/python\/no-unnecessary-def/);
+  expect(result.out).toMatch(/"wrap" is only used once and does not pay for the indirection/);
+  expect(result.out).toMatch(/"unused_fn" is not used and does not pay for the indirection/);
+  expect(result.out).toMatch(/Inline at its only use/);
+  expect(result.out).toMatch(/Remove this helper/);
+  expect(result.out).not.toMatch(/in this file/);
+  expect(result.out).not.toMatch(NO_SUGGESTION);
+});
+
 test("pass-through in __init__.py is quiet", async () => {
   const result = await runFixture("def-ok-init");
   expect(result.err).toBe("");
