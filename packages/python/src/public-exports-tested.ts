@@ -1,6 +1,7 @@
 import { defineRule, type RuleContext } from "qualety";
 import type { PythonNode, PythonSource } from "./python.ts";
 import {
+  asNodes,
   childNodes,
   clearReexports,
   collectImports,
@@ -32,7 +33,7 @@ export const publicExportsTested = defineRule({
       if (!isInitModule(abs) || isSkippedSource(abs, cwd)) {
         continue;
       }
-      reportUntested(unit, tested, context);
+      reportUntested(unit, tested, artifact.sources, context);
     }
   },
 });
@@ -40,6 +41,7 @@ export const publicExportsTested = defineRule({
 function reportUntested(
   unit: PythonSource,
   tested: ReadonlySet<string>,
+  sources: ReadonlyMap<string, PythonSource>,
   context: Pick<RuleContext, "report">,
 ) {
   const all = readDunderAll(unit.tree);
@@ -50,8 +52,13 @@ function reportUntested(
     all.kind === "names"
       ? all.names.filter((item) => !item.name.startsWith("_"))
       : clearReexports(unit.tree);
+  const binds = collectImports(unit, sources);
   for (const item of publics) {
     if (tested.has(`${unit.file}#${item.name}`)) {
+      continue;
+    }
+    const bind = binds.named.get(item.name) ?? simpleAliasBind(item.name, unit.tree, binds);
+    if (bind !== undefined && tested.has(`${bind.file}#${bind.name}`)) {
       continue;
     }
     context.report({
@@ -62,6 +69,29 @@ function reportUntested(
       suggestion: `Add a test import of "${item.name}", or stop exporting it.`,
     });
   }
+}
+
+function simpleAliasBind(name: string, tree: PythonNode, binds: FileBinds) {
+  for (const stmt of asNodes(tree.body)) {
+    if (stmt._type !== "Assign") {
+      continue;
+    }
+    const targets = asNodes(stmt.targets);
+    const target = targets[0];
+    if (
+      targets.length !== 1 ||
+      !isPythonNode(target) ||
+      target._type !== "Name" ||
+      target.id !== name ||
+      !isPythonNode(stmt.value) ||
+      stmt.value._type !== "Name" ||
+      typeof stmt.value.id !== "string"
+    ) {
+      continue;
+    }
+    return binds.named.get(stmt.value.id);
+  }
+  return undefined;
 }
 
 function collectTestedNames(sources: ReadonlyMap<string, PythonSource>, cwd: string): Set<string> {
