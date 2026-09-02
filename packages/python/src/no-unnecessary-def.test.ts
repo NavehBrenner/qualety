@@ -135,3 +135,34 @@ test("static path outside the package group does not silence", async () => {
   expect(result.out).toMatch(/python\/no-unnecessary-def/);
   expect(result.out).toMatch(/"wrap" is only used once and does not pay for the indirection/);
 });
+
+test("instance attr method and property uses are quiet", async () => {
+  const result = await runFixture("def-ok-attr-use");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+  expect(result.out).not.toMatch(/width_m/);
+  expect(result.out).not.toMatch(/describe/);
+  expect(result.out).not.toMatch(/helper/);
+});
+
+test("cross-file instance method call is a use", async () => {
+  const result = await runFixture("def-ok-attr-cross-file");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+  expect(result.out).not.toMatch(/release_lock/);
+});
+
+test("external-only base class methods are quiet", async () => {
+  const result = await runFixture("def-ok-external-base");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+  expect(result.out).not.toMatch(/do_HEAD/);
+  expect(result.out).not.toMatch(/unused_hook/);
+});
+
+test("ambiguous instance method name silences every same-named def", async () => {
+  const result = await runFixture("def-ok-attr-ambiguous");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+  expect(result.out).not.toMatch(/ping/);
+});
