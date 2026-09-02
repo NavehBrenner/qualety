@@ -4,8 +4,11 @@ import {
   isPythonNode,
   type PythonNode,
   type PythonSource,
+  stringConstant,
   walkNodes,
 } from "@qualety/python/walk";
+
+const TRAIN_LIKE = new Set(["train", "main"]);
 
 export type NodePos = { line: number; column: number };
 
@@ -108,4 +111,77 @@ export function assignTarget(node: PythonNode): PythonNode | undefined {
     return undefined;
   }
   return asNodes(node.targets)[0];
+}
+
+export function parseEntryPoints(options: unknown): string[] {
+  if (typeof options !== "object" || options === null || !("entryPoints" in options)) {
+    return [];
+  }
+  const raw = options.entryPoints;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const names: string[] = [];
+  for (const item of raw) {
+    if (typeof item === "string" && item.length > 0) {
+      const trimmed = item.replaceAll("\\", "/").replace(/\.py$/, "");
+      const parts = trimmed.split(/[./]/);
+      names.push(parts[parts.length - 1] ?? trimmed);
+    }
+  }
+  return names;
+}
+
+export function collectTrainingEntries(
+  unit: PythonSource,
+  extra: readonly string[],
+): { name: string; node: PythonNode }[] {
+  const wanted = new Set<string>([...TRAIN_LIKE, ...extra]);
+  const defs: { name: string; node: PythonNode }[] = [];
+  for (const stmt of asNodes(unit.tree.body)) {
+    if (stmt._type !== "FunctionDef" && stmt._type !== "AsyncFunctionDef") {
+      continue;
+    }
+    if (typeof stmt.name === "string" && wanted.has(stmt.name)) {
+      defs.push({ name: stmt.name, node: stmt });
+    }
+  }
+  const first = defs[0];
+  if (first !== undefined) {
+    return defs;
+  }
+  const guard = mainGuard(unit.tree, wanted);
+  return guard === undefined ? [] : [guard];
+}
+
+function mainGuard(
+  tree: PythonNode,
+  wanted: ReadonlySet<string>,
+): { name: string; node: PythonNode } | undefined {
+  for (const stmt of asNodes(tree.body)) {
+    if (stmt._type !== "If" || !isPythonNode(stmt.test) || stmt.test._type !== "Compare") {
+      continue;
+    }
+    const left = stmt.test.left;
+    if (!isPythonNode(left) || left._type !== "Name" || left.id !== "__name__") {
+      continue;
+    }
+    if (!asNodes(stmt.test.comparators).some((item) => stringConstant(item) === "__main__")) {
+      continue;
+    }
+    let found: string | undefined;
+    walkNodes(stmt, (node) => {
+      if (node._type !== "Call") {
+        return;
+      }
+      const name = lastAttr(node.func);
+      if (name !== undefined && wanted.has(name)) {
+        found ??= name;
+      }
+    });
+    if (found !== undefined) {
+      return { name: found, node: stmt };
+    }
+  }
+  return undefined;
 }

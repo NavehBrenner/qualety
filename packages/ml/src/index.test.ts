@@ -14,9 +14,12 @@ const RULES = [
   "tf32-must-be-explicit",
   "determinism-test-required",
   "deterministic-algorithms-opt-in",
+  "metadata-writer-required",
+  "record-code-version",
+  "run-metadata-completeness",
 ] as const;
 
-test("plugin exports name, six rules, recommended including opt-in off, no provides", () => {
+test("plugin exports name, nine rules, recommended including opt-in off, no provides", () => {
   expect(namedPlugin).toBe(plugin);
   expect(plugin.name).toBe("ml");
   expect(plugin.provides).toBeUndefined();
@@ -29,6 +32,9 @@ test("plugin exports name, six rules, recommended including opt-in off, no provi
   expect(plugin.configs?.recommended?.rules?.["ml/tf32-must-be-explicit"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["ml/determinism-test-required"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["ml/deterministic-algorithms-opt-in"]).toBe("off");
+  expect(plugin.configs?.recommended?.rules?.["ml/metadata-writer-required"]).toBe("error");
+  expect(plugin.configs?.recommended?.rules?.["ml/record-code-version"]).toBe("error");
+  expect(plugin.configs?.recommended?.rules?.["ml/run-metadata-completeness"]).toBe("error");
 });
 
 test("ml without a python provider exits 2", async () => {

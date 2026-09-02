@@ -18,7 +18,7 @@ It sits **above** formatters and classic linters: plugin rules (compositional AS
 5. [docs/rulesets/react.md](docs/rulesets/react.md) — React plugin catalog (implemented vs backlog).
 6. [docs/rulesets/dry.md](docs/rulesets/dry.md) — DRY plugin catalog (`dry/no-duplicate-code`, `dry/no-semantic-duplicate`).
 7. [docs/rulesets/python.md](docs/rulesets/python.md) — Python plugin catalog (`python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`).
-8. [docs/rulesets/ml.md](docs/rulesets/ml.md) — ML plugin catalog (`ml/require-global-seed`, `ml/seed-must-reach-framework-rng`, `ml/dataloader-worker-seeding`, `ml/tf32-must-be-explicit`, `ml/determinism-test-required`, `ml/deterministic-algorithms-opt-in`).
+8. [docs/rulesets/ml.md](docs/rulesets/ml.md) — ML plugin catalog (`ml/require-global-seed`, `ml/seed-must-reach-framework-rng`, `ml/dataloader-worker-seeding`, `ml/tf32-must-be-explicit`, `ml/determinism-test-required`, `ml/deterministic-algorithms-opt-in`, `ml/metadata-writer-required`, `ml/record-code-version`, `ml/run-metadata-completeness`).
 9. [docs/rulesets/plugin-kit.md](docs/rulesets/plugin-kit.md) — portable authoring (`plugin-kit/…`); not a product app catalog.
 10. [docs/rulesets/](docs/rulesets/) — research inventories are **not** an implementation backlog.
 

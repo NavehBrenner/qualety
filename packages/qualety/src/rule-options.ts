@@ -5,6 +5,8 @@ import { isRecord } from "./record.ts";
 
 const OBJECT_KEYS = new Set(["type", "properties", "required", "additionalProperties"]);
 const NUMBER_KEYS = new Set(["type", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"]);
+const STRING_KEYS = new Set(["type"]);
+const ARRAY_KEYS = new Set(["type", "items"]);
 
 export function compileRuleOptions(schema: unknown, ruleId: string): z.ZodType {
   const record = requireRecord(schema, ruleId);
@@ -13,6 +15,12 @@ export function compileRuleOptions(schema: unknown, ruleId: string): z.ZodType {
   }
   if (record.type === "number") {
     return compileNumber(record, ruleId);
+  }
+  if (record.type === "string") {
+    return compileString(record, ruleId);
+  }
+  if (record.type === "array") {
+    return compileStringArray(record, ruleId);
   }
   throw unsupportedSchema(ruleId, typeof record.type === "string" ? record.type : "type");
 }
@@ -44,6 +52,21 @@ function compileObject(schema: JSONSchema, ruleId: string): z.ZodType {
     return z.object(shape).passthrough();
   }
   throw unsupportedSchema(ruleId, "additionalProperties");
+}
+
+function compileString(schema: JSONSchema, ruleId: string): z.ZodType {
+  rejectUnknownKeys(schema, STRING_KEYS, ruleId);
+  return z.string();
+}
+
+function compileStringArray(schema: JSONSchema, ruleId: string): z.ZodType {
+  rejectUnknownKeys(schema, ARRAY_KEYS, ruleId);
+  const items = schema.items;
+  if (!isRecord(items) || items.type !== "string") {
+    throw unsupportedSchema(ruleId, "items");
+  }
+  rejectUnknownKeys(items, STRING_KEYS, ruleId);
+  return z.array(z.string());
 }
 
 function compileNumber(schema: JSONSchema, ruleId: string): z.ZodType {
