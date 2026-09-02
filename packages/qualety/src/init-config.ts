@@ -1,5 +1,5 @@
 import type { Dirent } from "node:fs";
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isRecord } from "./record.ts";
 
@@ -46,12 +46,6 @@ export async function detectInitPlugins(cwd: string): Promise<string[]> {
   return plugins;
 }
 
-export async function writeInitConfig(cwd: string, plugins: readonly string[]): Promise<string> {
-  const relativePath = "qualety.config.json";
-  await writeFile(join(cwd, relativePath), `${JSON.stringify({ plugins }, null, 2)}\n`);
-  return relativePath;
-}
-
 async function walkDir(dir: string, depth: number, state: WalkState): Promise<void> {
   if (depth > MAX_WALK_DEPTH || state.filesVisited >= MAX_FILES_VISITED) {
     return;
@@ -59,22 +53,19 @@ async function walkDir(dir: string, depth: number, state: WalkState): Promise<vo
   if (depth > 0 && languagesFound(state.flags)) {
     return;
   }
-  for (const entry of await listDirents(dir)) {
+  let entries: Dirent[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+    entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
     if (state.filesVisited >= MAX_FILES_VISITED) {
       return;
     }
     state.filesVisited++;
     await visitEntry(dir, depth, entry, state);
-  }
-}
-
-async function listDirents(dir: string): Promise<Dirent[]> {
-  try {
-    const entries = await readdir(dir, { withFileTypes: true });
-    entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
-    return entries;
-  } catch {
-    return [];
   }
 }
 
@@ -85,44 +76,36 @@ async function visitEntry(
   state: WalkState,
 ): Promise<void> {
   if (entry.isDirectory()) {
-    if (shouldSkipDir(entry, state.flags)) {
+    if (SKIP_DIR_NAMES.has(entry.name) || entry.isSymbolicLink() || languagesFound(state.flags)) {
       return;
     }
     await walkDir(join(dir, entry.name), depth + 1, state);
     return;
   }
   if (depth === 0) {
-    applyRootMarker(entry.name, state.flags);
+    if (
+      entry.name === "pyproject.toml" ||
+      entry.name === "setup.cfg" ||
+      REQUIREMENTS_TXT.test(entry.name)
+    ) {
+      state.flags.python = true;
+    }
+    if (TSCONFIG_JSON.test(entry.name)) {
+      state.flags.typescript = true;
+    }
     if (entry.name === "package.json") {
       await applyPackageJson(join(dir, entry.name), state.flags);
     }
   }
-  applySourceName(entry.name, state.flags);
-}
-
-function shouldSkipDir(entry: Dirent, flags: InitFlags): boolean {
-  return SKIP_DIR_NAMES.has(entry.name) || entry.isSymbolicLink() || languagesFound(flags);
+  if (entry.name.endsWith(".py")) {
+    state.flags.python = true;
+  } else if (entry.name.endsWith(".ts") || entry.name.endsWith(".tsx")) {
+    state.flags.typescript = true;
+  }
 }
 
 function languagesFound(flags: InitFlags): boolean {
   return flags.python && flags.typescript;
-}
-
-function applyRootMarker(name: string, flags: InitFlags): void {
-  if (name === "pyproject.toml" || name === "setup.cfg" || REQUIREMENTS_TXT.test(name)) {
-    flags.python = true;
-  }
-  if (TSCONFIG_JSON.test(name)) {
-    flags.typescript = true;
-  }
-}
-
-function applySourceName(name: string, flags: InitFlags): void {
-  if (name.endsWith(".py")) {
-    flags.python = true;
-  } else if (name.endsWith(".ts") || name.endsWith(".tsx")) {
-    flags.typescript = true;
-  }
 }
 
 async function applyPackageJson(path: string, flags: InitFlags): Promise<void> {

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
-import { access } from "node:fs/promises";
+import { access, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { parseArgs } from "node:util";
 import {
@@ -12,7 +12,8 @@ import {
 } from "./biome.ts";
 import { CONFIG_FILENAMES, isStandalone, loadConfig, readConfigFile } from "./config.ts";
 import { type CheckFilters, check, loadPluginsFromConfig } from "./engine.ts";
-import { detectInitPlugins, writeInitConfig } from "./init-config.ts";
+import { detectInitPlugins } from "./init-config.ts";
+import { isRecord } from "./record.ts";
 import {
   GENERATED_RUFF_PATH,
   readRuffVersion,
@@ -154,7 +155,11 @@ async function runInit(
   let seededEmpty = false;
   if (existing === undefined || force) {
     const detected = await detectInitPlugins(cwd);
-    written.push(await writeInitConfig(cwd, detected));
+    await writeFile(
+      join(cwd, "qualety.config.json"),
+      `${JSON.stringify({ plugins: detected }, null, 2)}\n`,
+    );
+    written.push("qualety.config.json");
     configPath = join(cwd, "qualety.config.json");
     seededEmpty = detected.length === 0;
   } else {
@@ -179,7 +184,11 @@ async function findCwdConfigPath(cwd: string): Promise<string | undefined> {
     try {
       await access(candidate);
       return candidate;
-    } catch {}
+    } catch (error) {
+      if (!(isRecord(error) && error.code === "ENOENT")) {
+        throw error;
+      }
+    }
   }
   return undefined;
 }

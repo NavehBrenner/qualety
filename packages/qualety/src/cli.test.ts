@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { expect, test } from "vitest";
+import { z } from "zod";
 import { run } from "./cli.ts";
 import { detectInitPlugins } from "./init-config.ts";
 
@@ -433,10 +434,8 @@ test("no arguments exits 2", async () => {
   expect(await run([], silent, silent)).toBe(2);
 });
 
-async function readPlugins(dir: string): Promise<unknown> {
-  const raw: unknown = JSON.parse(await readFile(join(dir, "qualety.config.json"), "utf8"));
-  if (raw === null || typeof raw !== "object" || Array.isArray(raw) || !("plugins" in raw)) {
-    return undefined;
-  }
-  return raw.plugins;
+async function readPlugins(dir: string): Promise<string[]> {
+  return z
+    .object({ plugins: z.array(z.string()) })
+    .parse(JSON.parse(await readFile(join(dir, "qualety.config.json"), "utf8"))).plugins;
 }
