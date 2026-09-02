@@ -28,7 +28,7 @@ These decisions are considered stable unless a major new constraint appears:
 4. **Plugins**  
    First-class and user-writable. There is one explicit contract (see § Plugin contract). Plugins can be published as npm packages or loaded from local paths. Agent skills for creating and maintaining plugins are part of the deliverable.  
    **v1 plugin language is TypeScript only.** Plugins are TypeScript/JavaScript packages that export the `Plugin` interface. Python-written plugins may be supported later via the same protocol once a Python frontend exists.  
-    **Core has no built-in rule bag.** Every check is a plugin rule. Core is the engine, default artifact providers, config/CLI, and a generic artifact seam — not a default catalog and **not** a dupehound (or other niche binary) host.     Baseline TypeScript rules live in `@qualety/typescript` (`Plugin.name: "ts"`). React compositional rules live in `@qualety/react` (`Plugin.name: "react"`). Structural DRY lives in `@qualety/dry` (`Plugin.name: "dry"`), which **provides** the `dupehound` artifact. Python baseline lives in `@qualety/python` (`Plugin.name: "python"`), which **provides** the `python` artifact (not a default). `@qualety/plugin-kit` (`Plugin.name: "plugin-kit"`) is the portable plugin-authoring ruleset — not core, not `@qualety/dev`, not a product app catalog. `@qualety/dev` (`Plugin.name: "dev"`) is this monorepo’s dogfood plugin, not a product catalog. Shared/provider-only packages load as **ruleless plugins** (`name` + `provides`, no `rules`) via `plugins[]`.     A plugin may ship `configs.recommended`; loading it via `plugins[]` applies that preset (locked #2). Installing a plugin without listing it on `plugins[]` enables nothing. This repo’s root config lists product plugins and keeps explicit `dev/*` rules (no consumer recommended on `@qualety/dev`); framework plugins only when the tree needs them.
+    **Core has no built-in rule bag.** Every check is a plugin rule. Core is the engine, default artifact providers, config/CLI, and a generic artifact seam — not a default catalog and **not** a dupehound (or other niche binary) host.     Baseline TypeScript rules live in `@qualety/typescript` (`Plugin.name: "ts"`). React compositional rules live in `@qualety/react` (`Plugin.name: "react"`). Structural DRY lives in `@qualety/dry` (`Plugin.name: "dry"`), which **provides** the `dupehound` artifact.     Python baseline lives in `@qualety/python` (`Plugin.name: "python"`), which **provides** the `python` artifact (not a default). ML determinism / seeding lives in `@qualety/ml` (`Plugin.name: "ml"`); it does not provide `"python"` — rules `requires: ["python"]` and the consumer must list `@qualety/python` (or another `"python"` provider) in `plugins[]`. `@qualety/plugin-kit` (`Plugin.name: "plugin-kit"`) is the portable plugin-authoring ruleset — not core, not `@qualety/dev`, not a product app catalog. `@qualety/dev` (`Plugin.name: "dev"`) is this monorepo’s dogfood plugin, not a product catalog. Shared/provider-only packages load as **ruleless plugins** (`name` + `provides`, no `rules`) via `plugins[]`.     A plugin may ship `configs.recommended`; loading it via `plugins[]` applies that preset (locked #2). Installing a plugin without listing it on `plugins[]` enables nothing. This repo’s root config lists product plugins and keeps explicit `dev/*` rules (no consumer recommended on `@qualety/dev`); framework plugins only when the tree needs them.
 
 5. **Runtime helpers**  
    Optional companion packages (e.g. a future official `DataRegion`). Static rules work both with the official helpers and with equivalent structural patterns the user already has. **Helpers are optional; this WP ships none.** TanStack Query detectors live under `@qualety/react`, not a separate package.
@@ -50,6 +50,8 @@ These decisions are considered stable unless a major new constraint appears:
     **DRY plugin — what we own:** `dry/no-duplicate-code` (structural R4: dupehound whole-function path plus ts-morph fragment windows), `dry/no-duplicate-python` (Arm F whole-function twin), and `dry/no-semantic-duplicate` (Type-4 near-dupes via check-time `code-embeddings`, not `qualety index`). We wrap the dupehound CLI for whole-function fingerprints and plugin config; we do not re-own its winnowing / Jaccard. Fragment clones are exact structural hashes on statement windows (TypeScript only). Architecture fitness only if we add something ArchUnit / dependency-cruiser do not already cover.
 
       **Python plugin — what we own:** `python/no-unnecessary-def` (package-local ≤1-use pass-through / small-flat defs), `python/no-unnecessary-class` (package-local ≤1-use thin / pass-through classes), `python/public-exports-tested` (static test-presence for package `__all__` / `__init__` re-exports), `python/no-mutable-default` (mutable default args), `python/require-typed-public` (annotation presence on public callables), `python/no-bare-except` (bare `except:` / `BaseException`), `python/no-silent-except` (no-op except bodies), `python/no-open-without-with` (unmanaged `open(...)`), `python/no-sys-path-hack` (`sys.path` mutations), `python/no-public-any` (bare `Any` on public callables). Product `python/*` twins **keep**; they are not equivalent to overlapping Ruff codes. Ruff recommended/default select is composed (not a catalog dump); `@qualety/python` `ruff.rules` enables **`UP`** and **`B`** (bugbear) at error. Overlay user `config.ruff.rules` (`"off"` / retune) or `ruff: false` for the phase. No full `I` / `S` / `ANN*` / pylint dump.
+
+    **ML plugin — what we own:** `ml/require-global-seed`, `ml/seed-must-reach-framework-rng`, `ml/dataloader-worker-seeding`, `ml/tf32-must-be-explicit`, `ml/determinism-test-required`, `ml/deterministic-algorithms-opt-in`. No Ruff/Biome deltas. Does not re-provide `"python"`.
 
    **What we do not own** (use Biome, ESLint, or dependency-cruiser): circular imports; max relative import depth; simple path bans (`dist/`, `generated/`, …); deep-import / internal-module bans; generic layer charts those tools already do well.
 
@@ -95,7 +97,8 @@ These decisions are considered stable unless a major new constraint appears:
     | `@qualety/react` | yes | bundled |
     | `@qualety/dry` | yes | bundled |
      | `@qualety/python` | yes | bundled |
-    | `@qualety/plugin-kit` | yes (plugin authors) | **not** bundled |
+     | `@qualety/ml` | yes | bundled |
+     | `@qualety/plugin-kit` | yes (plugin authors) | **not** bundled |
     | `@qualety/dev` | no (`private`) | **not** bundled |
     | Future product plugin | yes when it ships | bundled when it ships |
 
@@ -145,7 +148,7 @@ These decisions are considered stable unless a major new constraint appears:
 
   `NO_SUGGESTION = "No suggestion available for this rule."`
 
-    Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `ts/no-unsafe-assertion`, `ts/no-empty-catch`, `ts/no-floating-promises`, `ts/no-misused-promises`, `ts/exhaustive-switch`, `ts/explicit-public-return-types`, `ts/no-non-null-assertion`, `ts/no-export-star`, `ts/no-public-any`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-code`, `dry/no-duplicate-python`, `dry/no-semantic-duplicate`, `python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`, `python/no-bare-except`, `python/no-silent-except`, `python/no-open-without-with`, `python/no-sys-path-hack`, `python/no-public-any`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
+    Product rules in this repo (`ts/public-exports-tested`, `ts/zod-boundary`, `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `ts/no-unsafe-assertion`, `ts/no-empty-catch`, `ts/no-floating-promises`, `ts/no-misused-promises`, `ts/exhaustive-switch`, `ts/explicit-public-return-types`, `ts/no-non-null-assertion`, `ts/no-export-star`, `ts/no-public-any`, `react/no-fetch-in-useeffect`, `react/query-error-handled`, `dry/no-duplicate-code`, `dry/no-duplicate-python`, `dry/no-semantic-duplicate`, `python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`, `python/no-bare-except`, `python/no-silent-except`, `python/no-open-without-with`, `python/no-sys-path-hack`, `python/no-public-any`, `ml/require-global-seed`, `ml/seed-must-reach-framework-rng`, `ml/dataloader-worker-seeding`, `ml/tf32-must-be-explicit`, `ml/determinism-test-required`, `ml/deterministic-algorithms-opt-in`, `dev/core-provider-boundaries`, `dev/docs-export-honesty`, `dev/no-fs-in-rules`, `dev/concrete-suggestion`) **must** use concrete suggestions, not the sentinel. CLI prints a `suggestion:` line unless the value is exactly `NO_SUGGESTION`. `report()` fills the sentinel at runtime if the field is missing (JS plugins keep working).
 - **Plugin**: A package that exports `name` plus optional `rules` and/or `provides`. Ruleless plugins (`name` + `provides` only) are shared providers. Optional `biome.rules` (`group/name`) and `ruff.rules` (native Ruff codes / prefixes) feed the generated linter configs; they are **not** product rules.
 - **Artifact**: Opaque value built once per check when an enabled rule `requires` its id. One provider map: plugin `provides` first, then default registry gap-fill (`"typescript"` → `ParsedProject`; `"dupehound"` and `"code-embeddings"` in `@qualety/dry`; `"python"` in `@qualety/python`). `"code-embeddings"` is a check-time artifact, not `qualety index`.
 
@@ -417,6 +420,21 @@ Do **not** own classic eslint-plugin-react / react-hooks / jsx-a11y, TanStack es
 | `python/no-public-any` | Implemented (public callables must not annotate with bare `Any`; see [python.md](./rulesets/python.md)) |
 
 Authored in TypeScript. Provides artifact `"python"` (CPython `ast` via `python3` spawn); not a default provider. Not a Ruff clone. DRY / types arm / Python-authored plugins are **not** this WP.
+
+### v1 ML plugin catalog
+
+`@qualety/ml` (`name: "ml"`) ships only:
+
+| Rule | Status |
+|------|--------|
+| `ml/require-global-seed` | Implemented (training module must seed RNGs before DataLoader / torch.nn; see [ml.md](./rulesets/ml.md)) |
+| `ml/seed-must-reach-framework-rng` | Implemented (seed param must reach framework RNG, not only split; see [ml.md](./rulesets/ml.md)) |
+| `ml/dataloader-worker-seeding` | Implemented (`DataLoader(num_workers>0)` needs `worker_init_fn` or `generator`; see [ml.md](./rulesets/ml.md)) |
+| `ml/tf32-must-be-explicit` | Implemented (CUDA move must set both `allow_tf32` flags; see [ml.md](./rulesets/ml.md)) |
+| `ml/determinism-test-required` | Implemented (training entry point needs a two-run weight-identity test; see [ml.md](./rulesets/ml.md)) |
+| `ml/deterministic-algorithms-opt-in` | Implemented (recommended `off`; `use_deterministic_algorithms` or `cudnn.deterministic`; see [ml.md](./rulesets/ml.md)) |
+
+Authored in TypeScript. Does not provide `"python"`; rules `requires: ["python"]`. No Ruff/Biome deltas.
 
 ## 4. CLI interface
 

@@ -17,6 +17,7 @@
     "@qualety/dev": "workspace:*",
     "@qualety/dry": "workspace:*",
     "@qualety/plugin-kit": "workspace:*",
+    "@qualety/ml": "workspace:*",
     "@qualety/python": "workspace:*",
     "@qualety/typescript": "workspace:*",
     "@types/node": "^26.2.0",

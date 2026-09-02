@@ -39,6 +39,9 @@ const officialLoaders: Record<string, () => Promise<unknown>> = {
   "@qualety/python": () =>
     // @ts-expect-error official plugin; not a qualety dependency
     import("@qualety/python"),
+  "@qualety/ml": () =>
+    // @ts-expect-error official plugin; not a qualety dependency
+    import("@qualety/ml"),
 };
 
 export type CheckFilters = {

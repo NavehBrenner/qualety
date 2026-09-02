@@ -199,6 +199,7 @@ jobs:
           pnpm --filter @qualety/dry publish --access public --provenance --no-git-checks
           pnpm --filter @qualety/plugin-kit publish --access public --provenance --no-git-checks
           pnpm --filter @qualety/python publish --access public --provenance --no-git-checks
+          pnpm --filter @qualety/ml publish --access public --provenance --no-git-checks
 
   pypi:
     needs: compile
