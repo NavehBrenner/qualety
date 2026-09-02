@@ -17,6 +17,9 @@ importers:
       '@qualety/dry':
         specifier: workspace:*
         version: link:packages/dry
+      '@qualety/ml':
+        specifier: workspace:*
+        version: link:packages/ml
       '@qualety/plugin-kit':
         specifier: workspace:*
         version: link:packages/plugin-kit
@@ -66,6 +69,19 @@ importers:
       zod:
         specifier: ^4.0.17
         version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+
+  packages/ml:
+    dependencies:
+      '@qualety/python':
+        specifier: workspace:*
+        version: link:../python
+      qualety:
+        specifier: workspace:*
+        version: link:../qualety
     devDependencies:
       '@types/node':
         specifier: ^26.2.0

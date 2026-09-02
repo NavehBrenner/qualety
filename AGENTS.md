@@ -7,7 +7,7 @@
 
 `qualety` turns high-level engineering standards into **executable CI checks** so AI coding agents (and humans) get structural quality without relying on prose instructions or manual review of large diffs.
 
-It sits **above** formatters and classic linters: plugin rules (compositional AST, test-presence, structural DRY). Not a SAST product. Qualety may **invoke Biome** (merge plugin `biome` recommends, generate config, spawn). Do **not** reimplement Biome’s engine or rules as `ts/*` twins. Core has **no built-in rule bag** — every check is a plugin rule. Baseline TypeScript lives in `@qualety/typescript`. React compositional rules live in `@qualety/react`. Structural and semantic DRY live in `@qualety/dry`. Python baseline lives in `@qualety/python`. Portable plugin-authoring rules live in `@qualety/plugin-kit` (not a product app catalog).
+It sits **above** formatters and classic linters: plugin rules (compositional AST, test-presence, structural DRY). Not a SAST product. Qualety may **invoke Biome** (merge plugin `biome` recommends, generate config, spawn). Do **not** reimplement Biome’s engine or rules as `ts/*` twins. Core has **no built-in rule bag** — every check is a plugin rule. Baseline TypeScript lives in `@qualety/typescript`. React compositional rules live in `@qualety/react`. Structural and semantic DRY live in `@qualety/dry`. Python baseline lives in `@qualety/python`. ML determinism / seeding lives in `@qualety/ml`. Portable plugin-authoring rules live in `@qualety/plugin-kit` (not a product app catalog).
 
 ## What to read before coding
 
@@ -18,8 +18,9 @@ It sits **above** formatters and classic linters: plugin rules (compositional AS
 5. [docs/rulesets/react.md](docs/rulesets/react.md) — React plugin catalog (implemented vs backlog).
 6. [docs/rulesets/dry.md](docs/rulesets/dry.md) — DRY plugin catalog (`dry/no-duplicate-code`, `dry/no-semantic-duplicate`).
 7. [docs/rulesets/python.md](docs/rulesets/python.md) — Python plugin catalog (`python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public`).
-8. [docs/rulesets/plugin-kit.md](docs/rulesets/plugin-kit.md) — portable authoring (`plugin-kit/…`); not a product app catalog.
-9. [docs/rulesets/](docs/rulesets/) — research inventories are **not** an implementation backlog.
+8. [docs/rulesets/ml.md](docs/rulesets/ml.md) — ML plugin catalog (`ml/require-global-seed`, `ml/seed-must-reach-framework-rng`, `ml/dataloader-worker-seeding`, `ml/tf32-must-be-explicit`, `ml/determinism-test-required`, `ml/deterministic-algorithms-opt-in`).
+9. [docs/rulesets/plugin-kit.md](docs/rulesets/plugin-kit.md) — portable authoring (`plugin-kit/…`); not a product app catalog.
+10. [docs/rulesets/](docs/rulesets/) — research inventories are **not** an implementation backlog.
 
 Do **not** invent import-lint / cycle / path-ban rules or a long TypeScript catalog. Add rules to plugins; do not grow a core rule table.
 
@@ -28,7 +29,7 @@ Do **not** invent import-lint / cycle / path-ban rules or a long TypeScript cata
 - Implement against the **plugin contract** and CLI surface in SPECS — do not invent parallel APIs.
 - Prefer **extending plugins** over growing core, unless the change is shared infrastructure (artifact providers, config, reporting).
 - Shared/provider-only packages register as **ruleless plugins** (`name` + `provides`, no `rules`) via `plugins[]`. A rule in any loaded module may `requires` an artifact id provided by another loaded module. Duplicate artifact ids fail closed (exit 2, both owners named). Defaults (`"typescript"`) only fill ids nobody provided.
-- Product plugins are `@qualety/typescript`, `@qualety/react`, `@qualety/dry`, and `@qualety/python`. Do not re-scaffold the engine. Do not pad plugins with empty stub rules.
+- Product plugins are `@qualety/typescript`, `@qualety/react`, `@qualety/dry`, `@qualety/python`, and `@qualety/ml`. Do not re-scaffold the engine. Do not pad plugins with empty stub rules.
 - **One coherent change per PR** (one rule, one engine slice, or one docs theme).
 - Add **fixtures** (valid + invalid) for every rule; messages must be actionable by another agent.
 - Dogfood: once `qualety check` exists, run it on this repo.

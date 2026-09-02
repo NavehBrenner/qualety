@@ -30,7 +30,7 @@ jobs:
           key: code-embeddings-onnx-quantized-1-${{ runner.os }}
       - run: pnpm build
       - run: |
-          for pkg in qualety @qualety/typescript @qualety/react @qualety/dry @qualety/plugin-kit @qualety/python; do
+          for pkg in qualety @qualety/typescript @qualety/react @qualety/dry @qualety/plugin-kit @qualety/python @qualety/ml; do
             out=$(pnpm --filter "$pkg" pack --dry-run)
             echo "$out"
             echo "$out" | grep -q LICENSE

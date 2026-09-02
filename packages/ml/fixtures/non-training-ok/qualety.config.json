@@ -1,0 +1,10 @@
+{
+  "plugins": ["../../../python/dist/index.js", "../../dist/index.js"],
+  "rules": {
+    "ml/require-global-seed": "error",
+    "ml/seed-must-reach-framework-rng": "error",
+    "ml/determinism-test-required": "error",
+    "ml/deterministic-algorithms-opt-in": "error"
+  },
+  "biome": false
+}

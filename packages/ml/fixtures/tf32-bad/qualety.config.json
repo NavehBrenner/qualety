@@ -1,0 +1,7 @@
+{
+  "plugins": ["../../../python/dist/index.js", "../../dist/index.js"],
+  "rules": {
+    "ml/tf32-must-be-explicit": "error"
+  },
+  "biome": false
+}

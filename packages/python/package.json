@@ -21,6 +21,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./walk": {
+      "types": "./dist/walk.d.ts",
+      "import": "./dist/walk.js"
+    },
     "./package.json": "./package.json"
   },
   "types": "./dist/index.d.ts",

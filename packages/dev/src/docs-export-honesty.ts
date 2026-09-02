@@ -8,6 +8,7 @@ const PLUGIN_CATALOGS = [
   { dir: "react", catalog: "docs/rulesets/react.md" },
   { dir: "dry", catalog: "docs/rulesets/dry.md" },
   { dir: "python", catalog: "docs/rulesets/python.md" },
+  { dir: "ml", catalog: "docs/rulesets/ml.md" },
   { dir: "dev", catalog: "docs/rulesets/dev.md" },
   { dir: "plugin-kit", catalog: "docs/rulesets/plugin-kit.md" },
 ] as const;

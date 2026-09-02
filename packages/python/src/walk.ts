@@ -1,6 +1,8 @@
 import { basename, dirname, join, resolve } from "node:path";
 import type { PythonNode, PythonSource } from "./python.ts";
 
+export type { PythonNode, PythonSource };
+
 const MAX_NONBLANK_LINES = 10;
 const CONTROL = new Set(["If", "For", "AsyncFor", "While", "Try", "Match"]);
 const NESTED_STOP = new Set(["FunctionDef", "AsyncFunctionDef", "ClassDef", "Lambda"]);
@@ -715,12 +717,7 @@ function listOfStrings(value: unknown): { name: string; node: PythonNode }[] | u
   }
   const names: { name: string; node: PythonNode }[] = [];
   for (const elt of asNodes(value.elts)) {
-    const text =
-      elt._type === "Constant" && typeof elt.value === "string"
-        ? elt.value
-        : elt._type === "Str" && typeof elt.s === "string"
-          ? elt.s
-          : undefined;
+    const text = stringConstant(elt);
     if (text === undefined) {
       return undefined;
     }
@@ -856,11 +853,9 @@ function foldPath(
   pathNames: Map<string, string>,
   unit: PythonSource,
 ): string | undefined {
-  if (node._type === "Constant" && typeof node.value === "string") {
-    return node.value;
-  }
-  if (node._type === "Str" && typeof node.s === "string") {
-    return node.s;
+  const text = stringConstant(node);
+  if (text !== undefined) {
+    return text;
   }
   if (node._type === "JoinedStr") {
     return foldJoined(node, pathNames, unit);
@@ -1083,7 +1078,7 @@ function callArg(
   return undefined;
 }
 
-function intConstant(node: PythonNode | undefined): number | undefined {
+export function intConstant(node: PythonNode | undefined): number | undefined {
   if (node === undefined) {
     return undefined;
   }
@@ -1094,4 +1089,18 @@ function intConstant(node: PythonNode | undefined): number | undefined {
     return node.n;
   }
   return undefined;
+}
+
+export function stringConstant(node: PythonNode | undefined): string | undefined {
+  if (!isPythonNode(node)) {
+    return undefined;
+  }
+  switch (node._type) {
+    case "Constant":
+      return typeof node.value === "string" ? node.value : undefined;
+    case "Str":
+      return typeof node.s === "string" ? node.s : undefined;
+    default:
+      return undefined;
+  }
 }

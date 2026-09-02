@@ -1,0 +1,43 @@
+{
+  "name": "@qualety/ml",
+  "version": "0.0.0",
+  "description": "ML determinism and seeding rules for qualety.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NavehBrenner/qualety.git",
+    "directory": "packages/ml"
+  },
+  "bugs": {
+    "url": "https://github.com/NavehBrenner/qualety/issues"
+  },
+  "homepage": "https://github.com/NavehBrenner/qualety",
+  "publishConfig": {
+    "access": "public"
+  },
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@qualety/python": "workspace:*",
+    "qualety": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0"
+  }
+}
