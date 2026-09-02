@@ -11,6 +11,7 @@ import {
   forEachPythonSource,
   groupByPackage,
   hasDecorator,
+  intConstant,
   isDunder,
   isInitModule,
   isPassThrough,
@@ -24,6 +25,7 @@ import {
   publicInitNames,
   readDunderAll,
   scanPathLoadUses,
+  stringConstant,
   tallyResolvedUse,
   walkCallables,
   walkNodes,
@@ -68,4 +70,6 @@ test("walk helpers", () => {
   expect(walkCallables).toBeTypeOf("function");
   expect(collectModuleAliases).toBeTypeOf("function");
   expect(isPublicCallable({ _type: "FunctionDef", name: "foo" }, "", false, undefined)).toBe(true);
+  expect(intConstant({ _type: "Constant", value: 3 })).toBe(3);
+  expect(stringConstant({ _type: "Constant", value: "x" })).toBe("x");
 });

@@ -1,19 +1,15 @@
-import { defineRule } from "qualety";
 import {
   asNodes,
-  attrChain,
   isPythonNode,
-  isSkippedSource,
   isTestPath,
-  isTrainingModule,
-  lastAttr,
   nodeRange,
   type PythonNode,
   type PythonSource,
-  pythonSources,
   stringConstant,
   walkNodes,
-} from "./ast.ts";
+} from "@qualety/python/walk";
+import { defineRule } from "qualety";
+import { attrChain, forEachMlSource, lastAttr, treeHas } from "./ast.ts";
 
 const TRAIN_LIKE = new Set(["train", "main"]);
 const EQUAL_CALLS = new Set(["assertEqual", "assert_equal", "equal", "allclose"]);
@@ -38,14 +34,49 @@ export const determinismTestRequired = defineRule({
   create(context) {
     const cwd = context.getCwd();
     const extra = optionNames(context.options);
-    const units = pythonSources(context.getArtifact("python"));
-    const tests = units.filter((unit) => isTestPath(unit.file, cwd));
-    for (const unit of units) {
-      if (isSkippedSource(unit.file, cwd) || !isTrainingModule(unit.tree)) {
-        continue;
+    const python = context.getArtifact("python");
+    const tests: PythonSource[] = [];
+    for (const unit of python.sources.values()) {
+      if (isTestPath(unit.file, cwd)) {
+        tests.push(unit);
       }
+    }
+    forEachMlSource(python.sources, cwd, { trainingOnly: true }, (unit) => {
       for (const entry of collectEntries(unit, extra)) {
-        if (tests.some((test) => testCovers(test, entry.name))) {
+        if (
+          tests.some((test) => {
+            if (
+              !treeHas(
+                test.tree,
+                (node) =>
+                  (node._type === "Name" && node.id === entry.name) ||
+                  (node._type === "Attribute" && node.attr === entry.name) ||
+                  (node._type === "alias" &&
+                    (node.name === entry.name || node.asname === entry.name)),
+              )
+            ) {
+              return false;
+            }
+            if (countCalls(test.tree, new Set<string>([entry.name, ...TRAIN_LIKE])) < 2) {
+              return false;
+            }
+            return treeHas(test.tree, (node) => {
+              if (node._type === "Call") {
+                const name = lastAttr(node.func);
+                return name !== undefined && EQUAL_CALLS.has(name);
+              }
+              if (node._type !== "Compare" || !asNodes(node.ops).some((op) => op._type === "Eq")) {
+                return false;
+              }
+              return treeHas(
+                node,
+                (child) =>
+                  (child._type === "Attribute" && child.attr === "state_dict") ||
+                  attrChain(child).includes("state_dict"),
+              );
+            });
+          })
+        ) {
           continue;
         }
         context.report({
@@ -56,7 +87,7 @@ export const determinismTestRequired = defineRule({
           suggestion: TEST_HINT,
         });
       }
-    }
+    });
   },
 });
 
@@ -71,16 +102,12 @@ function optionNames(options: unknown): string[] {
   const names: string[] = [];
   for (const item of raw) {
     if (typeof item === "string" && item.length > 0) {
-      names.push(lastSegment(item));
+      const trimmed = item.replaceAll("\\", "/").replace(/\.py$/, "");
+      const parts = trimmed.split(/[./]/);
+      names.push(parts[parts.length - 1] ?? trimmed);
     }
   }
   return names;
-}
-
-function lastSegment(value: string): string {
-  const trimmed = value.replaceAll("\\", "/").replace(/\.py$/, "");
-  const parts = trimmed.split(/[./]/);
-  return parts[parts.length - 1] ?? trimmed;
 }
 
 function collectEntries(
@@ -97,7 +124,8 @@ function collectEntries(
       defs.push({ name: stmt.name, node: stmt });
     }
   }
-  if (defs.length > 0) {
+  const first = defs[0];
+  if (first !== undefined) {
     return defs;
   }
   const guard = mainGuard(unit.tree, wanted);
@@ -109,64 +137,31 @@ function mainGuard(
   wanted: ReadonlySet<string>,
 ): { name: string; node: PythonNode } | undefined {
   for (const stmt of asNodes(tree.body)) {
-    if (!isMainCompare(stmt)) {
+    if (stmt._type !== "If" || !isPythonNode(stmt.test) || stmt.test._type !== "Compare") {
       continue;
     }
-    const called = calledWantedName(stmt, wanted);
-    if (called !== undefined) {
-      return { name: called, node: stmt };
+    const left = stmt.test.left;
+    if (!isPythonNode(left) || left._type !== "Name" || left.id !== "__name__") {
+      continue;
+    }
+    if (!asNodes(stmt.test.comparators).some((item) => stringConstant(item) === "__main__")) {
+      continue;
+    }
+    let found: string | undefined;
+    walkNodes(stmt, (node) => {
+      if (node._type !== "Call") {
+        return;
+      }
+      const name = lastAttr(node.func);
+      if (name !== undefined && wanted.has(name)) {
+        found ??= name;
+      }
+    });
+    if (found !== undefined) {
+      return { name: found, node: stmt };
     }
   }
   return undefined;
-}
-
-function isMainCompare(stmt: PythonNode): boolean {
-  if (stmt._type !== "If" || !isPythonNode(stmt.test) || stmt.test._type !== "Compare") {
-    return false;
-  }
-  const left = stmt.test.left;
-  if (!isPythonNode(left) || left._type !== "Name" || left.id !== "__name__") {
-    return false;
-  }
-  return asNodes(stmt.test.comparators).some((item) => stringConstant(item) === "__main__");
-}
-
-function calledWantedName(stmt: PythonNode, wanted: ReadonlySet<string>): string | undefined {
-  let found: string | undefined;
-  walkNodes(stmt, (node) => {
-    if (node._type !== "Call") {
-      return;
-    }
-    const name = lastAttr(node.func);
-    if (name !== undefined && wanted.has(name) && found === undefined) {
-      found = name;
-    }
-  });
-  return found;
-}
-
-function testCovers(test: PythonSource, entryName: string): boolean {
-  if (!referencesName(test.tree, entryName)) {
-    return false;
-  }
-  const names = new Set<string>([entryName, ...TRAIN_LIKE]);
-  return countCalls(test.tree, names) >= 2 && hasWeightAssert(test.tree);
-}
-
-function referencesName(tree: PythonNode, name: string): boolean {
-  let found = false;
-  walkNodes(tree, (node) => {
-    if (node._type === "Name" && node.id === name) {
-      found = true;
-    }
-    if (node._type === "Attribute" && node.attr === name) {
-      found = true;
-    }
-    if (node._type === "alias" && (node.name === name || node.asname === name)) {
-      found = true;
-    }
-  });
-  return found;
 }
 
 function countCalls(tree: PythonNode, names: ReadonlySet<string>): number {
@@ -180,46 +175,4 @@ function countCalls(tree: PythonNode, names: ReadonlySet<string>): number {
     }
   });
   return count;
-}
-
-function hasWeightAssert(tree: PythonNode): boolean {
-  let found = false;
-  walkNodes(tree, (node) => {
-    if (isEqualCall(node) || isStateDictEq(node)) {
-      found = true;
-    }
-  });
-  return found;
-}
-
-function isEqualCall(node: PythonNode): boolean {
-  if (node._type !== "Call") {
-    return false;
-  }
-  const name = lastAttr(node.func);
-  return name !== undefined && EQUAL_CALLS.has(name);
-}
-
-function isStateDictEq(node: PythonNode): boolean {
-  if (node._type !== "Compare" || !hasEqOp(node)) {
-    return false;
-  }
-  return compareMentionsStateDict(node);
-}
-
-function hasEqOp(node: PythonNode): boolean {
-  return asNodes(node.ops).some((op) => op._type === "Eq");
-}
-
-function compareMentionsStateDict(node: PythonNode): boolean {
-  let found = false;
-  walkNodes(node, (child) => {
-    if (child._type === "Attribute" && child.attr === "state_dict") {
-      found = true;
-    }
-    if (attrChain(child).includes("state_dict")) {
-      found = true;
-    }
-  });
-  return found;
 }

@@ -3,7 +3,7 @@
 Honest catalog for **`@qualety/ml`** (`Plugin.name: "ml"`).  
 This is the implementation list for this plugin. Plugins stay **authored in TypeScript** while checking Python.
 
-The plugin **provides nothing**. Rules `requires: ["python"]` and consume `context.getArtifact("python")`. The consumer must list **`@qualety/python`** (or another provider of `"python"`) in `plugins[]` when enabling ml rules that need it. Missing provider → fail-closed exit 2. Loading the plugin via `plugins[]` applies `configs.recommended` below. Overlay user `config.rules` to `"off"` or retune. Installing the package without `plugins[]` enables nothing. No `ruff` / `biome` section.
+The plugin **provides nothing**. Rules `requires: ["python"]` and consume `context.getArtifact("python")`. AST walk helpers are imported from `@qualety/python/walk` (not cloned). The consumer must list **`@qualety/python`** (or another provider of `"python"`) in `plugins[]` when enabling ml rules that need it. Missing provider → fail-closed exit 2. Loading the plugin via `plugins[]` applies `configs.recommended` below. Overlay user `config.rules` to `"off"` or retune. Installing the package without `plugins[]` enables nothing. No `ruff` / `biome` section.
 
 ```json
 {

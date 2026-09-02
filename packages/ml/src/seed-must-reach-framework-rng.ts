@@ -1,22 +1,15 @@
-import { defineRule, type RuleContext } from "qualety";
 import {
   asNodes,
-  attrChain,
-  callKeyword,
   childNodes,
-  firstTrainingNode,
-  functionArgNames,
   isPythonNode,
-  isSkippedSource,
-  isTrainingModule,
-  lastAttr,
   nodeRange,
   type PythonNode,
   type PythonSource,
-  pythonSources,
   stringConstant,
   walkNodes,
-} from "./ast.ts";
+} from "@qualety/python/walk";
+import { defineRule, type RuleContext } from "qualety";
+import { attrChain, callKeyword, firstTrainingNode, forEachMlSource, lastAttr } from "./ast.ts";
 
 const SEED_NAMES = new Set(["seed", "train_seed", "split_seed"]);
 const FLAG_DEST: Record<string, string> = {
@@ -35,53 +28,49 @@ export const seedMustReachFrameworkRng = defineRule({
     },
   },
   create(context) {
-    const cwd = context.getCwd();
-    for (const unit of pythonSources(context.getArtifact("python"))) {
-      if (isSkippedSource(unit.file, cwd) || !isTrainingModule(unit.tree)) {
-        continue;
-      }
-      checkUnit(unit, context);
+    for (const python of [context.getArtifact("python")]) {
+      // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: inlined scope + nested-def walk
+      forEachMlSource(python.sources, context.getCwd(), { trainingOnly: true }, (unit) => {
+        const moduleNames = new Set(SEED_NAMES);
+        addArgparseDestsFromStmts(asNodes(unit.tree.body), moduleNames);
+        considerUses(
+          { _type: "Module", body: asNodes(unit.tree.body) },
+          moduleNames,
+          unit,
+          context,
+        );
+        const stack: PythonNode[] = [unit.tree];
+        while (stack.length > 0) {
+          const node = stack.pop();
+          if (node === undefined) {
+            continue;
+          }
+          if (node._type === "FunctionDef" || node._type === "AsyncFunctionDef") {
+            const names = new Set(SEED_NAMES);
+            if (isPythonNode(node.args)) {
+              const args = [
+                ...asNodes(node.args.posonlyargs),
+                ...asNodes(node.args.args),
+                ...asNodes(node.args.kwonlyargs),
+              ];
+              for (const arg of args) {
+                if (typeof arg.arg === "string" && SEED_NAMES.has(arg.arg)) {
+                  names.add(arg.arg);
+                }
+              }
+            }
+            addArgparseDestsFromStmts(asNodes(node.body), names);
+            considerUses(node, names, unit, context);
+            continue;
+          }
+          for (const child of childNodes(node)) {
+            stack.push(child);
+          }
+        }
+      });
     }
   },
 });
-
-function checkUnit(unit: PythonSource, context: Pick<RuleContext, "report">) {
-  checkScope(asNodes(unit.tree.body), unit, context);
-  walkFunctions(unit.tree, unit, context);
-}
-
-function walkFunctions(node: PythonNode, unit: PythonSource, context: Pick<RuleContext, "report">) {
-  if (node._type === "FunctionDef" || node._type === "AsyncFunctionDef") {
-    const names = seedNamesInFunction(node);
-    considerUses(node, names, unit, context);
-    return;
-  }
-  for (const child of childNodes(node)) {
-    walkFunctions(child, unit, context);
-  }
-}
-
-function checkScope(
-  stmts: readonly PythonNode[],
-  unit: PythonSource,
-  context: Pick<RuleContext, "report">,
-) {
-  const names = new Set(SEED_NAMES);
-  addArgparseDestsFromStmts(stmts, names);
-  const synthetic: PythonNode = { _type: "Module", body: stmts };
-  considerUses(synthetic, names, unit, context);
-}
-
-function seedNamesInFunction(fn: PythonNode): Set<string> {
-  const names = new Set(SEED_NAMES);
-  for (const arg of functionArgNames(fn)) {
-    if (SEED_NAMES.has(arg)) {
-      names.add(arg);
-    }
-  }
-  addArgparseDestsFromStmts(asNodes(fn.body), names);
-  return names;
-}
 
 function addArgparseDestsFromStmts(stmts: readonly PythonNode[], names: Set<string>) {
   for (const stmt of stmts) {
@@ -104,8 +93,9 @@ function argparseDest(node: PythonNode): string | undefined {
   }
   for (const arg of asNodes(node.args)) {
     const flag = stringConstant(arg);
-    if (flag !== undefined && FLAG_DEST[flag] !== undefined) {
-      return FLAG_DEST[flag];
+    const destName = flag === undefined ? undefined : FLAG_DEST[flag];
+    if (destName !== undefined) {
+      return destName;
     }
   }
   return undefined;
@@ -125,9 +115,7 @@ function considerUses(
         return;
       }
       kinds.push(classifyCall(node));
-      if (reportAt === undefined) {
-        reportAt = node;
-      }
+      reportAt ??= node;
     });
   }
   if (kinds.length === 0 || kinds.includes("sink") || kinds.includes("unknown")) {
@@ -168,36 +156,22 @@ function isSeedExpr(node: PythonNode, names: Set<string>): boolean {
 
 function classifyCall(node: PythonNode): CallKind {
   const name = lastAttr(node.func);
-  if (name === "train_test_split") {
+  if (name === "train_test_split" || name === "Random") {
     return "nonsink";
   }
-  if (name === "Random") {
-    return "nonsink";
+  if (name === "manual_seed" || name === "seed") {
+    return "sink";
   }
-  if (isFrameworkSink(node, name)) {
+  if (name === "Generator" && callKeyword(node, "seed") !== undefined) {
+    return "sink";
+  }
+  if (name === "DataLoader" && callKeyword(node, "generator") !== undefined) {
+    return "sink";
+  }
+  if (attrChain(node.func).includes("manual_seed")) {
     return "sink";
   }
   return "unknown";
-}
-
-function isFrameworkSink(node: PythonNode, name: string | undefined): boolean {
-  if (name === "manual_seed") {
-    return true;
-  }
-  if (name === "seed") {
-    return true;
-  }
-  if (name === "Generator" && callKeyword(node, "seed") !== undefined) {
-    return true;
-  }
-  if (name === "DataLoader" && callTakesGenerator(node)) {
-    return true;
-  }
-  return attrChain(node.func).includes("manual_seed");
-}
-
-function callTakesGenerator(node: PythonNode): boolean {
-  return callKeyword(node, "generator") !== undefined;
 }
 
 function walkSkipDefs(node: PythonNode, visit: (node: PythonNode) => void): void {

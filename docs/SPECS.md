@@ -434,7 +434,7 @@ Authored in TypeScript. Provides artifact `"python"` (CPython `ast` via `python3
 | `ml/determinism-test-required` | Implemented (training entry point needs a two-run weight-identity test; see [ml.md](./rulesets/ml.md)) |
 | `ml/deterministic-algorithms-opt-in` | Implemented (recommended `off`; `use_deterministic_algorithms` or `cudnn.deterministic`; see [ml.md](./rulesets/ml.md)) |
 
-Authored in TypeScript. Does not provide `"python"`; rules `requires: ["python"]`. No Ruff/Biome deltas.
+Authored in TypeScript. Does not provide `"python"`; rules `requires: ["python"]`. Imports `@qualety/python/walk` for shared AST walk helpers. No Ruff/Biome deltas.
 
 ## 4. CLI interface
 

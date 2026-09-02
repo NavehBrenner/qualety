@@ -1,18 +1,12 @@
-import { defineRule, type RuleContext } from "qualety";
 import {
   asNodes,
-  attrChain,
-  callKeyword,
-  isPythonNode,
-  isSkippedSource,
-  lastAttr,
   nodeRange,
   type PythonNode,
-  type PythonSource,
-  pythonSources,
   stringConstant,
   walkNodes,
-} from "./ast.ts";
+} from "@qualety/python/walk";
+import { defineRule } from "qualety";
+import { assignTarget, attrChain, callKeyword, forEachMlSource, lastAttr } from "./ast.ts";
 
 const CUDA_DEVICE = /^cuda(?::\d+)?$/;
 const TF32_HINT = "Set both allow_tf32 flags explicitly next to device setup.";
@@ -25,41 +19,32 @@ export const tf32MustBeExplicit = defineRule({
     },
   },
   create(context) {
-    const cwd = context.getCwd();
-    for (const unit of pythonSources(context.getArtifact("python"))) {
-      if (isSkippedSource(unit.file, cwd)) {
-        continue;
-      }
-      checkUnit(unit, context);
+    for (const python of [context.getArtifact("python")]) {
+      forEachMlSource(python.sources, context.getCwd(), { trainingOnly: false }, (unit) => {
+        const flags = { matmul: false, cudnn: false };
+        const moves: PythonNode[] = [];
+        walkNodes(unit.tree, (node) => {
+          noteTf32Assign(node, flags);
+          if (isCudaMove(node)) {
+            moves.push(node);
+          }
+        });
+        const first = moves[0];
+        if (first === undefined || (flags.matmul && flags.cudnn)) {
+          return;
+        }
+        context.report({
+          severity: "error",
+          file: unit.file,
+          range: nodeRange(first),
+          message:
+            "CUDA device move without explicit torch.backends.cuda.matmul.allow_tf32 and torch.backends.cudnn.allow_tf32.",
+          suggestion: TF32_HINT,
+        });
+      });
     }
   },
 });
-
-function checkUnit(unit: PythonSource, context: Pick<RuleContext, "report">) {
-  const flags = { matmul: false, cudnn: false };
-  const moves: PythonNode[] = [];
-  walkNodes(unit.tree, (node) => {
-    noteTf32Assign(node, flags);
-    if (isCudaMove(node)) {
-      moves.push(node);
-    }
-  });
-  if (moves.length === 0 || (flags.matmul && flags.cudnn)) {
-    return;
-  }
-  const first = moves[0];
-  if (first === undefined) {
-    return;
-  }
-  context.report({
-    severity: "error",
-    file: unit.file,
-    range: nodeRange(first),
-    message:
-      "CUDA device move without explicit torch.backends.cuda.matmul.allow_tf32 and torch.backends.cudnn.allow_tf32.",
-    suggestion: TF32_HINT,
-  });
-}
 
 function noteTf32Assign(node: PythonNode, flags: { matmul: boolean; cudnn: boolean }) {
   const target = assignTarget(node);
@@ -78,35 +63,19 @@ function noteTf32Assign(node: PythonNode, flags: { matmul: boolean; cudnn: boole
   }
 }
 
-function assignTarget(node: PythonNode): PythonNode | undefined {
-  if (node._type === "AnnAssign" && isPythonNode(node.target)) {
-    return node.target;
-  }
-  if (node._type !== "Assign") {
-    return undefined;
-  }
-  const target = asNodes(node.targets)[0];
-  return target;
-}
-
-function isCudaMove(node: PythonNode): boolean {
+function isCudaMove(node: PythonNode): node is PythonNode & { readonly _type: "Call" } {
   if (node._type !== "Call") {
     return false;
   }
   if (lastAttr(node.func) === "cuda") {
     return true;
   }
-  if (lastAttr(node.func) === "to" && isCudaDeviceArg(node)) {
+  const device = stringConstant(callKeyword(node, "device"));
+  if (device !== undefined && CUDA_DEVICE.test(device)) {
     return true;
   }
-  const device = stringConstant(callKeyword(node, "device"));
-  return device !== undefined && CUDA_DEVICE.test(device);
-}
-
-function isCudaDeviceArg(node: PythonNode): boolean {
-  const deviceKw = stringConstant(callKeyword(node, "device"));
-  if (deviceKw !== undefined && CUDA_DEVICE.test(deviceKw)) {
-    return true;
+  if (lastAttr(node.func) !== "to") {
+    return false;
   }
   const first = asNodes(node.args)[0];
   if (first === undefined) {
@@ -116,13 +85,9 @@ function isCudaDeviceArg(node: PythonNode): boolean {
   if (literal !== undefined) {
     return CUDA_DEVICE.test(literal);
   }
-  return isDeviceCudaCall(first);
-}
-
-function isDeviceCudaCall(node: PythonNode): boolean {
-  if (node._type !== "Call" || lastAttr(node.func) !== "device") {
+  if (first._type !== "Call" || lastAttr(first.func) !== "device") {
     return false;
   }
-  const first = stringConstant(asNodes(node.args)[0]) ?? stringConstant(callKeyword(node, "type"));
-  return first !== undefined && CUDA_DEVICE.test(first);
+  const type = stringConstant(asNodes(first.args)[0]) ?? stringConstant(callKeyword(first, "type"));
+  return type !== undefined && CUDA_DEVICE.test(type);
 }

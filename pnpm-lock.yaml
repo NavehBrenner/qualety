@@ -76,6 +76,9 @@ importers:
 
   packages/ml:
     dependencies:
+      '@qualety/python':
+        specifier: workspace:*
+        version: link:../python
       qualety:
         specifier: workspace:*
         version: link:../qualety
