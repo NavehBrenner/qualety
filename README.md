@@ -68,7 +68,7 @@ The original author has a working internal TypeScript/TSX prototype for several 
 
 ## Install
 
-One engine, three surfaces (SPECS #10). **Public npm and PyPI packages are not published yet** (first registry cut is [#59](https://github.com/NavehBrenner/qualety/issues/59)). Until then: this workspace (`pnpm install` / `pnpm build`) or a GitHub Release binary after a deliberate `v*` tag.
+One engine, three surfaces (SPECS #10). **PyPI `qualety` is published (latest 0.1.3).** **npm official packages are published (latest 0.1.3):** `qualety`, `@qualety/typescript`, `@qualety/react`, `@qualety/dry`, `@qualety/python`, `@qualety/plugin-kit`.
 
 | Surface | Use when |
 |---|---|
@@ -83,15 +83,27 @@ Custom or relative plugins on the binary/pip exit 2 — use `npm i qualety`. Pyt
 Installing `qualety` pins `@biomejs/biome`. Installing `@qualety/python` pins `@astral-sh/ruff-wasm-nodejs`. Put a plugin on `plugins[]` and that plugin’s `configs.recommended` is applied (user `config.rules` overlays last; `"off"` still disables). With a `qualety.config.*` present, `qualety check` runs Biome then Ruff (generated `.qualety/biome.json` / `.qualety/ruff.toml` from baseline + plugin `biome` / `ruff` sections + user overlay) then product rules. JS/TS Biome deltas live on `@qualety/typescript` `biome.rules` (unsafe assertion, complexity@15, explicit `any`, non-null `!`, `@ts-ignore`, banned types, focused tests, unused params, throw-only-error, implied eval). Python Ruff deltas live on `@qualety/python` `ruff.rules` (`UP`, `B`). Overlay those maps or set `biome: false` / `ruff: false` to turn those phases off. `pnpm check` in this repo still uses committed `biome.json`.
 
 ```bash
-# npm (when published)
-npm i -D qualety @qualety/typescript @qualety/python
-
-# pip (when published)
 pip install qualety
-python -m qualety check
+qualety init
+qualety check
+qualety doctor
+```
 
-# binary from a GitHub Release
-./qualety check
+```bash
+npm i -D qualety @qualety/typescript @qualety/python
+qualety init
+qualety check
+qualety doctor
+```
+
+`qualety init` scaffolds `qualety.config.json` when missing (language-detected plugins); an existing config only refreshes `.qualety/*`; `--force` overwrites json config only. `qualety doctor` reports biome/ruff backend state.
+
+Minimal config is `plugins[]`. Loading a plugin applies `configs.recommended`; user `rules` overlay or `"off"`.
+
+```json
+{
+  "plugins": ["@qualety/python"]
+}
 ```
 
 Recommended TypeScript `compilerOptions` ship from `@qualety/typescript`. One-line wire — this is **not** a `tsc` phase inside `qualety check`, and it does not enable product `ts/*` (those still need `plugins[]`):
@@ -130,7 +142,6 @@ Layout: `packages/qualety` (engine, CLI, plugin contract),
 `packages/dry` (`@qualety/dry`),
 `packages/python` (`@qualety/python`), and
 `packages/plugin-kit` (`@qualety/plugin-kit`).
-Public registry publish is **not** live yet (first cut is #59); install-from-workspace remains the path until then.
 
 ## Roadmap (High Level)
 

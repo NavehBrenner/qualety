@@ -100,6 +100,8 @@ type ProjectRuffSlice = {
   ignore?: string[];
   extendIgnore?: string[];
   isort?: Record<string, unknown>;
+  lineLength?: number;
+  targetVersion?: string;
 };
 
 export async function writeGeneratedRuffConfig(
@@ -111,10 +113,10 @@ export async function writeGeneratedRuffConfig(
   const userRules = userRuff === false || userRuff === undefined ? undefined : userRuff.rules;
   const slice = project ?? (await loadProjectRuffSlice(cwd));
   await mkdir(join(cwd, GENERATED_DIR), { recursive: true });
-  const lint = ruffLintSettings(mergeRuffRules(plugins, userRules), slice);
+  const settings = workspaceSettings(mergeRuffRules(plugins, userRules), slice);
   await writeFile(
     join(cwd, GENERATED_RUFF_PATH),
-    Object.keys(lint).length === 0 ? "" : stringify({ lint }),
+    Object.keys(settings).length === 0 ? "" : stringify(settings),
   );
   return GENERATED_RUFF_PATH;
 }
@@ -153,7 +155,7 @@ export async function runRuffPhase(input: {
       throw error;
     }
     usedProject = undefined;
-    workspace = wasm.open(workspaceSettings(merged));
+    workspace = wasm.open(workspaceSettings(merged, undefined));
   }
   await writeGeneratedRuffConfig(input.cwd, input.plugins, input.ruff, usedProject ?? {});
   try {
@@ -233,10 +235,20 @@ async function loadRuffWasm(modulePath?: string) {
 
 function workspaceSettings(
   merged: Record<string, RuffRuleSetting>,
-  project?: ProjectRuffSlice,
+  project: ProjectRuffSlice | undefined,
 ): Record<string, unknown> {
   const lint = ruffLintSettings(merged, project);
-  return Object.keys(lint).length === 0 ? {} : { lint };
+  const settings: Record<string, unknown> = {};
+  if (project?.lineLength !== undefined) {
+    settings["line-length"] = project.lineLength;
+  }
+  if (project?.targetVersion !== undefined) {
+    settings["target-version"] = project.targetVersion;
+  }
+  if (Object.keys(lint).length > 0) {
+    settings.lint = lint;
+  }
+  return settings;
 }
 
 function ruffLintSettings(
@@ -310,12 +322,24 @@ async function readTomlDocument(
 function sliceProjectRuff(root: Record<string, unknown>): ProjectRuffSlice {
   const lint = isRecord(root.lint) ? root.lint : undefined;
   const isortSource = lint !== undefined && Object.hasOwn(lint, "isort") ? lint.isort : root.isort;
+  const lineLength = Object.hasOwn(root, "line-length")
+    ? root["line-length"]
+    : lint?.["line-length"];
+  const targetVersion = Object.hasOwn(root, "target-version")
+    ? root["target-version"]
+    : lint?.["target-version"];
   return {
     select: pickStringArray(lint, root, "select"),
     extendSelect: pickStringArray(lint, root, "extend-select"),
     ignore: pickStringArray(lint, root, "ignore"),
     extendIgnore: pickStringArray(lint, root, "extend-ignore"),
     isort: isRecord(isortSource) ? isortSource : undefined,
+    lineLength:
+      typeof lineLength === "number" && Number.isInteger(lineLength) && lineLength > 0
+        ? lineLength
+        : undefined,
+    targetVersion:
+      typeof targetVersion === "string" && targetVersion.length > 0 ? targetVersion : undefined,
   };
 }
 

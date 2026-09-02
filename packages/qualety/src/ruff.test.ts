@@ -373,7 +373,115 @@ convention = "google"
   });
   await writeGeneratedRuffConfig(dir, [], undefined);
   const written = await readFile(join(dir, GENERATED_RUFF_PATH), "utf8");
+  expect(written).toBe(`line-length = 88
+target-version = "py311"
+
+[lint]
+select = [ "E" ]
+`);
+  expect(written).not.toMatch(/format|quote-style|pydocstyle|convention/);
+});
+
+test("pyproject and ruff.toml inherit line-length and target-version at root", async () => {
+  const pyproject = await writeTree({
+    "pyproject.toml": `[tool.ruff]
+line-length = 100
+target-version = "py312"
+[tool.ruff.lint]
+select = ["I"]
+`,
+  });
+  await writeGeneratedRuffConfig(pyproject, [], undefined);
+  expect(await readFile(join(pyproject, GENERATED_RUFF_PATH), "utf8")).toBe(`line-length = 100
+target-version = "py312"
+
+[lint]
+select = [ "I" ]
+`);
+  const ruffToml = await writeTree({
+    "ruff.toml": `line-length = 100
+target-version = "py312"
+[lint]
+select = ["I"]
+`,
+  });
+  await writeGeneratedRuffConfig(ruffToml, [], undefined);
+  expect(await readFile(join(ruffToml, GENERATED_RUFF_PATH), "utf8")).toBe(`line-length = 100
+target-version = "py312"
+
+[lint]
+select = [ "I" ]
+`);
+});
+
+test("project line-length 100 drops wrap I001 that fires at 88", async () => {
+  const importLine =
+    "from demo.helpers.widgets import extremely_long_helper_name_that_wraps_under_eighty_eight_ok";
+  const files = { "demo/thing.py": `${importLine}\n` };
+  const withLength = await writeTree({
+    ...files,
+    "pyproject.toml": `[tool.ruff]
+line-length = 100
+`,
+  });
+  const withoutLength = await writeTree(files);
+  const codesAt100 = (
+    await runRuffPhase({
+      cwd: withLength,
+      files: ["demo/thing.py"],
+      plugins: [],
+      ruff: undefined,
+    })
+  ).map((violation) => violation.ruleId);
+  const codesAtDefault = (
+    await runRuffPhase({
+      cwd: withoutLength,
+      files: ["demo/thing.py"],
+      plugins: [],
+      ruff: undefined,
+    })
+  ).map((violation) => violation.ruleId);
+  expect(importLine.length).toBeGreaterThanOrEqual(89);
+  expect(importLine.length).toBeLessThanOrEqual(99);
+  expect(codesAt100).not.toContain("I001");
+  expect(codesAtDefault).toContain("I001");
+});
+
+test("missing line-length and target-version stay off the mirror", async () => {
+  const dir = await writeTree({
+    "pyproject.toml": `[tool.ruff.lint]
+select = ["E"]
+`,
+  });
+  await writeGeneratedRuffConfig(dir, [], undefined);
+  const written = await readFile(join(dir, GENERATED_RUFF_PATH), "utf8");
   expect(written).toBe(`[lint]
+select = [ "E" ]
+`);
+});
+
+test("invalid line-length and target-version are omitted", async () => {
+  const dir = await writeTree({
+    "pyproject.toml": `[tool.ruff]
+line-length = "100"
+target-version = 312
+[tool.ruff.lint]
+select = ["E"]
+`,
+  });
+  await writeGeneratedRuffConfig(dir, [], undefined);
+  expect(await readFile(join(dir, GENERATED_RUFF_PATH), "utf8")).toBe(`[lint]
+select = [ "E" ]
+`);
+  const nonPositive = await writeTree({
+    "ruff.toml": `line-length = 0
+target-version = ""
+[lint]
+select = ["E"]
+`,
+  });
+  await writeGeneratedRuffConfig(nonPositive, [], undefined);
+  expect(await readFile(join(nonPositive, GENERATED_RUFF_PATH), "utf8")).toBe(`[lint]
 select = [ "E" ]
 `);
 });

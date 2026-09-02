@@ -1,8 +1,10 @@
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { expect, test } from "vitest";
+import { z } from "zod";
 import { run } from "./cli.ts";
+import { detectInitPlugins } from "./init-config.ts";
 
 const silent = () => {};
 
@@ -108,7 +110,7 @@ test("--help lists filter flags", async () => {
   expect(text).toMatch(/--rule <id>/);
   expect(text).toMatch(/--diff-worktree/);
   expect(text).toMatch(/--diff /);
-  expect(text).toMatch(/qualety init/);
+  expect(text).toMatch(/qualety init \[--force\]/);
   expect(text).toMatch(/qualety doctor/);
 });
 
@@ -243,11 +245,137 @@ test("init skips ruff.toml when ruff is false", async () => {
   expect(lines.join("\n")).not.toMatch(/ruff\.toml/);
 });
 
-test("init without config exits 2", async () => {
+test("init scaffolds python plugin from *.py", async () => {
+  const dir = await writeTree({ "app.py": "x = 1\n" });
+  const lines: string[] = [];
+  expect(await run(["init"], (m) => lines.push(String(m)), silent, dir)).toBe(0);
+  expect(lines.join("\n")).toMatch(
+    /qualety\.config\.json\n\.qualety\/biome\.json\n\.qualety\/ruff\.toml/,
+  );
+  expect(await readPlugins(dir)).toEqual(["@qualety/python"]);
+  await readFile(join(dir, ".qualety/biome.json"));
+  await readFile(join(dir, ".qualety/ruff.toml"));
+});
+
+test("init scaffolds typescript from tsconfig only", async () => {
+  const dir = await writeTree({ "tsconfig.json": "{}\n" });
+  expect(await run(["init"], silent, silent, dir)).toBe(0);
+  expect(await readPlugins(dir)).toEqual(["@qualety/typescript"]);
+});
+
+test("init scaffolds typescript from .tsx without react", async () => {
+  const dir = await writeTree({ "src/App.tsx": "export const App = () => null;\n" });
+  expect(await run(["init"], silent, silent, dir)).toBe(0);
+  expect(await readPlugins(dir)).toEqual(["@qualety/typescript"]);
+});
+
+test("detects react from package.json only", async () => {
+  const dir = await writeTree({
+    "package.json": JSON.stringify({ dependencies: { react: "19.0.0" } }),
+  });
+  expect(await detectInitPlugins(dir)).toEqual(["@qualety/react"]);
+});
+
+test("plugin order is typescript, react, python", async () => {
+  const dir = await writeTree({
+    "package.json": JSON.stringify({
+      dependencies: { react: "19.0.0", typescript: "5.0.0" },
+    }),
+    "app.py": "x = 1\n",
+  });
+  expect(await detectInitPlugins(dir)).toEqual([
+    "@qualety/typescript",
+    "@qualety/react",
+    "@qualety/python",
+  ]);
+});
+
+test("init scaffolds typescript and python together", async () => {
+  const dir = await writeTree({
+    "tsconfig.json": "{}\n",
+    "app.py": "x = 1\n",
+  });
+  expect(await run(["init"], silent, silent, dir)).toBe(0);
+  expect(await readPlugins(dir)).toEqual(["@qualety/typescript", "@qualety/python"]);
+});
+
+test("init empty tree writes empty plugins and note", async () => {
   const dir = await writeTree({});
+  const lines: string[] = [];
+  expect(await run(["init"], (m) => lines.push(String(m)), silent, dir)).toBe(0);
+  expect(await readPlugins(dir)).toEqual([]);
+  expect(lines.join("\n")).toMatch(
+    /qualety\.config\.json\n\.qualety\/biome\.json\n\.qualety\/ruff\.toml\nNo plugins detected — qualety check is a no-op until you add plugins\./,
+  );
+});
+
+test("init skips node_modules and other skip dirs", async () => {
+  const dir = await writeTree({
+    "node_modules/foo.ts": "export {};\n",
+    "venv/app.py": "x = 1\n",
+    ".git/bar.ts": "export {};\n",
+  });
+  expect(await run(["init"], silent, silent, dir)).toBe(0);
+  expect(await readPlugins(dir)).toEqual([]);
+});
+
+test("init leaves existing json config bytes unchanged", async () => {
+  const body = JSON.stringify({ plugins: [], rules: {} });
+  const dir = await writeTree({ "qualety.config.json": body });
+  expect(await run(["init"], silent, silent, dir)).toBe(0);
+  expect(await readFile(join(dir, "qualety.config.json"), "utf8")).toBe(body);
+});
+
+test("init leaves existing ts config bytes unchanged", async () => {
+  const body = "export default { plugins: [] as string[], rules: {} };\n";
+  const dir = await writeTree({ "qualety.config.ts": body });
+  expect(await run(["init"], silent, silent, dir)).toBe(0);
+  expect(await readFile(join(dir, "qualety.config.ts"), "utf8")).toBe(body);
+});
+
+test("init --force reseeds json config", async () => {
+  const dir = await writeTree({
+    "qualety.config.json": JSON.stringify({ plugins: [] }),
+    "app.py": "x = 1\n",
+  });
+  expect(await run(["init", "--force"], silent, silent, dir)).toBe(0);
+  expect(await readPlugins(dir)).toEqual(["@qualety/python"]);
+});
+
+test("init --force refuses non-json configs", async () => {
+  const body = "export default { plugins: [] };\n";
+  for (const name of [
+    "qualety.config.ts",
+    "qualety.config.mts",
+    "qualety.config.js",
+    "qualety.config.mjs",
+  ]) {
+    const dir = await writeTree({ [name]: body });
+    const errors: string[] = [];
+    expect(await run(["init", "--force"], silent, (m) => errors.push(String(m)), dir)).toBe(2);
+    expect(errors.join("\n")).toMatch(/--force only overwrites qualety\.config\.json/);
+    expect(await readFile(join(dir, name), "utf8")).toBe(body);
+  }
+});
+
+test("init --force with no config scaffolds", async () => {
+  const dir = await writeTree({ "app.py": "x = 1\n" });
+  expect(await run(["init", "--force"], silent, silent, dir)).toBe(0);
+  expect(await readPlugins(dir)).toEqual(["@qualety/python"]);
+});
+
+test("init extra positional exits 2", async () => {
   const errors: string[] = [];
-  expect(await run(["init"], silent, (m) => errors.push(String(m)), dir)).toBe(2);
-  expect(errors.join("\n")).toMatch(/No qualety config found/);
+  expect(await run(["init", "src"], silent, (m) => errors.push(String(m)))).toBe(2);
+  expect(errors.join("\n")).toMatch(/Usage:/);
+});
+
+test("init then check loads recommended python rules", async () => {
+  const dir = await writeTree({ "app.py": "x = 1\n" });
+  expect(await run(["init"], silent, silent, dir)).toBe(0);
+  const lines: string[] = [];
+  await run(["check"], (m) => lines.push(String(m)), silent, dir);
+  expect(lines.join("\n")).not.toMatch(/No rules configured — nothing to check/);
 });
 
 test("doctor reports biome off without config", async () => {
@@ -305,3 +433,9 @@ test("unknown command exits 2", async () => {
 test("no arguments exits 2", async () => {
   expect(await run([], silent, silent)).toBe(2);
 });
+
+async function readPlugins(dir: string): Promise<string[]> {
+  return z
+    .object({ plugins: z.array(z.string()) })
+    .parse(JSON.parse(await readFile(join(dir, "qualety.config.json"), "utf8"))).plugins;
+}

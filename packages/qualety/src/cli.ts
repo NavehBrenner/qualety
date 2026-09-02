@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
+import { access, writeFile } from "node:fs/promises";
+import { basename, join } from "node:path";
 import { parseArgs } from "node:util";
 import {
   biomeEnabled,
@@ -8,8 +10,10 @@ import {
   resolveBiomeBinary,
   writeGeneratedBiomeConfig,
 } from "./biome.ts";
-import { isStandalone, loadConfig } from "./config.ts";
+import { CONFIG_FILENAMES, isStandalone, loadConfig, readConfigFile } from "./config.ts";
 import { type CheckFilters, check, loadPluginsFromConfig } from "./engine.ts";
+import { detectInitPlugins } from "./init-config.ts";
+import { isRecord } from "./record.ts";
 import {
   GENERATED_RUFF_PATH,
   readRuffVersion,
@@ -22,7 +26,7 @@ const USAGE = `qualety — executable code invariants
 
 Usage:
   qualety check [options]
-  qualety init
+  qualety init [--force]
   qualety doctor
 
 Options:
@@ -53,6 +57,7 @@ export async function run(
     rule?: string[];
     diff?: boolean;
     "diff-worktree"?: boolean;
+    force?: boolean;
   };
   try {
     ({ positionals, values } = parseArgs({
@@ -64,6 +69,7 @@ export async function run(
         rule: { type: "string", multiple: true },
         diff: { type: "boolean" },
         "diff-worktree": { type: "boolean" },
+        force: { type: "boolean" },
       },
       allowPositionals: true,
     }));
@@ -87,6 +93,7 @@ async function dispatch(
     rule?: string[];
     diff?: boolean;
     "diff-worktree"?: boolean;
+    force?: boolean;
   },
   out: (msg: string) => void,
   err: (msg: string) => void,
@@ -94,7 +101,7 @@ async function dispatch(
 ): Promise<number> {
   const [command, ...rest] = positionals;
   if (command === "init" || command === "doctor") {
-    return runMeta(command, rest, positionals, out, err, cwd);
+    return runMeta(command, rest, positionals, out, err, cwd, values.force === true);
   }
   if (command !== "check" || rest.length > 0) {
     err(`Unknown command: ${positionals.join(" ")}\n\n${USAGE}`);
@@ -115,6 +122,7 @@ async function runMeta(
   out: (msg: string) => void,
   err: (msg: string) => void,
   cwd: string,
+  force: boolean,
 ): Promise<number> {
   if (rest.length > 0) {
     err(`Unknown command: ${positionals.join(" ")}\n\n${USAGE}`);
@@ -124,21 +132,65 @@ async function runMeta(
     if (command !== "init") {
       return await runDoctor(cwd, out);
     }
-    const loaded = await loadConfig(cwd);
-    if (loaded === undefined) {
-      throw new Error("No qualety config found.");
-    }
-    const plugins = await loadPluginsFromConfig(loaded.config, loaded.path);
-    const paths = [await writeGeneratedBiomeConfig(cwd, plugins, loaded.config.biome)];
-    if (ruffEnabled(loaded.config)) {
-      paths.push(await writeGeneratedRuffConfig(cwd, plugins, loaded.config.ruff));
-    }
-    out(paths.join("\n"));
-    return 0;
+    return await runInit(cwd, out, err, force);
   } catch (e) {
     err(e instanceof Error ? e.message : String(e));
     return 2;
   }
+}
+
+async function runInit(
+  cwd: string,
+  out: (msg: string) => void,
+  err: (msg: string) => void,
+  force: boolean,
+): Promise<number> {
+  const existing = await findCwdConfigPath(cwd);
+  if (force && existing !== undefined && basename(existing) !== "qualety.config.json") {
+    err("--force only overwrites qualety.config.json.");
+    return 2;
+  }
+  const written: string[] = [];
+  let configPath: string;
+  let seededEmpty = false;
+  if (existing === undefined || force) {
+    const detected = await detectInitPlugins(cwd);
+    await writeFile(
+      join(cwd, "qualety.config.json"),
+      `${JSON.stringify({ plugins: detected }, null, 2)}\n`,
+    );
+    written.push("qualety.config.json");
+    configPath = join(cwd, "qualety.config.json");
+    seededEmpty = detected.length === 0;
+  } else {
+    configPath = existing;
+  }
+  const config = await readConfigFile(configPath);
+  const plugins = await loadPluginsFromConfig(config, configPath);
+  written.push(await writeGeneratedBiomeConfig(cwd, plugins, config.biome));
+  if (ruffEnabled(config)) {
+    written.push(await writeGeneratedRuffConfig(cwd, plugins, config.ruff));
+  }
+  out(written.join("\n"));
+  if (seededEmpty) {
+    out("No plugins detected — qualety check is a no-op until you add plugins.");
+  }
+  return 0;
+}
+
+async function findCwdConfigPath(cwd: string): Promise<string | undefined> {
+  for (const name of CONFIG_FILENAMES) {
+    const candidate = join(cwd, name);
+    try {
+      await access(candidate);
+      return candidate;
+    } catch (error) {
+      if (!(isRecord(error) && error.code === "ENOENT")) {
+        throw error;
+      }
+    }
+  }
+  return undefined;
 }
 
 async function runDoctor(cwd: string, out: (msg: string) => void): Promise<number> {
