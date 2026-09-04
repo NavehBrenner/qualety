@@ -39,7 +39,7 @@ async function gitOk(cwd: string, args: string[]): Promise<string | undefined> {
   }
 }
 
-async function runGit(cwd: string, args: string[]): Promise<string> {
+export async function runGit(cwd: string, args: string[]): Promise<string> {
   try {
     const result = await execFileAsync("git", args, { cwd, encoding: "utf8" });
     return result.stdout;
@@ -56,6 +56,6 @@ async function runGit(cwd: string, args: string[]): Promise<string> {
   }
 }
 
-function splitGitNames(stdout: string): string[] {
+export function splitGitNames(stdout: string): string[] {
   return stdout.split("\n").filter((line) => line !== "");
 }
