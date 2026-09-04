@@ -54,10 +54,8 @@ export function parseWriterName(options: unknown): string {
 
 const optionsSchema = {
   parse(value: unknown): { writerName?: unknown } {
-    if (typeof value === "object") {
-      if (value !== null) {
-        return { writerName: Reflect.get(value, "writerName") };
-      }
+    if (typeof value === "object" && value !== null) {
+      return { writerName: Reflect.get(value, "writerName") };
     }
     return {};
   },

@@ -133,10 +133,8 @@ export function parseEntryPoints(options: unknown): string[] {
 
 const optionsSchema = {
   parse(value: unknown): { entryPoints?: unknown } {
-    if (typeof value === "object") {
-      if (value !== null) {
-        return { entryPoints: Reflect.get(value, "entryPoints") };
-      }
+    if (typeof value === "object" && value !== null) {
+      return { entryPoints: Reflect.get(value, "entryPoints") };
     }
     return {};
   },
