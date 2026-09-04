@@ -126,9 +126,10 @@ function tallyFileUses(
     unit.file,
     (parent, child) => parent._type === "Call" && child === parent.func,
     (ref) => {
-      const key = resolveCall(ref, fileBinds, defs, classes);
+      const call = { kind: "name" as const, ...ref };
+      const key = resolveCall(call, fileBinds, defs, classes);
       if (key === undefined) {
-        addAmbiguousLoads(ref, fileBinds, defs, valueLoads);
+        addAmbiguousLoads(call, fileBinds, defs, valueLoads);
       }
       return key;
     },
@@ -198,15 +199,31 @@ function collectDefs(
   }
 }
 
-type RawCall = {
-  file: string;
-  name: string;
-  owner: string | undefined;
-  className: string;
-  lineno: number;
-  ctorName?: string;
-  instanceAttr?: string;
-};
+type RawCall =
+  | {
+      kind: "name";
+      file: string;
+      name: string;
+      owner: string | undefined;
+      className: string;
+      lineno: number;
+    }
+  | {
+      kind: "ctor";
+      file: string;
+      name: string;
+      className: string;
+      lineno: number;
+      ctorName: string;
+    }
+  | {
+      kind: "instance";
+      file: string;
+      name: string;
+      className: string;
+      lineno: number;
+      instanceAttr: string;
+    };
 
 function walkCalls(
   node: PythonNode,
@@ -239,7 +256,7 @@ function rawCall(node: PythonNode, className: string, file: string): RawCall | u
     return undefined;
   }
   if (func._type === "Name" && typeof func.id === "string") {
-    return { file, name: func.id, owner: undefined, className, lineno };
+    return { kind: "name", file, name: func.id, owner: undefined, className, lineno };
   }
   if (func._type !== "Attribute" || typeof func.attr !== "string" || !isPythonNode(func.value)) {
     return undefined;
@@ -255,12 +272,12 @@ function rawAttrCall(
   lineno: number,
 ): RawCall | undefined {
   if (value._type === "Name" && typeof value.id === "string") {
-    return { file, name: attr, owner: value.id, className, lineno };
+    return { kind: "name", file, name: attr, owner: value.id, className, lineno };
   }
   if (value._type === "Call") {
     const callee = value.func;
     if (isPythonNode(callee) && callee._type === "Name" && typeof callee.id === "string") {
-      return { file, name: attr, owner: undefined, className, lineno, ctorName: callee.id };
+      return { kind: "ctor", file, name: attr, className, lineno, ctorName: callee.id };
     }
     return undefined;
   }
@@ -277,7 +294,7 @@ function rawAttrCall(
   if (base !== "self" && base !== "cls") {
     return undefined;
   }
-  return { file, name: attr, owner: undefined, className, lineno, instanceAttr: value.attr };
+  return { kind: "instance", file, name: attr, className, lineno, instanceAttr: value.attr };
 }
 
 function resolveCall(
@@ -286,12 +303,12 @@ function resolveCall(
   defs: readonly Def[],
   classes: readonly ClassHit[],
 ): string | undefined {
-  if (call.ctorName !== undefined) {
+  if (call.kind === "ctor") {
     const hits = defs.filter((def) => def.className === call.ctorName && def.name === call.name);
     const hit = hits[0];
     return hits.length === 1 && hit !== undefined ? defKey(hit) : undefined;
   }
-  if (call.instanceAttr !== undefined) {
+  if (call.kind === "instance") {
     return resolveAttrCall(call, fileBinds, defs, classes);
   }
   const owner = call.owner;
@@ -328,13 +345,12 @@ function findDefKey(
 }
 
 function resolveAttrCall(
-  call: RawCall,
+  call: Extract<RawCall, { kind: "instance" }>,
   fileBinds: FileBinds | undefined,
   defs: readonly Def[],
   classes: readonly ClassHit[],
 ): string | undefined {
-  const attr = call.instanceAttr;
-  if (attr === undefined || call.className === "") {
+  if (call.className === "") {
     return undefined;
   }
   const ownerHits = classes.filter(
@@ -344,7 +360,7 @@ function resolveAttrCall(
   if (ownerHits.length !== 1 || ownerClass === undefined) {
     return undefined;
   }
-  const rhsName = attrBindRhs(ownerClass.node, attr);
+  const rhsName = attrBindRhs(ownerClass.node, call.instanceAttr);
   if (rhsName === undefined) {
     return undefined;
   }
@@ -466,7 +482,7 @@ function resolveAttrOwner(
 }
 
 function addUnprovenAttributeLoads(call: RawCall, defs: readonly Def[], valueLoads: Set<string>) {
-  if (call.instanceAttr === undefined) {
+  if (call.kind !== "instance") {
     return;
   }
   for (const def of defs) {
@@ -486,6 +502,9 @@ function addAmbiguousLoads(
   defs: readonly Def[],
   valueLoads: Set<string>,
 ) {
+  if (call.kind !== "name") {
+    return;
+  }
   const owner = call.owner;
   if (typeof owner !== "string" || owner === "self" || owner === "cls") {
     return;
