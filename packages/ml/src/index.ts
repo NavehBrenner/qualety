@@ -1,4 +1,5 @@
 import type { Plugin } from "qualety";
+import { artifactHashRecorded } from "./artifact-hash-recorded.ts";
 import { dataloaderWorkerSeeding } from "./dataloader-worker-seeding.ts";
 import { determinismTestRequired } from "./determinism-test-required.ts";
 import { deterministicAlgorithmsOptIn } from "./deterministic-algorithms-opt-in.ts";
@@ -21,6 +22,7 @@ const plugin: Plugin = {
     "metadata-writer-required": metadataWriterRequired,
     "record-code-version": recordCodeVersion,
     "run-metadata-completeness": runMetadataCompleteness,
+    "artifact-hash-recorded": artifactHashRecorded,
   },
   configs: {
     recommended: {
@@ -34,6 +36,7 @@ const plugin: Plugin = {
         "ml/metadata-writer-required": "error",
         "ml/record-code-version": "error",
         "ml/run-metadata-completeness": "error",
+        "ml/artifact-hash-recorded": "error",
       },
     },
   },

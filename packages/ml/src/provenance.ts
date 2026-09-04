@@ -79,6 +79,26 @@ export function collectGateSites(
   return sites;
 }
 
+export function collectArtifactSaves(
+  sources: ReadonlyMap<string, PythonSource>,
+  cwd: string,
+): GateSite[] {
+  const sites: GateSite[] = [];
+  forEachMlSource(sources, cwd, { trainingOnly: false }, (unit) => {
+    walkNodes(unit.tree, (node) => {
+      if (!isArtifactSave(node)) {
+        return;
+      }
+      sites.push({
+        unit,
+        node,
+        scope: enclosingDef(unit.tree, node) ?? unit.tree,
+      });
+    });
+  });
+  return sites;
+}
+
 export function resolveWriter(
   unit: PythonSource,
   writerName: string,
@@ -188,7 +208,7 @@ function addSite(sites: GateSite[], site: GateSite): void {
   sites.push(site);
 }
 
-function isArtifactSave(node: PythonNode): boolean {
+export function isArtifactSave(node: PythonNode): boolean {
   if (node._type !== "Call") {
     return false;
   }
