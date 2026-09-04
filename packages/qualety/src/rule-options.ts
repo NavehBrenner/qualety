@@ -5,6 +5,8 @@ import { isRecord } from "./record.ts";
 
 const OBJECT_KEYS = new Set(["type", "properties", "required", "additionalProperties"]);
 const NUMBER_KEYS = new Set(["type", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"]);
+const STRING_KEYS = new Set(["type"]);
+const ARRAY_KEYS = new Set(["type", "items"]);
 
 export function compileRuleOptions(schema: unknown, ruleId: string): z.ZodType {
   const record = requireRecord(schema, ruleId);
@@ -13,6 +15,19 @@ export function compileRuleOptions(schema: unknown, ruleId: string): z.ZodType {
   }
   if (record.type === "number") {
     return compileNumber(record, ruleId);
+  }
+  if (record.type === "string") {
+    rejectUnknownKeys(record, STRING_KEYS, ruleId);
+    return z.string();
+  }
+  if (record.type === "array") {
+    rejectUnknownKeys(record, ARRAY_KEYS, ruleId);
+    const items = record.items;
+    if (!isRecord(items) || items.type !== "string") {
+      throw unsupportedSchema(ruleId, "items");
+    }
+    rejectUnknownKeys(items, STRING_KEYS, ruleId);
+    return z.array(z.string());
   }
   throw unsupportedSchema(ruleId, typeof record.type === "string" ? record.type : "type");
 }

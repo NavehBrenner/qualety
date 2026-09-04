@@ -3,6 +3,7 @@ import {
   assignTarget,
   attrChain,
   callKeyword,
+  collectTrainingEntries,
   firstTrainingNode,
   forEachMlSource,
   isBackwardCall,
@@ -10,7 +11,10 @@ import {
   isDataLoaderCall,
   lastAttr,
   nodePos,
+  optionsSchema,
+  parseEntryPoints,
   treeHas,
+  walkSkipDefs,
 } from "./ast.ts";
 
 test("ml ast helpers", () => {
@@ -25,4 +29,8 @@ test("ml ast helpers", () => {
   expect(nodePos).toBeTypeOf("function");
   expect(isBefore).toBeTypeOf("function");
   expect(callKeyword).toBeTypeOf("function");
+  expect(collectTrainingEntries).toBeTypeOf("function");
+  expect(parseEntryPoints).toBeTypeOf("function");
+  expect(optionsSchema.parse).toBeTypeOf("function");
+  expect(walkSkipDefs).toBeTypeOf("function");
 });

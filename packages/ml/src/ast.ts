@@ -1,11 +1,15 @@
 import {
   asNodes,
+  childNodes,
   forEachPythonSource,
   isPythonNode,
   type PythonNode,
   type PythonSource,
+  stringConstant,
   walkNodes,
 } from "@qualety/python/walk";
+
+const TRAIN_LIKE = new Set(["train", "main"]);
 
 export type NodePos = { line: number; column: number };
 
@@ -108,4 +112,102 @@ export function assignTarget(node: PythonNode): PythonNode | undefined {
     return undefined;
   }
   return asNodes(node.targets)[0];
+}
+
+export const optionsSchema = {
+  parse(value: unknown): Record<string, unknown> {
+    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      const parsed: Record<string, unknown> = {};
+      for (const key of Object.keys(value)) {
+        parsed[key] = Reflect.get(value, key);
+      }
+      return parsed;
+    }
+    return {};
+  },
+};
+
+export function parseEntryPoints(options: unknown): string[] {
+  const parsed = optionsSchema.parse(options);
+  const raw = parsed.entryPoints;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const names: string[] = [];
+  for (const item of raw) {
+    if (typeof item === "string" && item.length > 0) {
+      const trimmed = item.replaceAll("\\", "/").replace(/\.py$/, "");
+      const parts = trimmed.split(/[./]/);
+      names.push(parts[parts.length - 1] ?? trimmed);
+    }
+  }
+  return names;
+}
+
+export function walkSkipDefs(node: PythonNode, visit: (node: PythonNode) => void): void {
+  visit(node);
+  if (
+    node._type === "FunctionDef" ||
+    node._type === "AsyncFunctionDef" ||
+    node._type === "ClassDef"
+  ) {
+    return;
+  }
+  for (const child of childNodes(node)) {
+    walkSkipDefs(child, visit);
+  }
+}
+
+export function collectTrainingEntries(
+  unit: PythonSource,
+  extra: readonly string[],
+): { name: string; node: PythonNode }[] {
+  const wanted = new Set<string>([...TRAIN_LIKE, ...extra]);
+  const defs: { name: string; node: PythonNode }[] = [];
+  for (const stmt of asNodes(unit.tree.body)) {
+    if (stmt._type !== "FunctionDef" && stmt._type !== "AsyncFunctionDef") {
+      continue;
+    }
+    if (typeof stmt.name === "string" && wanted.has(stmt.name)) {
+      defs.push({ name: stmt.name, node: stmt });
+    }
+  }
+  const first = defs[0];
+  if (first !== undefined) {
+    return defs;
+  }
+  const guard = mainGuard(unit.tree, wanted);
+  return guard === undefined ? [] : [guard];
+}
+
+function mainGuard(
+  tree: PythonNode,
+  wanted: ReadonlySet<string>,
+): { name: string; node: PythonNode } | undefined {
+  for (const stmt of asNodes(tree.body)) {
+    if (stmt._type !== "If" || !isPythonNode(stmt.test) || stmt.test._type !== "Compare") {
+      continue;
+    }
+    const left = stmt.test.left;
+    if (!isPythonNode(left) || left._type !== "Name" || left.id !== "__name__") {
+      continue;
+    }
+    if (!asNodes(stmt.test.comparators).some((item) => stringConstant(item) === "__main__")) {
+      continue;
+    }
+    let found: string | undefined;
+    walkNodes(stmt, (node) => {
+      if (node._type !== "Call") {
+        return;
+      }
+      const name = lastAttr(node.func);
+      if (name !== undefined && wanted.has(name)) {
+        found ??= name;
+      }
+    });
+    if (found !== undefined) {
+      return { name: found, node: stmt };
+    }
+  }
+  return undefined;
 }

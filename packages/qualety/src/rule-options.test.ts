@@ -25,8 +25,32 @@ test("extra key with additionalProperties false fails", () => {
 });
 
 test("unsupported schema keyword fails closed", () => {
-  expect(() => compileRuleOptions({ type: "string" }, "fixture/tuned")).toThrow(/fixture\/tuned/);
-  expect(() => compileRuleOptions({ type: "string" }, "fixture/tuned")).toThrow(
+  expect(() => compileRuleOptions({ type: "boolean" }, "fixture/tuned")).toThrow(/fixture\/tuned/);
+  expect(() => compileRuleOptions({ type: "boolean" }, "fixture/tuned")).toThrow(
     /unsupported meta\.schema/,
   );
+});
+
+test("string and string-array properties compile", () => {
+  const compiled = compileRuleOptions(
+    {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        writerName: { type: "string" },
+        entryPoints: { type: "array", items: { type: "string" } },
+      },
+    },
+    "ml/metadata-writer-required",
+  );
+  expect(compiled.safeParse({ writerName: "log_run" })).toEqual({
+    success: true,
+    data: { writerName: "log_run" },
+  });
+  expect(compiled.safeParse({ entryPoints: ["fit"] })).toEqual({
+    success: true,
+    data: { entryPoints: ["fit"] },
+  });
+  expect(compiled.safeParse({ writerName: 1 }).success).toBe(false);
+  expect(compiled.safeParse({ extra: true }).success).toBe(false);
 });

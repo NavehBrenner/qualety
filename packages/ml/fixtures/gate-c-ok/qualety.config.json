@@ -1,0 +1,8 @@
+{
+  "plugins": ["../../../python/dist/index.js", "../../dist/index.js"],
+  "rules": {
+    "ml/metadata-writer-required": "error",
+    "ml/record-code-version": "error"
+  },
+  "biome": false
+}

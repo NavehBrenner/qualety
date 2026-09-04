@@ -1,15 +1,20 @@
 import {
   asNodes,
-  isPythonNode,
   isTestPath,
   nodeRange,
   type PythonNode,
   type PythonSource,
-  stringConstant,
   walkNodes,
 } from "@qualety/python/walk";
 import { defineRule } from "qualety";
-import { attrChain, forEachMlSource, lastAttr, treeHas } from "./ast.ts";
+import {
+  attrChain,
+  collectTrainingEntries,
+  forEachMlSource,
+  lastAttr,
+  parseEntryPoints,
+  treeHas,
+} from "./ast.ts";
 
 const TRAIN_LIKE = new Set(["train", "main"]);
 const EQUAL_CALLS = new Set(["assertEqual", "assert_equal", "equal", "allclose"]);
@@ -33,7 +38,7 @@ export const determinismTestRequired = defineRule({
   },
   create(context) {
     const cwd = context.getCwd();
-    const extra = optionNames(context.options);
+    const extra = parseEntryPoints(context.options);
     const python = context.getArtifact("python");
     const tests: PythonSource[] = [];
     for (const unit of python.sources.values()) {
@@ -42,7 +47,7 @@ export const determinismTestRequired = defineRule({
       }
     }
     forEachMlSource(python.sources, cwd, { trainingOnly: true }, (unit) => {
-      for (const entry of collectEntries(unit, extra)) {
+      for (const entry of collectTrainingEntries(unit, extra)) {
         if (
           tests.some((test) => {
             if (
@@ -90,79 +95,6 @@ export const determinismTestRequired = defineRule({
     });
   },
 });
-
-function optionNames(options: unknown): string[] {
-  if (typeof options !== "object" || options === null || !("entryPoints" in options)) {
-    return [];
-  }
-  const raw = options.entryPoints;
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-  const names: string[] = [];
-  for (const item of raw) {
-    if (typeof item === "string" && item.length > 0) {
-      const trimmed = item.replaceAll("\\", "/").replace(/\.py$/, "");
-      const parts = trimmed.split(/[./]/);
-      names.push(parts[parts.length - 1] ?? trimmed);
-    }
-  }
-  return names;
-}
-
-function collectEntries(
-  unit: PythonSource,
-  extra: readonly string[],
-): { name: string; node: PythonNode }[] {
-  const wanted = new Set<string>([...TRAIN_LIKE, ...extra]);
-  const defs: { name: string; node: PythonNode }[] = [];
-  for (const stmt of asNodes(unit.tree.body)) {
-    if (stmt._type !== "FunctionDef" && stmt._type !== "AsyncFunctionDef") {
-      continue;
-    }
-    if (typeof stmt.name === "string" && wanted.has(stmt.name)) {
-      defs.push({ name: stmt.name, node: stmt });
-    }
-  }
-  const first = defs[0];
-  if (first !== undefined) {
-    return defs;
-  }
-  const guard = mainGuard(unit.tree, wanted);
-  return guard === undefined ? [] : [guard];
-}
-
-function mainGuard(
-  tree: PythonNode,
-  wanted: ReadonlySet<string>,
-): { name: string; node: PythonNode } | undefined {
-  for (const stmt of asNodes(tree.body)) {
-    if (stmt._type !== "If" || !isPythonNode(stmt.test) || stmt.test._type !== "Compare") {
-      continue;
-    }
-    const left = stmt.test.left;
-    if (!isPythonNode(left) || left._type !== "Name" || left.id !== "__name__") {
-      continue;
-    }
-    if (!asNodes(stmt.test.comparators).some((item) => stringConstant(item) === "__main__")) {
-      continue;
-    }
-    let found: string | undefined;
-    walkNodes(stmt, (node) => {
-      if (node._type !== "Call") {
-        return;
-      }
-      const name = lastAttr(node.func);
-      if (name !== undefined && wanted.has(name)) {
-        found ??= name;
-      }
-    });
-    if (found !== undefined) {
-      return { name: found, node: stmt };
-    }
-  }
-  return undefined;
-}
 
 function countCalls(tree: PythonNode, names: ReadonlySet<string>): number {
   let count = 0;
