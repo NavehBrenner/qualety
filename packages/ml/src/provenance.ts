@@ -56,7 +56,7 @@ const optionsSchema = {
   parse(value: unknown): { writerName?: unknown } {
     if (typeof value === "object") {
       if (value !== null) {
-        return value as { writerName?: unknown };
+        return { writerName: Reflect.get(value, "writerName") };
       }
     }
     return {};
@@ -115,6 +115,7 @@ export function bodyWrites(fn: PythonNode): boolean {
   let pathWrite = false;
   let opened = false;
   let wrote = false;
+  // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: inlined open-write mode
   walkNodes(fn, (node) => {
     if (node._type !== "Call") {
       return;
@@ -130,12 +131,9 @@ export function bodyWrites(fn: PythonNode): boolean {
       wrote = true;
     }
     if (name === "open") {
-      const modeKw = stringConstant(callKeyword(node, "mode"));
-      if (modeKw !== undefined) {
-        if (WRITE_MODES.has(modeKw)) {
-          opened = true;
-        }
-      } else if (WRITE_MODES.has(stringConstant(asNodes(node.args)[1]) ?? "")) {
+      const mode =
+        stringConstant(callKeyword(node, "mode")) ?? stringConstant(asNodes(node.args)[1]) ?? "";
+      if (WRITE_MODES.has(mode)) {
         opened = true;
       }
     }

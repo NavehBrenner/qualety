@@ -135,7 +135,7 @@ const optionsSchema = {
   parse(value: unknown): { entryPoints?: unknown } {
     if (typeof value === "object") {
       if (value !== null) {
-        return value as { entryPoints?: unknown };
+        return { entryPoints: Reflect.get(value, "entryPoints") };
       }
     }
     return {};
