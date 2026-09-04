@@ -61,12 +61,6 @@ function hasBareAny(fn: PythonNode, aliases: ReadonlySet<string>): boolean {
   }
   const args = fn.args;
   const params = [...asNodes(args.posonlyargs), ...asNodes(args.args), ...asNodes(args.kwonlyargs)];
-  if (isPythonNode(args.vararg)) {
-    params.push(args.vararg);
-  }
-  if (isPythonNode(args.kwarg)) {
-    params.push(args.kwarg);
-  }
   for (const arg of params) {
     if (isBareAny(arg.annotation, aliases)) {
       return true;

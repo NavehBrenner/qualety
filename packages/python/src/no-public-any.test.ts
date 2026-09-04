@@ -40,7 +40,7 @@ test("public Any param, return, typing.Any, and same-file alias exit 1", async (
   expect(result.out).not.toMatch(NO_SUGGESTION);
 });
 
-test("int, list[Any], Any | None, private, and nested def exit 0", async () => {
+test("int, list[Any], Any | None, *args/**kwargs Any, private, and nested def exit 0", async () => {
   const result = await runFixture("public-any-ok");
   expect(result.err).toBe("");
   expect(result.code).toBe(0);
