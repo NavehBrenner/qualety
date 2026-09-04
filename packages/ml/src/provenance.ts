@@ -214,7 +214,7 @@ export function isArtifactSave(node: PythonNode): boolean {
   return tail === "dump" && chain[0] === "joblib";
 }
 
-function enclosingDef(tree: PythonNode, target: PythonNode): PythonNode | undefined {
+export function enclosingDef(tree: PythonNode, target: PythonNode): PythonNode | undefined {
   const line = typeof target.lineno === "number" ? target.lineno : 1;
   let found: PythonNode | undefined;
   for (const stmt of asNodes(tree.body)) {

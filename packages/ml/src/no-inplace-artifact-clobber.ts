@@ -1,6 +1,5 @@
 import {
   asNodes,
-  containsPos,
   isPythonNode,
   nodeRange,
   type PythonNode,
@@ -10,7 +9,7 @@ import {
 } from "@qualety/python/walk";
 import { defineRule, type GitWorktreeArtifact, type RuleContext } from "qualety";
 import { attrChain, callKeyword, forEachMlSource, lastAttr, treeHas } from "./ast.ts";
-import { isArtifactSave } from "./provenance.ts";
+import { enclosingDef, isArtifactSave } from "./provenance.ts";
 
 const HINT =
   "Write to a staging path and os.replace onto the final name (or write under a unique run directory); do not clobber a tracked or dirty artifact path in place.";
@@ -119,18 +118,17 @@ function pathWriteDest(node: PythonNode): string | undefined {
 }
 
 function hasAtomicReplace(scope: PythonNode, dest: string): boolean {
-  let found = false;
+  const dests: string[] = [];
   walkNodes(scope, (node) => {
     if (node._type !== "Call" || lastAttr(node.func) !== "replace") {
       return;
     }
-    const args = asNodes(node.args);
-    const target = stringConstant(args[1] ?? args[0]);
-    if (target === dest) {
-      found = true;
+    const target = stringConstant(asNodes(node.args)[1] ?? asNodes(node.args)[0]);
+    if (target !== undefined) {
+      dests.push(target);
     }
   });
-  return found;
+  return dests.includes(dest);
 }
 
 function gitPathKey(
@@ -157,18 +155,4 @@ function gitPathKey(
   }
   const relative = joined.slice(root.length + 1);
   return entries.has(relative) ? relative : undefined;
-}
-
-function enclosingDef(tree: PythonNode, target: PythonNode): PythonNode | undefined {
-  const line = typeof target.lineno === "number" ? target.lineno : 1;
-  let found: PythonNode | undefined;
-  for (const stmt of asNodes(tree.body)) {
-    if (stmt._type !== "FunctionDef" && stmt._type !== "AsyncFunctionDef") {
-      continue;
-    }
-    if (containsPos(stmt, line)) {
-      found = stmt;
-    }
-  }
-  return found;
 }
