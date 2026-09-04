@@ -29,9 +29,9 @@ Keys (all `true`): `strict`, `noUncheckedIndexedAccess`, `noImplicitOverride`, `
 | `ts/no-floating-promises` | Do not leave a Promise as an expression statement without `await`, `return`, `void`, or a rejection handler. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/no-misused-promises` | Do not pass a Promise-returning function where a sync void callback is expected. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/no-non-null-assertion` | Do not use a non-null assertion (`expr!`) on an expression. `defineRule` / `requires: ["typescript"]` | `error` |
-| `ts/no-public-any` | Public value exports must not be annotated as `any` or `any[]`. `defineRule` / `requires: ["typescript"]` | `error` |
+| `ts/no-public-any` | Public value exports must not be annotated as `any`, `any[]`, `Function`, or `Object`. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/no-unnecessary-abstraction` | Do not keep a local abstraction that does not pay for its indirection: package-local ≤1-use pass-through / small-flat helpers and ≤1-use type aliases. `defineRule` / `requires: ["typescript"]` | `error` |
-| `ts/no-unsafe-assertion` | Do not use `as any` or `as unknown as T` assertions that erase type safety. `defineRule` / `requires: ["typescript"]` | `error` |
+| `ts/no-unsafe-assertion` | Do not use `as any`, `as unknown as T`, or `<any>x` assertions that erase type safety. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/public-exports-tested` | Every public value export in included non-test sources is referenced from a test path (static R5-lite; not coverage). `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/type-narrowing-checks` | A runtime check on a value is legitimate only if the TypeScript checker shows a strict refinement of that subject on the true/success path. `defineRule` / `requires: ["typescript"]` | `error` |
 | `ts/zod-boundary` | Load/parse functions with an `unknown` param (Z1) and `JSON.parse` results (Z2) must hit schema `.parse` / `.safeParse` before property access. `defineRule` / `requires: ["typescript"]` | `error` |
@@ -95,7 +95,7 @@ Do not keep a local abstraction that does not pay for its indirection. **Underap
 
 ### `ts/no-unsafe-assertion`
 
-Flag `expr as any` and `expr as unknown as T` (once, on the outer assertion). Skip `.d.ts`, `*.test.*` / `*.spec.*`, `__tests__`. Do not flag `as const`, lone `as unknown`, or other `as T`. Non-null `expr!` lives on `ts/no-non-null-assertion`. Angle-bracket `<any>x` is deferred.
+Flag `expr as any`, `expr as unknown as T` (once, on the outer assertion), and angle-bracket `<any>expr`. Skip `.d.ts`, `*.test.*` / `*.spec.*`, `__tests__`. Do not flag `as const`, lone `as unknown`, other `as T`, or non-any angle-bracket (`<T>x`, `<unknown>x`). Non-null `expr!` lives on `ts/no-non-null-assertion`.
 
 ### `ts/no-empty-catch`
 
@@ -109,7 +109,7 @@ Promise signal is underapprox (default provider skips lib files): checker type n
 
 ### `ts/no-public-any`
 
-Exported declarations only (`export function` / `export const|let|var` / `export default` function or binding). Flag explicit `: any` / `: any[]` on params, returns, and bindings, and initializer `as any` on that export. Skip type-only, `export *`, `export =`, `.d.ts`, test paths. Silence `export { x }` / `export { x } from`. Do not infer unannotated internals. Do not flag `unknown`. Public `Function` / `Object` deferred.
+Exported declarations only (`export function` / `export const|let|var` / `export default` function or binding). Flag explicit `: any` / `: any[]` / `: Function` / `: Object` on params, returns, and bindings, and initializer `as any` / `as Function` / `as Object` on that export. Skip type-only, `export *`, `export =`, `.d.ts`, test paths. Silence `export { x }` / `export { x } from`. Do not infer unannotated internals. Do not flag `unknown` or lowercase `object`.
 
 ### `ts/no-misused-promises`
 

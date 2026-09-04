@@ -10,7 +10,7 @@ export const noPublicAny = defineRule({
   meta: {
     requires: ["typescript"],
     docs: {
-      description: "Public value exports must not be annotated as any or any[].",
+      description: "Public value exports must not be annotated as any, any[], Function, or Object.",
     },
   },
   create(context) {
@@ -103,7 +103,7 @@ function reportIfAny(
     return;
   }
   const text = typeNode.getText().trim();
-  if (text !== "any" && text !== "any[]") {
+  if (text !== "any" && text !== "any[]" && text !== "Function" && text !== "Object") {
     return;
   }
   reportAt(context, file, typeNode, `Public export "${name}" is typed as any.`, HINT);

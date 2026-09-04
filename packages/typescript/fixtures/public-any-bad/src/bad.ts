@@ -18,6 +18,17 @@ export const coerced = 1 as any;
 export const arrow = (x: any): void => {
   void x;
 };
+export function takesFunction(x: Function): void {
+  void x;
+}
+
+export function returnsObject(): Object {
+  return {};
+}
+
+export const boxed: Object = {};
+export const asFn = (() => undefined) as Function;
+
 export default function def(x: any): void {
   void x;
 }
