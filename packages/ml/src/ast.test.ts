@@ -2,6 +2,7 @@ import { expect, test } from "vitest";
 import {
   assignTarget,
   attrChain,
+  boundValue,
   callKeyword,
   collectTrainingEntries,
   firstTrainingNode,
@@ -21,6 +22,7 @@ test("ml ast helpers", () => {
   expect(forEachMlSource).toBeTypeOf("function");
   expect(treeHas).toBeTypeOf("function");
   expect(assignTarget).toBeTypeOf("function");
+  expect(boundValue).toBeTypeOf("function");
   expect(attrChain).toBeTypeOf("function");
   expect(lastAttr).toBeTypeOf("function");
   expect(isDataLoaderCall).toBeTypeOf("function");

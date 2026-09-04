@@ -10,6 +10,7 @@ import {
 } from "@qualety/python/walk";
 import {
   attrChain,
+  boundValue,
   callKeyword,
   collectTrainingEntries,
   forEachMlSource,
@@ -65,11 +66,24 @@ export function collectGateSites(
         addSite(sites, { unit, node: entry.node, scope: entry.node });
       }
     }
+  });
+  for (const artifactSave of collectArtifactSaves(sources, cwd)) {
+    addSite(sites, artifactSave);
+  }
+  return sites;
+}
+
+export function collectArtifactSaves(
+  sources: ReadonlyMap<string, PythonSource>,
+  cwd: string,
+): GateSite[] {
+  const sites: GateSite[] = [];
+  forEachMlSource(sources, cwd, { trainingOnly: false }, (unit) => {
     walkNodes(unit.tree, (node) => {
       if (!isArtifactSave(node)) {
         return;
       }
-      addSite(sites, {
+      sites.push({
         unit,
         node,
         scope: enclosingDef(unit.tree, node) ?? unit.tree,
@@ -188,7 +202,7 @@ function addSite(sites: GateSite[], site: GateSite): void {
   sites.push(site);
 }
 
-function isArtifactSave(node: PythonNode): boolean {
+export function isArtifactSave(node: PythonNode): boolean {
   if (node._type !== "Call") {
     return false;
   }
@@ -288,8 +302,8 @@ function takeCallPayload(node: PythonNode, scope: PythonNode, payload: PayloadSh
   for (const arg of asNodes(node.args)) {
     takeDict(arg, payload);
     if (arg._type === "Name" && typeof arg.id === "string") {
-      const bound = boundDict(scope, arg.id);
-      if (bound !== undefined) {
+      const bound = boundValue(scope, arg.id);
+      if (bound?._type === "Dict") {
         takeDict(bound, payload);
       }
     }
@@ -341,25 +355,6 @@ function addPayloadNames(node: PythonNode, names: Set<string>): void {
   if (node._type === "Name" && typeof node.id === "string") {
     names.add(node.id);
   }
-}
-
-function boundDict(scope: PythonNode, name: string): PythonNode | undefined {
-  let found: PythonNode | undefined;
-  for (const stmt of asNodes(scope.body)) {
-    if (stmt._type !== "Assign") {
-      continue;
-    }
-    const target = asNodes(stmt.targets)[0];
-    if (
-      target?._type === "Name" &&
-      target.id === name &&
-      isPythonNode(stmt.value) &&
-      stmt.value._type === "Dict"
-    ) {
-      found = stmt.value;
-    }
-  }
-  return found;
 }
 
 function argumentDest(node: PythonNode): string | undefined {

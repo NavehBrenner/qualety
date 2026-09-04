@@ -114,6 +114,17 @@ export function assignTarget(node: PythonNode): PythonNode | undefined {
   return asNodes(node.targets)[0];
 }
 
+export function boundValue(scope: PythonNode, name: string): PythonNode | undefined {
+  let found: PythonNode | undefined;
+  for (const stmt of asNodes(scope.body)) {
+    const target = assignTarget(stmt);
+    if (target?._type === "Name" && target.id === name && isPythonNode(stmt.value)) {
+      found = stmt.value;
+    }
+  }
+  return found;
+}
+
 export const optionsSchema = {
   parse(value: unknown): Record<string, unknown> {
     if (value !== null && typeof value === "object" && !Array.isArray(value)) {

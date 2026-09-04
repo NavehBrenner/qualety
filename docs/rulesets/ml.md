@@ -24,6 +24,7 @@ The plugin **provides nothing**. Rules `requires: ["python"]` and consume `conte
 | `ml/metadata-writer-required` | Every Gate B training entry and Gate C artifact save must resolve, prove-write, and call `writerName` (default `save_metadata`). `defineRule` / `requires: ["python"]` | `error` |
 | `ml/record-code-version` | Resolved metadata writer payload must include an allowlisted code-version key. `defineRule` / `requires: ["python"]` | `error` |
 | `ml/run-metadata-completeness` | CLI/config dests and obvious config fields must reach the writer payload (`allowExclusions` to opt out). `defineRule` / `requires: ["python"]` | `error` |
+| `ml/artifact-hash-recorded` | Every Gate C model-artifact write with a recoverable path must record a path/bytes-bound content hash in the metadata writer payload. `defineRule` / `requires: ["python"]` | `error` |
 
 **Training module** (shared, local file evidence only): a non-skipped `.py` whose AST shows a `.backward` attribute call or a `DataLoader(...)` construction. No reachable-from-CLI analysis.
 
@@ -77,7 +78,7 @@ Opt-in only (recommended `off`). When enabled error/warn: a training module must
 
 ## Run provenance
 
-Three rules share **Gate B ∨ Gate C** (local file evidence only). No wall-clock / iteration / “long loop” gate. Cross-module artifact hashing is [#127](https://github.com/NavehBrenner/qualety/issues/127). Artifact durability / in-place overwrite is [#128](https://github.com/NavehBrenner/qualety/issues/128).
+Three provenance rules share **Gate B ∨ Gate C** (local file evidence only). `ml/artifact-hash-recorded` is **Gate C only**. No wall-clock / iteration / “long loop” gate. Artifact durability / in-place overwrite is [#128](https://github.com/NavehBrenner/qualety/issues/128).
 
 **Gate B** — same grain as `ml/determinism-test-required`: module-level `def train` / `def main` in a training module, or `if __name__ == "__main__"` that calls such a name when no matching def, or optional `entryPoints`. Helpers that merely contain `.backward` are out of scope.
 
@@ -92,10 +93,11 @@ Optional overlay:
   "rules": {
     "ml/metadata-writer-required": ["error", { "writerName": "save_metadata" }],
     "ml/record-code-version": ["error", { "writerName": "save_metadata" }],
-    "ml/run-metadata-completeness": ["error", {
-      "writerName": "save_metadata",
-      "allowExclusions": ["verbose", "progress"]
-    }]
+     "ml/run-metadata-completeness": ["error", {
+       "writerName": "save_metadata",
+       "allowExclusions": ["verbose", "progress"]
+     }],
+     "ml/artifact-hash-recorded": ["error", { "writerName": "save_metadata" }]
   }
 }
 ```
@@ -127,3 +129,19 @@ Report when a gate hits, the writer resolves, the required set is non-empty, and
 **Quiet:** no gate; empty required set; cannot parse arguments/fields; unresolved writer; underapprox failure.
 
 **Suggestion:** pass the missing dest/field into the writer, or add it to `allowExclusions` if it does not affect results.
+
+### `ml/artifact-hash-recorded`
+
+Gate C only (`torch.save` / `joblib.dump`; `state_dict` only as those writes). Gate B training entry alone does not require an artifact hash. `writerName` default `"save_metadata"` (same resolution as provenance). `entryPoints` is accepted so overlays match provenance grain; this rule ignores it.
+
+Require a **bound** path, not a bare hash key:
+
+1. Save site has a statically recoverable destination (string constant, `os.path.join` / `pathlib.Path` / `joinpath` / `/` of constants, or a name bound to one of those in the same scope/module). Unrecoverable → silence.
+2. A `hashlib.{sha256,sha1,md5}` digest (optional `.hexdigest()` / `.digest()`) is bound to that path (read via `open` / `Path.read_bytes` / `read_text`) or to the same local object name passed into the save (strict). Same-package modules may split save / hash helper / writer via bare-name `ImportFrom` (same underapprox as `resolveWriter`). Outside package / unresolvable import → silence.
+3. That digest (or a name holding it) reaches the writer payload as the value of an allowlisted key (`artifact_hash`, `model_hash`, `weights_hash`, `content_hash`, `file_hash`, `sha256`, `sha1`, `md5`, `digest`) or as a payload value. Bare key presence, hash of a different path, or an unrelated name is not a pass.
+
+**Report when:** Gate C hits, path recoverable, writer resolves, bound hash→payload link proven absent.
+
+**Quiet:** no Gate C; path unrecoverable; writer unresolved (other rule owns); binding present; any underapprox failure.
+
+**Suggestion:** hash the saved artifact (e.g. `hashlib.sha256(Path(path).read_bytes()).hexdigest()`) and record it in `save_metadata` (or configured writer) under an allowlisted key such as `artifact_hash`.

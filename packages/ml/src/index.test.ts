@@ -17,9 +17,10 @@ const RULES = [
   "metadata-writer-required",
   "record-code-version",
   "run-metadata-completeness",
+  "artifact-hash-recorded",
 ] as const;
 
-test("plugin exports name, nine rules, recommended including opt-in off, no provides", () => {
+test("plugin exports name, ten rules, recommended including opt-in off, no provides", () => {
   expect(namedPlugin).toBe(plugin);
   expect(plugin.name).toBe("ml");
   expect(plugin.provides).toBeUndefined();
@@ -35,6 +36,7 @@ test("plugin exports name, nine rules, recommended including opt-in off, no prov
   expect(plugin.configs?.recommended?.rules?.["ml/metadata-writer-required"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["ml/record-code-version"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["ml/run-metadata-completeness"]).toBe("error");
+  expect(plugin.configs?.recommended?.rules?.["ml/artifact-hash-recorded"]).toBe("error");
 });
 
 test("ml without a python provider exits 2", async () => {
