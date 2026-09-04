@@ -5,9 +5,8 @@ import {
   bodyWrites,
   collectGateSites,
   parseWriterName,
+  reachableNames,
   resolveWriter,
-  writerCalled,
-  writerHint,
 } from "./provenance.ts";
 
 export const metadataWriterRequired = defineRule({
@@ -29,7 +28,7 @@ export const metadataWriterRequired = defineRule({
   create(context) {
     const writerName = parseWriterName(context.options);
     const python = context.getArtifact("python");
-    const hint = writerHint(writerName);
+    const hint = `Define ${writerName} that writes the run record, and call it from the training entry / save path.`;
     for (const site of collectGateSites(
       python.sources,
       context.getCwd(),
@@ -56,7 +55,7 @@ export const metadataWriterRequired = defineRule({
         });
         continue;
       }
-      if (!writerCalled(site, writerName)) {
+      if (!reachableNames(site.scope, site.unit.tree).has(writerName)) {
         context.report({
           severity: "error",
           file: site.unit.file,

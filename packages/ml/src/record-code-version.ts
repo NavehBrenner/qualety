@@ -7,7 +7,6 @@ import {
   hasCodeVersion,
   parseWriterName,
   resolveWriter,
-  versionHint,
 } from "./provenance.ts";
 
 export const recordCodeVersion = defineRule({
@@ -29,7 +28,8 @@ export const recordCodeVersion = defineRule({
   create(context) {
     const writerName = parseWriterName(context.options);
     const python = context.getArtifact("python");
-    const hint = versionHint();
+    const hint =
+      "Record git_commit / code_version (or equivalent allowlisted key) in the metadata writer payload.";
     for (const site of collectGateSites(
       python.sources,
       context.getCwd(),

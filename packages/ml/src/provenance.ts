@@ -1,6 +1,5 @@
 import {
   asNodes,
-  childNodes,
   collectImports,
   containsPos,
   isPythonNode,
@@ -18,9 +17,10 @@ import {
   isDataLoaderCall,
   lastAttr,
   treeHas,
+  walkSkipDefs,
 } from "./ast.ts";
 
-export const DEFAULT_WRITER_NAME = "save_metadata";
+const DEFAULT_WRITER_NAME = "save_metadata";
 
 const VERSION_KEYS = new Set([
   "git_commit",
@@ -40,11 +40,6 @@ export type GateSite = {
   scope: PythonNode;
 };
 
-export type WriterDef = {
-  unit: PythonSource;
-  def: PythonNode;
-};
-
 export type PayloadShape = {
   proven: boolean;
   keys: Set<string>;
@@ -52,35 +47,21 @@ export type PayloadShape = {
 };
 
 export function parseWriterName(options: unknown): string {
-  if (typeof options !== "object" || options === null || !("writerName" in options)) {
-    return DEFAULT_WRITER_NAME;
-  }
-  const raw = options.writerName;
+  const parsed = optionsSchema.parse(options);
+  const raw = parsed.writerName;
   return typeof raw === "string" && raw.length > 0 ? raw : DEFAULT_WRITER_NAME;
 }
 
-export function parseAllowExclusions(options: unknown): string[] {
-  if (typeof options !== "object" || options === null || !("allowExclusions" in options)) {
-    return [];
-  }
-  const raw = options.allowExclusions;
-  if (!Array.isArray(raw)) {
-    return [];
-  }
-  return raw.filter((item): item is string => typeof item === "string");
-}
-
-export function writerHint(writerName: string): string {
-  return `Define ${writerName} that writes the run record, and call it from the training entry / save path.`;
-}
-
-export function versionHint(): string {
-  return "Record git_commit / code_version (or equivalent allowlisted key) in the metadata writer payload.";
-}
-
-export function completenessHint(writerName: string): string {
-  return `Pass the missing dest/field into ${writerName} or add it to allowExclusions if it does not affect results.`;
-}
+const optionsSchema = {
+  parse(value: unknown): { writerName?: unknown } {
+    if (typeof value === "object") {
+      if (value !== null) {
+        return value as { writerName?: unknown };
+      }
+    }
+    return {};
+  },
+};
 
 export function collectGateSites(
   sources: ReadonlyMap<string, PythonSource>,
@@ -112,7 +93,7 @@ export function resolveWriter(
   unit: PythonSource,
   writerName: string,
   sources: ReadonlyMap<string, PythonSource>,
-): WriterDef | undefined {
+): { unit: PythonSource; def: PythonNode } | undefined {
   const local = moduleWriterDef(unit.tree, writerName);
   if (local !== undefined) {
     return { unit, def: local };
@@ -148,15 +129,18 @@ export function bodyWrites(fn: PythonNode): boolean {
     if (name === "write") {
       wrote = true;
     }
-    if (openWriteMode(node)) {
-      opened = true;
+    if (name === "open") {
+      const modeKw = stringConstant(callKeyword(node, "mode"));
+      if (modeKw !== undefined) {
+        if (WRITE_MODES.has(modeKw)) {
+          opened = true;
+        }
+      } else if (WRITE_MODES.has(stringConstant(asNodes(node.args)[1]) ?? "")) {
+        opened = true;
+      }
     }
   });
   return dump || pathWrite || (opened && wrote);
-}
-
-export function writerCalled(site: GateSite, writerName: string): boolean {
-  return reachableNames(site.scope, moduleDefs(site.unit.tree)).has(writerName);
 }
 
 export function collectPayload(
@@ -165,7 +149,10 @@ export function collectPayload(
   writerName: string,
 ): PayloadShape {
   const payload: PayloadShape = { proven: false, keys: new Set(), names: new Set() };
-  scanPayloadTree(writerDef, payload);
+  walkNodes(writerDef, (node) => {
+    takeDict(node, payload);
+    takeEnv(node, payload);
+  });
   walkScope(scope, (node) => {
     if (node._type !== "Call" || lastAttr(node.func) !== writerName) {
       return;
@@ -264,7 +251,8 @@ function moduleDefs(tree: PythonNode): Map<string, PythonNode> {
   return defs;
 }
 
-function reachableNames(scope: PythonNode, defs: Map<string, PythonNode>): Set<string> {
+export function reachableNames(scope: PythonNode, tree: PythonNode): Set<string> {
+  const defs = moduleDefs(tree);
   const seen = new Set<string>();
   const queue: PythonNode[] = [scope];
   while (queue.length > 0) {
@@ -297,24 +285,6 @@ function directCalls(scope: PythonNode): Set<string> {
     }
   });
   return names;
-}
-
-function openWriteMode(node: PythonNode): boolean {
-  if (lastAttr(node.func) !== "open") {
-    return false;
-  }
-  const modeKw = stringConstant(callKeyword(node, "mode"));
-  if (modeKw !== undefined) {
-    return WRITE_MODES.has(modeKw);
-  }
-  return WRITE_MODES.has(stringConstant(asNodes(node.args)[1]) ?? "");
-}
-
-function scanPayloadTree(tree: PythonNode, payload: PayloadShape): void {
-  walkNodes(tree, (node) => {
-    takeDict(node, payload);
-    takeEnv(node, payload);
-  });
 }
 
 function takeCallPayload(node: PythonNode, scope: PythonNode, payload: PayloadShape): void {
@@ -481,19 +451,5 @@ function walkScope(scope: PythonNode, visit: (node: PythonNode) => void): void {
   const roots = stmts.length > 0 ? stmts : [scope];
   for (const stmt of roots) {
     walkSkipDefs(stmt, visit);
-  }
-}
-
-function walkSkipDefs(node: PythonNode, visit: (node: PythonNode) => void): void {
-  visit(node);
-  if (
-    node._type === "FunctionDef" ||
-    node._type === "AsyncFunctionDef" ||
-    node._type === "ClassDef"
-  ) {
-    return;
-  }
-  for (const child of childNodes(node)) {
-    walkSkipDefs(child, visit);
   }
 }

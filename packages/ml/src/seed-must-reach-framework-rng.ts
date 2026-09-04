@@ -9,7 +9,14 @@ import {
   walkNodes,
 } from "@qualety/python/walk";
 import { defineRule, type RuleContext } from "qualety";
-import { attrChain, callKeyword, firstTrainingNode, forEachMlSource, lastAttr } from "./ast.ts";
+import {
+  attrChain,
+  callKeyword,
+  firstTrainingNode,
+  forEachMlSource,
+  lastAttr,
+  walkSkipDefs,
+} from "./ast.ts";
 
 const SEED_NAMES = new Set(["seed", "train_seed", "split_seed"]);
 const FLAG_DEST: Record<string, string> = {
@@ -172,18 +179,4 @@ function classifyCall(node: PythonNode): CallKind {
     return "sink";
   }
   return "unknown";
-}
-
-function walkSkipDefs(node: PythonNode, visit: (node: PythonNode) => void): void {
-  visit(node);
-  if (
-    node._type === "FunctionDef" ||
-    node._type === "AsyncFunctionDef" ||
-    node._type === "ClassDef"
-  ) {
-    return;
-  }
-  for (const child of childNodes(node)) {
-    walkSkipDefs(child, visit);
-  }
 }

@@ -4,8 +4,6 @@ import { parseEntryPoints } from "./ast.ts";
 import {
   collectGateSites,
   collectPayload,
-  completenessHint,
-  parseAllowExclusions,
   parseWriterName,
   requiredMetadataNames,
   resolveWriter,
@@ -30,9 +28,18 @@ export const runMetadataCompleteness = defineRule({
   },
   create(context) {
     const writerName = parseWriterName(context.options);
-    const excluded = new Set(parseAllowExclusions(context.options));
+    const options = context.options;
+    const rawAllow =
+      typeof options === "object" && options !== null && "allowExclusions" in options
+        ? options.allowExclusions
+        : undefined;
+    const excluded = new Set(
+      Array.isArray(rawAllow)
+        ? rawAllow.filter((item): item is string => typeof item === "string")
+        : [],
+    );
     const python = context.getArtifact("python");
-    const hint = completenessHint(writerName);
+    const hint = `Pass the missing dest/field into ${writerName} or add it to allowExclusions if it does not affect results.`;
     for (const site of collectGateSites(
       python.sources,
       context.getCwd(),

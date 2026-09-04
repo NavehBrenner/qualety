@@ -13,6 +13,7 @@ import {
   nodePos,
   parseEntryPoints,
   treeHas,
+  walkSkipDefs,
 } from "./ast.ts";
 
 test("ml ast helpers", () => {
@@ -29,4 +30,5 @@ test("ml ast helpers", () => {
   expect(callKeyword).toBeTypeOf("function");
   expect(collectTrainingEntries).toBeTypeOf("function");
   expect(parseEntryPoints).toBeTypeOf("function");
+  expect(walkSkipDefs).toBeTypeOf("function");
 });

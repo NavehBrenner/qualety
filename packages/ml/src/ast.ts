@@ -1,5 +1,6 @@
 import {
   asNodes,
+  childNodes,
   forEachPythonSource,
   isPythonNode,
   type PythonNode,
@@ -114,10 +115,8 @@ export function assignTarget(node: PythonNode): PythonNode | undefined {
 }
 
 export function parseEntryPoints(options: unknown): string[] {
-  if (typeof options !== "object" || options === null || !("entryPoints" in options)) {
-    return [];
-  }
-  const raw = options.entryPoints;
+  const parsed = optionsSchema.parse(options);
+  const raw = parsed.entryPoints;
   if (!Array.isArray(raw)) {
     return [];
   }
@@ -130,6 +129,31 @@ export function parseEntryPoints(options: unknown): string[] {
     }
   }
   return names;
+}
+
+const optionsSchema = {
+  parse(value: unknown): { entryPoints?: unknown } {
+    if (typeof value === "object") {
+      if (value !== null) {
+        return value as { entryPoints?: unknown };
+      }
+    }
+    return {};
+  },
+};
+
+export function walkSkipDefs(node: PythonNode, visit: (node: PythonNode) => void): void {
+  visit(node);
+  if (
+    node._type === "FunctionDef" ||
+    node._type === "AsyncFunctionDef" ||
+    node._type === "ClassDef"
+  ) {
+    return;
+  }
+  for (const child of childNodes(node)) {
+    walkSkipDefs(child, visit);
+  }
 }
 
 export function collectTrainingEntries(
