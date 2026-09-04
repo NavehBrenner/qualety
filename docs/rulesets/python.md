@@ -135,7 +135,7 @@ Flag import-fix mutations of `sys.path` / `sys.path_hooks`: `insert` / `append` 
 
 Same public callables as `python/require-typed-public` (presence vs quality). Flag explicit annotations that resolve to bare `Any` by name: `Any`, `typing.Any`, trivial same-file `X = Any` / `X = typing.Any` / `from typing import Any as X`.
 
-**Quiet:** missing annotations; `list[Any]`, `Any | None`, `Optional[Any]`; non-trivial aliases; private / nested / dunder / overload / skipped paths / init-not-in-`__all__`.
+**Quiet:** missing annotations; `list[Any]`, `Any | None`, `Optional[Any]`; `*args: Any` / `**kwargs: Any`; non-trivial aliases; private / nested / dunder / overload / skipped paths / init-not-in-`__all__`.
 
 **Violation:** on the def name; suggestion: replace `Any` with a real type, `object`, or a Protocol/TypedDict.
 

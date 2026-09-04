@@ -13,6 +13,10 @@ def with_union(x: Any | None) -> Any | None:
     return x
 
 
+def forward(*args: Any, **kwargs: Any) -> None:
+    return None
+
+
 def _private(x: Any) -> Any:
     return x
 
