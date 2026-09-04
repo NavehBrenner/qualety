@@ -1,7 +1,7 @@
 import { defineRule } from "qualety";
 import { Node, SyntaxKind } from "ts-morph";
 import { unwrapParens } from "./narrowing.ts";
-import { reportAt, walkTsSources } from "./ts-source.ts";
+import { reportAt, walkTsArtifact } from "./ts-source.ts";
 
 const HINT = "Narrow with a type guard, schema parse, or fix the upstream type.";
 
@@ -14,8 +14,7 @@ export const noUnsafeAssertion = defineRule({
     },
   },
   create(context) {
-    const sources = context.getArtifact("typescript").sources;
-    walkTsSources(sources, (unit, file) => {
+    walkTsArtifact(context, (unit, file) => {
       for (const node of unit.getDescendantsOfKind(SyntaxKind.AsExpression)) {
         if (isUnsafeAssertion(node)) {
           reportAt(context, file, node, "Unsafe type assertion erases type safety.", HINT);

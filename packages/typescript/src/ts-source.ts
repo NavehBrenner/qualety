@@ -20,6 +20,13 @@ export function walkTsSources(
   }
 }
 
+export function walkTsArtifact(
+  context: Pick<RuleContext, "getArtifact">,
+  visit: (sourceFile: SourceFile, file: string) => void,
+): void {
+  walkTsSources(context.getArtifact("typescript").sources, visit);
+}
+
 export function reportAt(
   context: Pick<RuleContext, "report">,
   file: string,

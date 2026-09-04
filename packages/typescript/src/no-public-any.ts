@@ -2,7 +2,7 @@ import { defineRule, type RuleContext } from "qualety";
 import { Node, type SourceFile } from "ts-morph";
 import { unwrapParens } from "./narrowing.ts";
 import { type FunctionLike, isFunctionLike } from "./parse-flow.ts";
-import { reportAt, walkTsSources } from "./ts-source.ts";
+import { reportAt, walkTsArtifact } from "./ts-source.ts";
 
 const HINT = "Replace any with a real type or unknown, then narrow.";
 
@@ -14,8 +14,7 @@ export const noPublicAny = defineRule({
     },
   },
   create(context) {
-    const sources = context.getArtifact("typescript").sources;
-    walkTsSources(sources, (unit, file) => {
+    walkTsArtifact(context, (unit, file) => {
       for (const stmt of unit.getStatements()) {
         if (
           Node.isFunctionDeclaration(stmt) ||
