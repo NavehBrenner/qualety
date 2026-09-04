@@ -11,6 +11,7 @@ import {
   isDataLoaderCall,
   lastAttr,
   nodePos,
+  optionsSchema,
   parseEntryPoints,
   treeHas,
   walkSkipDefs,
@@ -30,5 +31,6 @@ test("ml ast helpers", () => {
   expect(callKeyword).toBeTypeOf("function");
   expect(collectTrainingEntries).toBeTypeOf("function");
   expect(parseEntryPoints).toBeTypeOf("function");
+  expect(optionsSchema.parse).toBeTypeOf("function");
   expect(walkSkipDefs).toBeTypeOf("function");
 });

@@ -114,6 +114,19 @@ export function assignTarget(node: PythonNode): PythonNode | undefined {
   return asNodes(node.targets)[0];
 }
 
+export const optionsSchema = {
+  parse(value: unknown): Record<string, unknown> {
+    if (value !== null && typeof value === "object" && !Array.isArray(value)) {
+      const parsed: Record<string, unknown> = {};
+      for (const key of Object.keys(value)) {
+        parsed[key] = Reflect.get(value, key);
+      }
+      return parsed;
+    }
+    return {};
+  },
+};
+
 export function parseEntryPoints(options: unknown): string[] {
   const parsed = optionsSchema.parse(options);
   const raw = parsed.entryPoints;
@@ -130,15 +143,6 @@ export function parseEntryPoints(options: unknown): string[] {
   }
   return names;
 }
-
-const optionsSchema = {
-  parse(value: unknown): { entryPoints?: unknown } {
-    if (typeof value === "object" && value !== null) {
-      return { entryPoints: Reflect.get(value, "entryPoints") };
-    }
-    return {};
-  },
-};
 
 export function walkSkipDefs(node: PythonNode, visit: (node: PythonNode) => void): void {
   visit(node);

@@ -16,6 +16,7 @@ import {
   isBackwardCall,
   isDataLoaderCall,
   lastAttr,
+  optionsSchema,
   treeHas,
   walkSkipDefs,
 } from "./ast.ts";
@@ -51,15 +52,6 @@ export function parseWriterName(options: unknown): string {
   const raw = parsed.writerName;
   return typeof raw === "string" && raw.length > 0 ? raw : DEFAULT_WRITER_NAME;
 }
-
-const optionsSchema = {
-  parse(value: unknown): { writerName?: unknown } {
-    if (typeof value === "object" && value !== null) {
-      return { writerName: Reflect.get(value, "writerName") };
-    }
-    return {};
-  },
-};
 
 export function collectGateSites(
   sources: ReadonlyMap<string, PythonSource>,
