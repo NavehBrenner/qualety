@@ -65,17 +65,10 @@ export function collectGateSites(
         addSite(sites, { unit, node: entry.node, scope: entry.node });
       }
     }
-    walkNodes(unit.tree, (node) => {
-      if (!isArtifactSave(node)) {
-        return;
-      }
-      addSite(sites, {
-        unit,
-        node,
-        scope: enclosingDef(unit.tree, node) ?? unit.tree,
-      });
-    });
   });
+  for (const artifactSave of collectArtifactSaves(sources, cwd)) {
+    addSite(sites, artifactSave);
+  }
   return sites;
 }
 

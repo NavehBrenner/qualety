@@ -429,23 +429,13 @@ function payloadLink(
       takeCallValues(node, scope, entries, digests);
     });
   }
-  let hit = false;
-  let proven = false;
-  let ambiguous = false;
-  for (const value of entries) {
-    proven = true;
-    const status = valueStatus(value, digests);
-    if (status === "hit") {
-      hit = true;
-    }
-    if (status === "ambiguous") {
-      ambiguous = true;
-    }
-  }
-  if (hit) {
+  if (entries.some((value) => valueStatus(value, digests) === "hit")) {
     return "hit";
   }
-  if (!proven || ambiguous) {
+  if (entries.length === 0) {
+    return "quiet";
+  }
+  if (entries.some((value) => valueStatus(value, digests) === "ambiguous")) {
     return "quiet";
   }
   return "absent";
