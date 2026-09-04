@@ -144,11 +144,29 @@ export interface ParsedProject {
   readonly sources: ReadonlyMap<string, SourceUnit>;
 }
 
+/** Coarse git path flags. Keys in `GitWorktreeArtifact.entries` are posix-relative to toplevel. */
+export type GitPathStatus = {
+  dirty: boolean;
+  untracked: boolean;
+  tracked: boolean;
+};
+
+/** Default `"git-worktree"` artifact. Soft-unavailable outside git (`available: false`). */
+export type GitWorktreeArtifact = {
+  /** Absolute repo toplevel; omitted when unavailable. */
+  toplevel?: string;
+  /** false when git is missing or cwd is not a repo — rules must silence, not crash. */
+  available: boolean;
+  /** posix-relative to toplevel (git native names). */
+  entries: ReadonlyMap<string, GitPathStatus>;
+};
+
 /**
  * Plugins augment via interface merging. Engine still uses Map<string, unknown>.
  */
 export interface ArtifactMap {
   typescript: ParsedProject;
+  "git-worktree": GitWorktreeArtifact;
 }
 
 export function defineConfig<T extends UserConfig>(config: T): T {

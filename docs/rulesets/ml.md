@@ -3,7 +3,7 @@
 Honest catalog for **`@qualety/ml`** (`Plugin.name: "ml"`).  
 This is the implementation list for this plugin. Plugins stay **authored in TypeScript** while checking Python.
 
-The plugin **provides nothing**. Rules `requires: ["python"]` and consume `context.getArtifact("python")`. AST walk helpers are imported from `@qualety/python/walk` (not cloned). The consumer must list **`@qualety/python`** (or another provider of `"python"`) in `plugins[]` when enabling ml rules that need it. Missing provider → fail-closed exit 2. Loading the plugin via `plugins[]` applies `configs.recommended` below. Overlay user `config.rules` to `"off"` or retune. Installing the package without `plugins[]` enables nothing. No `ruff` / `biome` section.
+The plugin **provides nothing**. Rules `requires: ["python"]` and consume `context.getArtifact("python")`. `ml/no-inplace-artifact-clobber` also `requires: ["git-worktree"]` (default core provider). AST walk helpers are imported from `@qualety/python/walk` (not cloned). The consumer must list **`@qualety/python`** (or another provider of `"python"`) in `plugins[]` when enabling ml rules that need it. Missing provider → fail-closed exit 2. Loading the plugin via `plugins[]` applies `configs.recommended` below. Overlay user `config.rules` to `"off"` or retune. Installing the package without `plugins[]` enables nothing. No `ruff` / `biome` section. Not plugin-kit — consumer ML/run output durability, not plugin-authoring hygiene.
 
 ```json
 {
@@ -25,6 +25,7 @@ The plugin **provides nothing**. Rules `requires: ["python"]` and consume `conte
 | `ml/record-code-version` | Resolved metadata writer payload must include an allowlisted code-version key. `defineRule` / `requires: ["python"]` | `error` |
 | `ml/run-metadata-completeness` | CLI/config dests and obvious config fields must reach the writer payload (`allowExclusions` to opt out). `defineRule` / `requires: ["python"]` | `error` |
 | `ml/artifact-hash-recorded` | Every Gate C model-artifact write with a recoverable path must record a path/bytes-bound content hash in the metadata writer payload. `defineRule` / `requires: ["python"]` | `error` |
+| `ml/no-inplace-artifact-clobber` | Git-aware in-place clobber of Gate C / run-output writes against tracked or dirty worktree paths. `defineRule` / `requires: ["python", "git-worktree"]` | `error` |
 
 **Training module** (shared, local file evidence only): a non-skipped `.py` whose AST shows a `.backward` attribute call or a `DataLoader(...)` construction. No reachable-from-CLI analysis.
 
@@ -78,7 +79,7 @@ Opt-in only (recommended `off`). When enabled error/warn: a training module must
 
 ## Run provenance
 
-Three provenance rules share **Gate B ∨ Gate C** (local file evidence only). `ml/artifact-hash-recorded` is **Gate C only**. No wall-clock / iteration / “long loop” gate. Artifact durability / in-place overwrite is [#128](https://github.com/NavehBrenner/qualety/issues/128).
+Three provenance rules share **Gate B ∨ Gate C** (local file evidence only). `ml/artifact-hash-recorded` is **Gate C only**. `ml/no-inplace-artifact-clobber` is Gate C / run-output durability (git-aware). No wall-clock / iteration / “long loop” gate.
 
 **Gate B** — same grain as `ml/determinism-test-required`: module-level `def train` / `def main` in a training module, or `if __name__ == "__main__"` that calls such a name when no matching def, or optional `entryPoints`. Helpers that merely contain `.backward` are out of scope.
 
@@ -145,3 +146,17 @@ Require a **bound** path, not a bare hash key:
 **Quiet:** no Gate C; path unrecoverable; writer unresolved (other rule owns); binding present; any underapprox failure.
 
 **Suggestion:** hash the saved artifact (e.g. `hashlib.sha256(Path(path).read_bytes()).hexdigest()`) and record it in `save_metadata` (or configured writer) under an allowlisted key such as `artifact_hash`.
+
+### `ml/no-inplace-artifact-clobber`
+
+Gate C / run-output durability. `requires: ["python", "git-worktree"]`. Recommended `error`. No `writerName` / `entryPoints`. Not a plugin-kit rule.
+
+In scope (underapprox): `torch.save(...)` / `joblib.dump(...)`; `state_dict` only as those same-function writes; `Path.write_bytes` / `open(..., "w"|"wb")` only when the dest literal looks like an artifact/run output (`checkpoint`, `artifact`, `weights`, `output`, `model.pt`, `.ckpt`, `.safetensors`, …) **or** the write sits in a function that already has a Gate C save. Unrelated `open("train.log")` → silence.
+
+Dest recovery is `stringConstant` only. Unrecoverable (name, f-string, join of vars) → silence. Path keys are posix-relative to the git toplevel.
+
+**Report when** `git-worktree.available` and dest is recoverable and present in worktree entries as tracked, dirty, or already-untracked, and the write is a direct in-place clobber of that same path (no atomic replace).
+
+**Quiet:** git unavailable; dest unrecoverable; not an artifact save; same-function `os.replace` / `Path.replace` onto the final name; path not in `entries` (first-time write); underapprox failure.
+
+**Suggestion:** write to a staging path and `os.replace` onto the final name (or write under a unique run directory); do not clobber a tracked or dirty artifact path in place.

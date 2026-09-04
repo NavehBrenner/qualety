@@ -32,4 +32,6 @@ Inventory of names on the `qualety` package public entry (`package.json` `export
 | `Rule` | type |
 | `Plugin` | type |
 | `ParsedProject` | type |
+| `GitPathStatus` | type |
+| `GitWorktreeArtifact` | type |
 | `ArtifactMap` | type |

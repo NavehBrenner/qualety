@@ -1,5 +1,5 @@
 import { defineRule } from "./define-rule.ts";
-import type { ParsedProject, Rule } from "./index.ts";
+import type { GitWorktreeArtifact, ParsedProject, Rule } from "./index.ts";
 
 defineRule({
   meta: { requires: ["typescript"], docs: { description: "typed" } },
@@ -27,6 +27,14 @@ defineRule({
   create: (context) => {
     // @ts-expect-error omitted requires ⇒ no getArtifact
     context.getArtifact("typescript");
+  },
+});
+
+defineRule({
+  meta: { requires: ["git-worktree"], docs: { description: "git" } },
+  create: (context) => {
+    const git: GitWorktreeArtifact = context.getArtifact("git-worktree");
+    void git;
   },
 });
 

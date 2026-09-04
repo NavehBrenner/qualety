@@ -1662,3 +1662,57 @@ test("--diff expands plugin entry companion into catalog", async () => {
   expect(out).not.toMatch(/src\/unrelated\.ts/);
   expect(out).toMatch(/sources:1/);
 });
+
+const gitWorktreePlugin = `export default {
+  name: "fixture",
+  rules: {
+    ping: {
+      meta: { requires: ["git-worktree"], docs: { description: "reads git-worktree" } },
+      create(context) {
+        const git = context.getArtifact("git-worktree");
+        const keys = [...git.entries.keys()].sort().join(",");
+        context.report({
+          severity: "error",
+          file: context.getFiles()[0] ?? ".",
+          range: { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } },
+          message: "available:" + git.available + " keys:" + keys,
+          suggestion: "use git-worktree",
+        });
+      },
+    },
+  },
+};
+`;
+
+test("rule requiring git-worktree receives the default artifact", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": gitWorktreePlugin,
+    "qualety.config.json": config({ "fixture/ping": "error" }),
+    "src/hello.ts": "export const n = 1;\n",
+    "keep/clean.txt": "clean\n",
+  });
+  await initGit(dir);
+  await commitAll(dir, "base");
+  const lines: string[] = [];
+  expect(await check(dir, (m) => lines.push(String(m)), silent)).toBe(1);
+  expect(lines.join("\n")).toMatch(/available:true keys:.*keep\/clean\.txt/);
+});
+
+test("git-worktree outside git is unavailable not exit 2", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": gitWorktreePlugin,
+    "qualety.config.json": config({ "fixture/ping": "error" }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const lines: string[] = [];
+  const errors: string[] = [];
+  expect(
+    await check(
+      dir,
+      (m) => lines.push(String(m)),
+      (m) => errors.push(String(m)),
+    ),
+  ).toBe(1);
+  expect(errors.join("\n")).toBe("");
+  expect(lines.join("\n")).toMatch(/available:false keys:/);
+});

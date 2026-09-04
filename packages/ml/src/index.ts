@@ -4,6 +4,7 @@ import { dataloaderWorkerSeeding } from "./dataloader-worker-seeding.ts";
 import { determinismTestRequired } from "./determinism-test-required.ts";
 import { deterministicAlgorithmsOptIn } from "./deterministic-algorithms-opt-in.ts";
 import { metadataWriterRequired } from "./metadata-writer-required.ts";
+import { noInplaceArtifactClobber } from "./no-inplace-artifact-clobber.ts";
 import { recordCodeVersion } from "./record-code-version.ts";
 import { requireGlobalSeed } from "./require-global-seed.ts";
 import { runMetadataCompleteness } from "./run-metadata-completeness.ts";
@@ -23,6 +24,7 @@ const plugin: Plugin = {
     "record-code-version": recordCodeVersion,
     "run-metadata-completeness": runMetadataCompleteness,
     "artifact-hash-recorded": artifactHashRecorded,
+    "no-inplace-artifact-clobber": noInplaceArtifactClobber,
   },
   configs: {
     recommended: {
@@ -37,6 +39,7 @@ const plugin: Plugin = {
         "ml/record-code-version": "error",
         "ml/run-metadata-completeness": "error",
         "ml/artifact-hash-recorded": "error",
+        "ml/no-inplace-artifact-clobber": "error",
       },
     },
   },

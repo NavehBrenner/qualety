@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { DEFAULT_PROVIDERS } from "./default-providers.ts";
 import { defineRule } from "./define-rule.ts";
+import { createGitWorktreeProvider } from "./git-worktree.ts";
 import { isRecord } from "./record.ts";
 import {
   artifactProviderSchema,
@@ -19,6 +20,7 @@ import { createTypeScriptProvider } from "./typescript-frontend.ts";
 test("core helpers and schemas are exported", () => {
   expect(isRecord({})).toBe(true);
   expect(DEFAULT_PROVIDERS.typescript).toBeDefined();
+  expect(DEFAULT_PROVIDERS["git-worktree"]).toBeDefined();
   expect(functionSchema).toBeDefined();
   expect(pluginProvidesSchema).toBeDefined();
   expect(requiresSchema).toBeDefined();
@@ -83,4 +85,8 @@ test("pluginSchema rejects a provider without build", () => {
 
 test("default typescript provider satisfies artifactProviderSchema", () => {
   expect(artifactProviderSchema.safeParse(createTypeScriptProvider()).success).toBe(true);
+});
+
+test("default git-worktree provider satisfies artifactProviderSchema", () => {
+  expect(artifactProviderSchema.safeParse(createGitWorktreeProvider()).success).toBe(true);
 });
