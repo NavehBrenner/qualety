@@ -107,7 +107,7 @@ function tallyFileUses(
 ) {
   markExternalOnly(unit.file, fileBinds, classes, externalOnlyClasses);
   walkCalls(unit.tree, "", unit.file, (call) => {
-    const key = resolveCall(call, fileBinds, defs);
+    const key = resolveCall(call, fileBinds, defs, classes);
     tallyResolvedUse(
       key,
       key === undefined ? undefined : byKey.get(key),
@@ -117,6 +117,7 @@ function tallyFileUses(
     );
     if (key === undefined) {
       addAmbiguousLoads(call, fileBinds, defs, valueLoads);
+      addUnprovenAttributeLoads(call, defs, valueLoads);
     }
   });
   collectLoadKeys(
@@ -125,7 +126,7 @@ function tallyFileUses(
     unit.file,
     (parent, child) => parent._type === "Call" && child === parent.func,
     (ref) => {
-      const key = resolveCall(ref, fileBinds, defs);
+      const key = resolveCall(ref, fileBinds, defs, classes);
       if (key === undefined) {
         addAmbiguousLoads(ref, fileBinds, defs, valueLoads);
       }
@@ -203,6 +204,8 @@ type RawCall = {
   owner: string | undefined;
   className: string;
   lineno: number;
+  ctorName?: string;
+  instanceAttr?: string;
 };
 
 function walkCalls(
@@ -241,17 +244,56 @@ function rawCall(node: PythonNode, className: string, file: string): RawCall | u
   if (func._type !== "Attribute" || typeof func.attr !== "string" || !isPythonNode(func.value)) {
     return undefined;
   }
-  if (func.value._type !== "Name" || typeof func.value.id !== "string") {
+  return rawAttrCall(func.value, func.attr, className, file, lineno);
+}
+
+function rawAttrCall(
+  value: PythonNode,
+  attr: string,
+  className: string,
+  file: string,
+  lineno: number,
+): RawCall | undefined {
+  if (value._type === "Name" && typeof value.id === "string") {
+    return { file, name: attr, owner: value.id, className, lineno };
+  }
+  if (value._type === "Call") {
+    const callee = value.func;
+    if (isPythonNode(callee) && callee._type === "Name" && typeof callee.id === "string") {
+      return { file, name: attr, owner: undefined, className, lineno, ctorName: callee.id };
+    }
     return undefined;
   }
-  return { file, name: func.attr, owner: func.value.id, className, lineno };
+  if (
+    value._type !== "Attribute" ||
+    typeof value.attr !== "string" ||
+    !isPythonNode(value.value) ||
+    value.value._type !== "Name" ||
+    typeof value.value.id !== "string"
+  ) {
+    return undefined;
+  }
+  const base = value.value.id;
+  if (base !== "self" && base !== "cls") {
+    return undefined;
+  }
+  return { file, name: attr, owner: undefined, className, lineno, instanceAttr: value.attr };
 }
 
 function resolveCall(
   call: RawCall,
   fileBinds: FileBinds | undefined,
   defs: readonly Def[],
+  classes: readonly ClassHit[],
 ): string | undefined {
+  if (call.ctorName !== undefined) {
+    const hits = defs.filter((def) => def.className === call.ctorName && def.name === call.name);
+    const hit = hits[0];
+    return hits.length === 1 && hit !== undefined ? defKey(hit) : undefined;
+  }
+  if (call.instanceAttr !== undefined) {
+    return resolveAttrCall(call, fileBinds, defs, classes);
+  }
   const owner = call.owner;
   if (owner === "self" || owner === "cls") {
     return findDefKey(defs, call.file, call.name, call.className);
@@ -283,6 +325,159 @@ function findDefKey(
   );
   const hit = hits[0];
   return hits.length === 1 && hit !== undefined ? defKey(hit) : undefined;
+}
+
+function resolveAttrCall(
+  call: RawCall,
+  fileBinds: FileBinds | undefined,
+  defs: readonly Def[],
+  classes: readonly ClassHit[],
+): string | undefined {
+  const attr = call.instanceAttr;
+  if (attr === undefined || call.className === "") {
+    return undefined;
+  }
+  const ownerHits = classes.filter(
+    (item) => item.file === call.file && item.name === call.className,
+  );
+  const ownerClass = ownerHits[0];
+  if (ownerHits.length !== 1 || ownerClass === undefined) {
+    return undefined;
+  }
+  const rhsName = attrBindRhs(ownerClass.node, attr);
+  if (rhsName === undefined) {
+    return undefined;
+  }
+  const owner = resolveAttrOwner(rhsName, call.file, fileBinds, classes);
+  if (owner === undefined) {
+    return undefined;
+  }
+  return findDefKey(defs, owner.file, call.name, owner.name);
+}
+
+function attrBindRhs(classNode: PythonNode, attr: string): string | undefined {
+  const names = new Set<string>();
+  for (const stmt of asNodes(classNode.body)) {
+    if (!collectBindName(stmt, attr, true, names)) {
+      return undefined;
+    }
+    if (
+      (stmt._type === "FunctionDef" || stmt._type === "AsyncFunctionDef") &&
+      stmt.name === "__init__"
+    ) {
+      for (const inner of asNodes(stmt.body)) {
+        if (!collectBindName(inner, attr, false, names)) {
+          return undefined;
+        }
+      }
+    }
+  }
+  if (names.size !== 1) {
+    return undefined;
+  }
+  const [rhsName] = names;
+  return rhsName;
+}
+
+function collectBindName(
+  stmt: PythonNode,
+  attr: string,
+  allowName: boolean,
+  names: Set<string>,
+): boolean {
+  const value = bindStmtValue(stmt, attr, allowName);
+  if (value === undefined) {
+    return true;
+  }
+  const rhsName = rhsClassName(value);
+  if (rhsName === undefined) {
+    return false;
+  }
+  names.add(rhsName);
+  return true;
+}
+
+function bindStmtValue(stmt: PythonNode, attr: string, allowName: boolean): PythonNode | undefined {
+  if (stmt._type === "Assign") {
+    const matched = asNodes(stmt.targets).some((target) => isAttrTarget(target, attr, allowName));
+    if (!matched || !isPythonNode(stmt.value)) {
+      return undefined;
+    }
+    return stmt.value;
+  }
+  if (stmt._type !== "AnnAssign" || !isPythonNode(stmt.target) || !isPythonNode(stmt.value)) {
+    return undefined;
+  }
+  if (!isAttrTarget(stmt.target, attr, allowName)) {
+    return undefined;
+  }
+  return stmt.value;
+}
+
+function isAttrTarget(target: PythonNode, attr: string, allowName: boolean): boolean {
+  if (allowName && target._type === "Name" && target.id === attr) {
+    return true;
+  }
+  if (
+    target._type !== "Attribute" ||
+    target.attr !== attr ||
+    !isPythonNode(target.value) ||
+    target.value._type !== "Name"
+  ) {
+    return false;
+  }
+  return target.value.id === "self" || target.value.id === "cls";
+}
+
+function rhsClassName(value: PythonNode): string | undefined {
+  if (value._type === "Name" && typeof value.id === "string") {
+    return value.id;
+  }
+  if (
+    value._type === "Call" &&
+    isPythonNode(value.func) &&
+    value.func._type === "Name" &&
+    typeof value.func.id === "string"
+  ) {
+    return value.func.id;
+  }
+  return undefined;
+}
+
+function resolveAttrOwner(
+  rhsName: string,
+  file: string,
+  fileBinds: FileBinds | undefined,
+  classes: readonly ClassHit[],
+): { file: string; name: string } | undefined {
+  const imported = fileBinds?.named.get(rhsName);
+  if (imported !== undefined) {
+    return imported;
+  }
+  const sameFile = classes.filter((item) => item.file === file && item.name === rhsName);
+  if (sameFile.length === 1) {
+    return sameFile[0];
+  }
+  if (sameFile.length !== 0) {
+    return undefined;
+  }
+  const group = classes.filter((item) => item.name === rhsName);
+  return group.length === 1 ? group[0] : undefined;
+}
+
+function addUnprovenAttributeLoads(call: RawCall, defs: readonly Def[], valueLoads: Set<string>) {
+  if (call.instanceAttr === undefined) {
+    return;
+  }
+  for (const def of defs) {
+    if (def.name !== call.name || def.className === "") {
+      continue;
+    }
+    if (call.file === def.file && containsPos(def.node, call.lineno)) {
+      continue;
+    }
+    valueLoads.add(defKey(def));
+  }
 }
 
 function addAmbiguousLoads(
