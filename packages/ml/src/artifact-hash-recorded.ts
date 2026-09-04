@@ -8,7 +8,7 @@ import {
   walkNodes,
 } from "@qualety/python/walk";
 import { defineRule } from "qualety";
-import { assignTarget, attrChain, callKeyword, lastAttr, walkSkipDefs } from "./ast.ts";
+import { assignTarget, attrChain, boundValue, callKeyword, lastAttr, walkSkipDefs } from "./ast.ts";
 import {
   collectArtifactSaves,
   type GateSite,
@@ -176,17 +176,6 @@ function foldPathCall(
     parts.push(part.text);
   }
   return parts.length === 0 ? undefined : { text: parts.join("/") };
-}
-
-function boundValue(scope: PythonNode, name: string): PythonNode | undefined {
-  let found: PythonNode | undefined;
-  for (const stmt of asNodes(scope.body)) {
-    const target = assignTarget(stmt);
-    if (target?._type === "Name" && target.id === name && isPythonNode(stmt.value)) {
-      found = stmt.value;
-    }
-  }
-  return found;
 }
 
 function samePath(expr: PythonNode, dest: PathId, unit: PythonSource, scope: PythonNode): boolean {

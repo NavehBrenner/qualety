@@ -10,6 +10,7 @@ import {
 } from "@qualety/python/walk";
 import {
   attrChain,
+  boundValue,
   callKeyword,
   collectTrainingEntries,
   forEachMlSource,
@@ -301,8 +302,8 @@ function takeCallPayload(node: PythonNode, scope: PythonNode, payload: PayloadSh
   for (const arg of asNodes(node.args)) {
     takeDict(arg, payload);
     if (arg._type === "Name" && typeof arg.id === "string") {
-      const bound = boundDict(scope, arg.id);
-      if (bound !== undefined) {
+      const bound = boundValue(scope, arg.id);
+      if (bound?._type === "Dict") {
         takeDict(bound, payload);
       }
     }
@@ -354,25 +355,6 @@ function addPayloadNames(node: PythonNode, names: Set<string>): void {
   if (node._type === "Name" && typeof node.id === "string") {
     names.add(node.id);
   }
-}
-
-function boundDict(scope: PythonNode, name: string): PythonNode | undefined {
-  let found: PythonNode | undefined;
-  for (const stmt of asNodes(scope.body)) {
-    if (stmt._type !== "Assign") {
-      continue;
-    }
-    const target = asNodes(stmt.targets)[0];
-    if (
-      target?._type === "Name" &&
-      target.id === name &&
-      isPythonNode(stmt.value) &&
-      stmt.value._type === "Dict"
-    ) {
-      found = stmt.value;
-    }
-  }
-  return found;
 }
 
 function argumentDest(node: PythonNode): string | undefined {
