@@ -1,7 +1,7 @@
 import { expect, test } from "vitest";
 import { DEFAULT_PROVIDERS } from "./default-providers.ts";
 import { defineRule } from "./define-rule.ts";
-import { createGitWorktreeProvider } from "./git-worktree.ts";
+import { buildGitWorktree } from "./git-worktree.ts";
 import { isRecord } from "./record.ts";
 import {
   artifactProviderSchema,
@@ -88,5 +88,5 @@ test("default typescript provider satisfies artifactProviderSchema", () => {
 });
 
 test("default git-worktree provider satisfies artifactProviderSchema", () => {
-  expect(artifactProviderSchema.safeParse(createGitWorktreeProvider()).success).toBe(true);
+  expect(artifactProviderSchema.safeParse({ build: buildGitWorktree }).success).toBe(true);
 });

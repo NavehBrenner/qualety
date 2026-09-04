@@ -4,6 +4,7 @@ import {
   collectArtifactSaves,
   collectGateSites,
   collectPayload,
+  enclosingDef,
   hasCodeVersion,
   isArtifactSave,
   parseWriterName,
@@ -17,6 +18,7 @@ test("ml provenance helpers", () => {
   expect(collectGateSites).toBeTypeOf("function");
   expect(collectArtifactSaves).toBeTypeOf("function");
   expect(isArtifactSave).toBeTypeOf("function");
+  expect(enclosingDef).toBeTypeOf("function");
   expect(resolveWriter).toBeTypeOf("function");
   expect(bodyWrites).toBeTypeOf("function");
   expect(collectPayload).toBeTypeOf("function");

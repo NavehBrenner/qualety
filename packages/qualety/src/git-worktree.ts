@@ -1,16 +1,9 @@
 import { runGit, splitGitNames } from "./git-seed.ts";
-import type {
-  ArtifactBuildContext,
-  ArtifactProvider,
-  GitPathStatus,
-  GitWorktreeArtifact,
-} from "./index.ts";
+import type { ArtifactBuildContext, GitPathStatus, GitWorktreeArtifact } from "./index.ts";
 
-export function createGitWorktreeProvider(): ArtifactProvider {
-  return { build: buildGitWorktree };
-}
-
-async function buildGitWorktree(context: ArtifactBuildContext): Promise<GitWorktreeArtifact> {
+export async function buildGitWorktree(
+  context: ArtifactBuildContext,
+): Promise<GitWorktreeArtifact> {
   try {
     const toplevel = (await runGit(context.cwd, ["rev-parse", "--show-toplevel"])).trim();
     const [dirtyOut, extraOut, trackedOut] = await Promise.all([

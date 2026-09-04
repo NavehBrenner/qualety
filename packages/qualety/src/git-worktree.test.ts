@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { expect, test } from "vitest";
 import { runGit, splitGitNames } from "./git-seed.ts";
-import { createGitWorktreeProvider } from "./git-worktree.ts";
+import { buildGitWorktree } from "./git-worktree.ts";
 import type { ArtifactBuildContext, GitWorktreeArtifact } from "./index.ts";
 
 const execFileAsync = promisify(execFile);
@@ -42,7 +42,7 @@ function buildContext(cwd: string): ArtifactBuildContext {
 }
 
 async function build(cwd: string): Promise<GitWorktreeArtifact> {
-  const artifact = await createGitWorktreeProvider().build(buildContext(cwd));
+  const artifact = await buildGitWorktree(buildContext(cwd));
   if (!isWorktree(artifact)) {
     throw new Error("git-worktree build did not return GitWorktreeArtifact");
   }
