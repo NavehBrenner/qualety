@@ -13,7 +13,7 @@ export const noUnsafeAssertion = defineRule({
         "Do not use as any, as unknown as T, or <any>x assertions that erase type safety.",
     },
   },
-  create(context) {
+  create: (context) => {
     walkTsArtifact(context, (unit, file) => {
       for (const node of unit.getDescendantsOfKind(SyntaxKind.AsExpression)) {
         if (isUnsafeAssertion(node)) {

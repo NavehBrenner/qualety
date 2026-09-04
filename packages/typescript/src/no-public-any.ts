@@ -13,7 +13,7 @@ export const noPublicAny = defineRule({
       description: "Public value exports must not be annotated as any, any[], Function, or Object.",
     },
   },
-  create(context) {
+  create: (context) => {
     walkTsArtifact(context, (unit, file) => {
       for (const stmt of unit.getStatements()) {
         if (
