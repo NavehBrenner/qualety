@@ -166,3 +166,44 @@ test("ambiguous instance method name silences every same-named def", async () =>
   expect(result.code).toBe(0);
   expect(result.out).not.toMatch(/ping/);
 });
+
+test("annotated, self-attr, and constructor receivers count; unused still reports", async () => {
+  const result = await runFixture("def-bad-receiver");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/python\/no-unnecessary-def/);
+  expect(result.out).toMatch(
+    /"via_annotated" is only used once and does not pay for the indirection/,
+  );
+  expect(result.out).toMatch(
+    /"via_self_attribute" is only used once and does not pay for the indirection/,
+  );
+  expect(result.out).toMatch(
+    /"via_constructor" is only used once and does not pay for the indirection/,
+  );
+  expect(result.out).toMatch(/"unused_fn" is not used and does not pay for the indirection/);
+  expect(result.out).toMatch(/Inline at its only use/);
+  expect(result.out).toMatch(/Remove this helper/);
+  expect(result.out).not.toMatch(/in this file/);
+  expect(result.out).not.toMatch(NO_SUGGESTION);
+});
+
+test("two self-attr and two constructor method calls exit 0", async () => {
+  const result = await runFixture("def-ok-receiver");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(0);
+  expect(result.out).not.toMatch(/via_self_attribute/);
+  expect(result.out).not.toMatch(/via_constructor/);
+});
+
+test("unproven instance attr bind silences the live method", async () => {
+  const result = await runFixture("def-ok-attr-unproven");
+  expect(result.err).toBe("");
+  expect(result.code).toBe(1);
+  expect(result.out).toMatch(/python\/no-unnecessary-def/);
+  expect(result.out).toMatch(/"unused_other" is not used and does not pay for the indirection/);
+  expect(result.out).not.toMatch(/"live"/);
+  expect(result.out).toMatch(/Remove this helper/);
+  expect(result.out).not.toMatch(/in this file/);
+  expect(result.out).not.toMatch(NO_SUGGESTION);
+});
