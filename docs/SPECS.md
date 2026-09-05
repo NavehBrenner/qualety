@@ -41,9 +41,9 @@ These decisions are considered stable unless a major new constraint appears:
 
     This monorepo’s committed `biome.json` remains the `pnpm check` / formatter file. Recommended Biome **deltas** live on `@qualety/typescript` `biome.rules` (not `ts/*` catalog rows): keep `nursery/noUnsafeTypeAssertion` at error and `complexity/noExcessiveCognitiveComplexity` at error with `maxAllowedComplexity: 15`; plus `suspicious/noExplicitAny`, `style/noNonNullAssertion`, `suspicious/noTsIgnore`, `complexity/noBannedTypes`, `suspicious/noFocusedTests`, `correctness/noUnusedFunctionParameters`, `style/useThrowOnlyError`, `nursery/noImpliedEval` at error. Thin deltas above Biome `recommended` — not a second catalog. Overlay user `config.biome.rules` (`"off"` / retune) or `biome: false` for the phase. Complexity is **not** a core `BASELINE_RULES` entry and not a product rule. Committed `biome.json` may still duplicate that complexity override for `pnpm check`.
 
-    **Twin parity:** `ts/no-unsafe-assertion` is not equivalent to Biome `nursery/noUnsafeTypeAssertion` (`as any` / `as unknown as T` vs any `as T`). `ts/no-empty-catch` is not equivalent to Biome empty-block rules (catch-only vs all empty blocks). Both stay product rules.
+    **Twin parity:** `ts/no-unsafe-assertion` is not equivalent to Biome `nursery/noUnsafeTypeAssertion` (`as any` / `as unknown as T` / `<any>x` vs any `as T`). `ts/no-empty-catch` is not equivalent to Biome empty-block rules (catch-only vs all empty blocks). Both stay product rules.
 
-      **TypeScript baseline — what we own:** `ts/public-exports-tested` (static R5-lite), `ts/zod-boundary` (Z1 load/parse + Z2 `JSON.parse`), `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `ts/no-unsafe-assertion` (`as any` + `as unknown as T`; angle-bracket `<any>x` deferred), `ts/no-empty-catch`, `ts/no-floating-promises`, `ts/no-misused-promises`, `ts/exhaustive-switch`, `ts/explicit-public-return-types`, `ts/no-non-null-assertion` (`expr!`), `ts/no-export-star`, `ts/no-public-any` (`any` / `any[]`; public `Function` / `Object` deferred).
+      **TypeScript baseline — what we own:** `ts/public-exports-tested` (static R5-lite), `ts/zod-boundary` (Z1 load/parse + Z2 `JSON.parse`), `ts/type-narrowing-checks`, `ts/no-constant-condition`, `ts/no-unnecessary-abstraction`, `ts/no-unsafe-assertion` (`as any` + `as unknown as T` + `<any>x`), `ts/no-empty-catch`, `ts/no-floating-promises`, `ts/no-misused-promises`, `ts/exhaustive-switch`, `ts/explicit-public-return-types`, `ts/no-non-null-assertion` (`expr!`), `ts/no-export-star`, `ts/no-public-any` (`any` / `any[]` / public `Function` / `Object`).
 
     **React plugin — what we own:** `react/no-fetch-in-useeffect` and `react/query-error-handled` (R1-lite). TanStack stays inside `@qualety/react` (detectors only). **R3 semantic tokens → future `@qualety/tailwind` (or DS), not react.**
 
@@ -379,7 +379,7 @@ See [docs/rulesets/typescript.md](./rulesets/typescript.md).
 | `ts/type-narrowing-checks` | Implemented (checker-visible narrowing; see [typescript.md](./rulesets/typescript.md)) |
 | `ts/no-constant-condition` | Implemented (constant conditions + same-file call-site facts; see [typescript.md](./rulesets/typescript.md)) |
 | `ts/no-unnecessary-abstraction` | Implemented (package-local ≤1-use helpers and types; see [typescript.md](./rulesets/typescript.md)) |
-| `ts/no-unsafe-assertion` | Implemented (`as any` + `as unknown as T`; angle-bracket `<any>x` deferred) |
+| `ts/no-unsafe-assertion` | Implemented (`as any` + `as unknown as T` + `<any>x`) |
 | `ts/no-empty-catch` | Implemented (empty / comment-only catch) |
 | `ts/no-floating-promises` | Implemented (expression-statement Promises; underapprox without lib `Promise`) |
 | `ts/no-misused-promises` | Implemented (Promise-returning fn in sync void callback / `.forEach`; underapprox) |
@@ -387,7 +387,7 @@ See [docs/rulesets/typescript.md](./rulesets/typescript.md).
 | `ts/explicit-public-return-types` | Implemented (exported fn / public method return annotations) |
 | `ts/no-non-null-assertion` | Implemented (`expr!`; not definite-assignment fields) |
 | `ts/no-export-star` | Implemented (`export *` and `export * as ns`) |
-| `ts/no-public-any` | Implemented (exported `any` / `any[]`; public `Function` / `Object` deferred) |
+| `ts/no-public-any` | Implemented (exported `any` / `any[]` / public `Function` / `Object`) |
 
 **Not catalogued** (do not implement in this plugin): circular imports, max relative import depth, simple path bans, deep-import / internal-module bans, generic layer charts. Use Biome / ESLint / dependency-cruiser.
 

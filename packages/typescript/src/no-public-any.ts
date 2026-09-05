@@ -2,7 +2,7 @@ import { defineRule, type RuleContext } from "qualety";
 import { Node, type SourceFile } from "ts-morph";
 import { unwrapParens } from "./narrowing.ts";
 import { type FunctionLike, isFunctionLike } from "./parse-flow.ts";
-import { reportAt, walkTsSources } from "./ts-source.ts";
+import { reportAt, walkTsArtifact } from "./ts-source.ts";
 
 const HINT = "Replace any with a real type or unknown, then narrow.";
 
@@ -10,12 +10,11 @@ export const noPublicAny = defineRule({
   meta: {
     requires: ["typescript"],
     docs: {
-      description: "Public value exports must not be annotated as any or any[].",
+      description: "Public value exports must not be annotated as any, any[], Function, or Object.",
     },
   },
-  create(context) {
-    const sources = context.getArtifact("typescript").sources;
-    walkTsSources(sources, (unit, file) => {
+  create: (context) => {
+    walkTsArtifact(context, (unit, file) => {
       for (const stmt of unit.getStatements()) {
         if (
           Node.isFunctionDeclaration(stmt) ||
@@ -103,7 +102,7 @@ function reportIfAny(
     return;
   }
   const text = typeNode.getText().trim();
-  if (text !== "any" && text !== "any[]") {
+  if (text !== "any" && text !== "any[]" && text !== "Function" && text !== "Object") {
     return;
   }
   reportAt(context, file, typeNode, `Public export "${name}" is typed as any.`, HINT);

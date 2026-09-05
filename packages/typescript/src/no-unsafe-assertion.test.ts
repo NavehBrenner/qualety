@@ -39,7 +39,7 @@ test("plugin exports no-unsafe-assertion and recommended includes it", () => {
   });
 });
 
-test("as any and as unknown as T exit 1", async () => {
+test("as any, as unknown as T, and <any>x exit 1", async () => {
   const result = await runFixture("assert-bad");
   expect(result.err).toBe("");
   expect(result.code).toBe(1);
@@ -49,7 +49,7 @@ test("as any and as unknown as T exit 1", async () => {
   expect(result.out).not.toMatch(NO_SUGGESTION);
 });
 
-test("as const, as T, as unknown, and test-path as any exit 0", async () => {
+test("as const, as T, as unknown, non-any angle-bracket, type-arg any, and test-path skip exit 0", async () => {
   const result = await runFixture("assert-ok");
   expect(result.err).toBe("");
   expect(result.code).toBe(0);
