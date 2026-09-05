@@ -19,9 +19,11 @@ const RULES = [
   "run-metadata-completeness",
   "artifact-hash-recorded",
   "no-inplace-artifact-clobber",
+  "no-refit-at-inference",
+  "inference-mode-required",
 ] as const;
 
-test("plugin exports name, eleven rules, recommended including opt-in off, no provides", () => {
+test("plugin exports name, thirteen rules, recommended including opt-in off, no provides", () => {
   expect(namedPlugin).toBe(plugin);
   expect(plugin.name).toBe("ml");
   expect(plugin.provides).toBeUndefined();
@@ -39,6 +41,8 @@ test("plugin exports name, eleven rules, recommended including opt-in off, no pr
   expect(plugin.configs?.recommended?.rules?.["ml/run-metadata-completeness"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["ml/artifact-hash-recorded"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["ml/no-inplace-artifact-clobber"]).toBe("error");
+  expect(plugin.configs?.recommended?.rules?.["ml/no-refit-at-inference"]).toBe("error");
+  expect(plugin.configs?.recommended?.rules?.["ml/inference-mode-required"]).toBe("error");
 });
 
 test("ml without a python provider exits 2", async () => {
