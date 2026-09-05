@@ -10,6 +10,7 @@ import {
   isBackwardCall,
   isBefore,
   isDataLoaderCall,
+  isModelForwardCall,
   lastAttr,
   nodePos,
   optionsSchema,
@@ -27,6 +28,7 @@ test("ml ast helpers", () => {
   expect(lastAttr).toBeTypeOf("function");
   expect(isDataLoaderCall).toBeTypeOf("function");
   expect(isBackwardCall).toBeTypeOf("function");
+  expect(isModelForwardCall).toBeTypeOf("function");
   expect(firstTrainingNode).toBeTypeOf("function");
   expect(nodePos).toBeTypeOf("function");
   expect(isBefore).toBeTypeOf("function");

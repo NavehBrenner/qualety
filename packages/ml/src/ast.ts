@@ -55,6 +55,32 @@ export function isBackwardCall(node: PythonNode): node is PythonNode & { readonl
   return node.func._type === "Attribute" && node.func.attr === "backward";
 }
 
+export function isModelForwardCall(
+  node: PythonNode,
+): node is PythonNode & { readonly _type: "Call" } {
+  if (node._type !== "Call" || !isPythonNode(node.func)) {
+    return false;
+  }
+  const chain = attrChain(node.func);
+  if (chain.includes("jit") || chain.includes("trace") || chain.includes("script")) {
+    return false;
+  }
+  if (lastAttr(node.func) === "forward") {
+    return true;
+  }
+  if (node.func._type !== "Name" && node.func._type !== "Attribute") {
+    return false;
+  }
+  if (chain.length === 1 && chain[0] === "model") {
+    return true;
+  }
+  return (
+    chain.length === 2 &&
+    chain[0] === "self" &&
+    (chain[1] === "model" || chain[1] === "policy" || chain[1] === "net")
+  );
+}
+
 export function treeHas(tree: PythonNode, pred: (node: PythonNode) => boolean): boolean {
   let found = false;
   walkNodes(tree, (node) => {

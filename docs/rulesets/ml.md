@@ -26,6 +26,8 @@ The plugin **provides nothing**. Rules `requires: ["python"]` and consume `conte
 | `ml/run-metadata-completeness` | CLI/config dests and obvious config fields must reach the writer payload (`allowExclusions` to opt out). `defineRule` / `requires: ["python"]` | `error` |
 | `ml/artifact-hash-recorded` | Every Gate C model-artifact write with a recoverable path must record a path/bytes-bound content hash in the metadata writer payload. `defineRule` / `requires: ["python"]` | `error` |
 | `ml/no-inplace-artifact-clobber` | Git-aware in-place clobber of Gate C / run-output writes against tracked or dirty worktree paths. `defineRule` / `requires: ["python", "git-worktree"]` | `error` |
+| `ml/no-refit-at-inference` | Do not `.fit` / `.fit_transform` a transformer, or recompute batch mean/std for normalize, on an inference / serve / checkpoint-load path. `defineRule` / `requires: ["python"]` | `error` |
+| `ml/inference-mode-required` | A model forward outside a training step must run under `torch.no_grad()` / `torch.inference_mode()` with `.eval()` first. Owns eval+grad (no twin `ml/eval-mode-for-inference`). `defineRule` / `requires: ["python"]` | `error` |
 
 **Training module** (shared, local file evidence only): a non-skipped `.py` whose AST shows a `.backward` attribute call or a `DataLoader(...)` construction. No reachable-from-CLI analysis.
 
@@ -160,3 +162,33 @@ Dest recovery is `stringConstant` only. Unrecoverable (name, f-string, join of v
 **Quiet:** git unavailable; dest unrecoverable; not an artifact save; same-function `os.replace` / `Path.replace` onto the final name; path not in `entries` (first-time write); underapprox failure.
 
 **Suggestion:** write to a staging path and `os.replace` onto the final name (or write under a unique run directory); do not clobber a tracked or dirty artifact path in place.
+
+## Train / serve
+
+Zero-config. Same skip grain as other ml rules (not test readers). Underapproximate — silence when uncertain. Concrete suggestion (not `NO_SUGGESTION`).
+
+### `ml/no-refit-at-inference`
+
+Flag fitting / re-estimating a transform on a path that is clearly inference / serve / checkpoint-load.
+
+**A.** `.fit` / `.fit_transform` on a proven sklearn-style transformer (`StandardScaler`, `MinMaxScaler`, `RobustScaler`, `Normalizer`, `QuantileTransformer`, `PowerTransformer`, `PolynomialFeatures`, `OneHotEncoder`, `LabelEncoder`, `OrdinalEncoder`, `SimpleImputer`, `KNNImputer`, `PCA`, `TruncatedSVD`, `Pipeline` / `make_pipeline`) when the module has inference evidence. Local-file proof only. `.transform` only and `partial_fit` → quiet.
+
+**B.** Same function: `mean` / `std` Call (`x.mean` / `x.std` / `torch.mean` / `torch.std` / `np.mean` / `np.std`) whose result (or the Call) is an operand of `Sub`/`Div` (or `-=`/`/=`) **and** the same function or module has checkpoint-load or model-forward inference evidence.
+
+**Inference evidence (any one):** `torch.load` / `load_state_dict` / `from_pretrained`; path segments `infer` / `inference` / `serving` / `deploy` / `predict`; def/class name segments `infer` / `predict` / `serve` / `deploy` / `forward_eval` / `policy_step`, or def name exactly `act`, **and** that function also has a model forward.
+
+**Quiet:** training evidence (`.backward` or `DataLoader`) and no inference evidence; cannot prove transformer fit or inference context.
+
+**Suggestion:** Use stats/transforms stored with the checkpoint (or fit only in training entry points); at serve call `.transform` with frozen parameters, never `.fit` / `.fit_transform`.
+
+### `ml/inference-mode-required`
+
+A proven model forward (`lastAttr === "forward"`, or Call on `model` / `self.model` / `self.policy` / `self.net`) outside a training step must have a grad guard and `.eval()` before the forward. One report per site listing whichever half is missing.
+
+**Grad guard:** enclosing `with torch.no_grad()` / `with torch.inference_mode()`, or `@torch.no_grad()` / `@torch.inference_mode()`. `enable_grad` is not a guard.
+
+**Eval:** `.eval()` in the **same function** before the forward (`isBefore`). `__init__` / other methods do not count.
+
+**Quiet:** same function has `.backward(`; both guard and eval proven; cannot prove the Call is a model forward; `torch.jit` / export traces; `loss = …` training-step context.
+
+**Suggestion:** Wrap inference forwards in `torch.inference_mode()` (or `no_grad`) and call `model.eval()` before serve/predict.
