@@ -179,6 +179,7 @@ jobs:
             "packages/dry/package.json",
             "packages/plugin-kit/package.json",
             "packages/python/package.json",
+            "packages/ml/package.json",
           ];
           for (const file of pkgs) {
             const json = JSON.parse(fs.readFileSync(file, "utf8"));
