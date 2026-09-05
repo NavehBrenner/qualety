@@ -26,10 +26,16 @@ The plugin **provides nothing**. Rules `requires: ["python"]` and consume `conte
 | `ml/run-metadata-completeness` | CLI/config dests and obvious config fields must reach the writer payload (`allowExclusions` to opt out). `defineRule` / `requires: ["python"]` | `error` |
 | `ml/artifact-hash-recorded` | Every Gate C model-artifact write with a recoverable path must record a path/bytes-bound content hash in the metadata writer payload. `defineRule` / `requires: ["python"]` | `error` |
 | `ml/no-inplace-artifact-clobber` | Git-aware in-place clobber of Gate C / run-output writes against tracked or dirty worktree paths. `defineRule` / `requires: ["python", "git-worktree"]` | `error` |
+| `ml/pack-padded-sequence-before-rnn` | Pack padded sequences before RNN/LSTM/GRU when `h_n` is consumed. `defineRule` / `requires: ["python"]` | `error` |
+| `ml/train-mode-restored` | Restore `.train()` after mid-epoch `.eval()` before the next `.backward()`. `defineRule` / `requires: ["python"]` | `error` |
+| `ml/optimizer-zero-grad` | Training `.backward()` + optimizer `.step()` must `zero_grad`. `defineRule` / `requires: ["python"]` | `error` |
+| `ml/tensor-to-device-result-ignored` | Bare `tensor.to` / `.cuda` / dtype Expr does not mutate; result ignored. `defineRule` / `requires: ["python"]` | `error` |
+| `ml/no-network-in-tests` | Test modules must not download weights (`pretrained` / `from_pretrained` / hub). `defineRule` / `requires: ["python"]` | `error` |
+| `ml/no-cuda-hardcoded` | No literal CUDA device hardcoding that breaks CPU-only envs. `defineRule` / `requires: ["python"]` | `error` |
 
 **Training module** (shared, local file evidence only): a non-skipped `.py` whose AST shows a `.backward` attribute call or a `DataLoader(...)` construction. No reachable-from-CLI analysis.
 
-Shared skip (unless a rule tightens): `.pyi`, `test_*.py` / `*_test.py`, path segment `tests` / `__tests__` / `fixtures`, `conftest.py`, `__pycache__`. `ml/determinism-test-required` reads test paths on purpose. Underapproximate — silence when uncertain. Concrete suggestion (not `NO_SUGGESTION`). Messaging does not say “in this file”.
+Shared skip (unless a rule tightens): `.pyi`, `test_*.py` / `*_test.py`, path segment `tests` / `__tests__` / `fixtures`, `conftest.py`, `__pycache__`. `ml/determinism-test-required` reads test paths on purpose. `ml/no-network-in-tests` targets test modules on purpose. Underapproximate — silence when uncertain. Concrete suggestion (not `NO_SUGGESTION`). Messaging does not say “in this file”.
 
 ### `ml/require-global-seed`
 
@@ -160,3 +166,55 @@ Dest recovery is `stringConstant` only. Unrecoverable (name, f-string, join of v
 **Quiet:** git unavailable; dest unrecoverable; not an artifact save; same-function `os.replace` / `Path.replace` onto the final name; path not in `entries` (first-time write); underapprox failure.
 
 **Suggestion:** write to a staging path and `os.replace` onto the final name (or write under a unique run directory); do not clobber a tracked or dirty artifact path in place.
+
+## Torch correctness
+
+Function-scoped unless noted. Same shared skip as above except `ml/no-network-in-tests`. Underapproximate — silence when proof fails.
+
+### `ml/pack-padded-sequence-before-rnn`
+
+RNN/LSTM/GRU call (`lastAttr` `rnn`/`lstm`/`gru`, or `.forward` whose chain contains those) whose **second return** is consumed (`out, h = …` and `h` loaded, LSTM `(h_n, c_n)` unpack, or result `[1]`) with no `pack_padded_sequence` / `pack_sequence` call before it in the same function.
+
+**Quiet:** output-only / `_` unused; pack proven in-function before the RNN; cannot prove RNN or `h_n` use.
+
+**Suggestion:** `pack_padded_sequence` (or `pack_sequence`) before the RNN when consuming `h_n`.
+
+### `ml/train-mode-restored`
+
+In a function that contains `.backward(`: `.eval()` then a later `.backward(` with no `.train()` between.
+
+**Quiet:** no `.eval()`; `.train()` restored before next backward; inference-only (no backward); cannot prove ordering. Serve eval is not this rule.
+
+**Suggestion:** call `model.train()` after the validation/eval pass before the next training step.
+
+### `ml/optimizer-zero-grad`
+
+Same function has `.backward(` and an optimizer `.step(` (`optimizer` / `opt` / `optim` recv) and **no** `.zero_grad(` anywhere in that function. Presence of `zero_grad` (including under `step % k`) quiets.
+
+**Quiet:** missing backward or step; `zero_grad` present; cannot prove optimizer step.
+
+**Suggestion:** call `optimizer.zero_grad()` before each accumulation window (or once per step if not accumulating).
+
+### `ml/tensor-to-device-result-ignored`
+
+`Expr` whose value is `.to` / `.cuda` / `.cpu` / `.float` / `.half` / `.double` / `.bfloat16`. For `.to`, require a device/dtype arg. Recv `model` / `self` / `net` / `module` quiets `.to`/`.cuda` (module in-place). Assigned / returned / Call-arg is not an `Expr` stmt.
+
+**Quiet:** result used; proven module in-place `.to`/`.cuda`; cannot prove a cast.
+
+**Suggestion:** assign the result (`x = x.to(device)`), or use in-place only on modules.
+
+### `ml/no-network-in-tests`
+
+Test paths only. `pretrained=True`; `weights=` string/True/attr that is not `None`/`False`; `from_pretrained` / `hf_hub_download`; `torch.hub.load`. Keyword proof only for pretrained/weights.
+
+**Quiet:** non-test paths; `pretrained=False` / `weights=None`; cannot prove download.
+
+**Suggestion:** build encoders/models with `pretrained=False` / `weights=None` in tests; use fixtures or local tiny weights.
+
+### `ml/no-cuda-hardcoded`
+
+`.cuda()` method; `device="cuda"` / `"cuda:N"` keyword; `.to("cuda")` / `torch.device("cuda")` string constant (`^cuda(?::\d+)?$`). Overlap with `ml/tf32-must-be-explicit` on `.cuda()` is intended.
+
+**Quiet:** device from variable/arg; `"cpu"` literals; cannot prove the string is cuda.
+
+**Suggestion:** take `device` from config/arg; use `torch.device("cuda" if torch.cuda.is_available() else "cpu")` or equivalent resolved device.

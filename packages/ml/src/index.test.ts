@@ -19,9 +19,15 @@ const RULES = [
   "run-metadata-completeness",
   "artifact-hash-recorded",
   "no-inplace-artifact-clobber",
+  "pack-padded-sequence-before-rnn",
+  "train-mode-restored",
+  "optimizer-zero-grad",
+  "tensor-to-device-result-ignored",
+  "no-network-in-tests",
+  "no-cuda-hardcoded",
 ] as const;
 
-test("plugin exports name, eleven rules, recommended including opt-in off, no provides", () => {
+test("plugin exports name, seventeen rules, recommended including opt-in off, no provides", () => {
   expect(namedPlugin).toBe(plugin);
   expect(plugin.name).toBe("ml");
   expect(plugin.provides).toBeUndefined();
@@ -39,6 +45,12 @@ test("plugin exports name, eleven rules, recommended including opt-in off, no pr
   expect(plugin.configs?.recommended?.rules?.["ml/run-metadata-completeness"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["ml/artifact-hash-recorded"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["ml/no-inplace-artifact-clobber"]).toBe("error");
+  expect(plugin.configs?.recommended?.rules?.["ml/pack-padded-sequence-before-rnn"]).toBe("error");
+  expect(plugin.configs?.recommended?.rules?.["ml/train-mode-restored"]).toBe("error");
+  expect(plugin.configs?.recommended?.rules?.["ml/optimizer-zero-grad"]).toBe("error");
+  expect(plugin.configs?.recommended?.rules?.["ml/tensor-to-device-result-ignored"]).toBe("error");
+  expect(plugin.configs?.recommended?.rules?.["ml/no-network-in-tests"]).toBe("error");
+  expect(plugin.configs?.recommended?.rules?.["ml/no-cuda-hardcoded"]).toBe("error");
 });
 
 test("ml without a python provider exits 2", async () => {
