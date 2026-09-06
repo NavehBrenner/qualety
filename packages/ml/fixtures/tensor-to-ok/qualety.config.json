@@ -1,0 +1,7 @@
+{
+  "plugins": ["../../../python/dist/index.js", "../../dist/index.js"],
+  "rules": {
+    "ml/tensor-to-device-result-ignored": "error"
+  },
+  "biome": false
+}

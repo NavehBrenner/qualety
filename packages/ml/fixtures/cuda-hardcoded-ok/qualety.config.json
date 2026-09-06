@@ -1,0 +1,7 @@
+{
+  "plugins": ["../../../python/dist/index.js", "../../dist/index.js"],
+  "rules": {
+    "ml/no-cuda-hardcoded": "error"
+  },
+  "biome": false
+}

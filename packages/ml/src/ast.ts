@@ -195,6 +195,12 @@ export function walkSkipDefs(node: PythonNode, visit: (node: PythonNode) => void
   }
 }
 
+export function walkFunctionBody(fn: PythonNode, visit: (node: PythonNode) => void): void {
+  for (const child of childNodes(fn)) {
+    walkSkipDefs(child, visit);
+  }
+}
+
 export function collectTrainingEntries(
   unit: PythonSource,
   extra: readonly string[],

@@ -5,13 +5,19 @@ import { determinismTestRequired } from "./determinism-test-required.ts";
 import { deterministicAlgorithmsOptIn } from "./deterministic-algorithms-opt-in.ts";
 import { inferenceModeRequired } from "./inference-mode-required.ts";
 import { metadataWriterRequired } from "./metadata-writer-required.ts";
+import { noCudaHardcoded } from "./no-cuda-hardcoded.ts";
 import { noInplaceArtifactClobber } from "./no-inplace-artifact-clobber.ts";
+import { noNetworkInTests } from "./no-network-in-tests.ts";
 import { noRefitAtInference } from "./no-refit-at-inference.ts";
+import { optimizerZeroGrad } from "./optimizer-zero-grad.ts";
+import { packPaddedSequenceBeforeRnn } from "./pack-padded-sequence-before-rnn.ts";
 import { recordCodeVersion } from "./record-code-version.ts";
 import { requireGlobalSeed } from "./require-global-seed.ts";
 import { runMetadataCompleteness } from "./run-metadata-completeness.ts";
 import { seedMustReachFrameworkRng } from "./seed-must-reach-framework-rng.ts";
+import { tensorToDeviceResultIgnored } from "./tensor-to-device-result-ignored.ts";
 import { tf32MustBeExplicit } from "./tf32-must-be-explicit.ts";
+import { trainModeRestored } from "./train-mode-restored.ts";
 
 const plugin: Plugin = {
   name: "ml",
@@ -29,6 +35,12 @@ const plugin: Plugin = {
     "no-inplace-artifact-clobber": noInplaceArtifactClobber,
     "no-refit-at-inference": noRefitAtInference,
     "inference-mode-required": inferenceModeRequired,
+    "pack-padded-sequence-before-rnn": packPaddedSequenceBeforeRnn,
+    "train-mode-restored": trainModeRestored,
+    "optimizer-zero-grad": optimizerZeroGrad,
+    "tensor-to-device-result-ignored": tensorToDeviceResultIgnored,
+    "no-network-in-tests": noNetworkInTests,
+    "no-cuda-hardcoded": noCudaHardcoded,
   },
   configs: {
     recommended: {
@@ -46,6 +58,12 @@ const plugin: Plugin = {
         "ml/no-inplace-artifact-clobber": "error",
         "ml/no-refit-at-inference": "error",
         "ml/inference-mode-required": "error",
+        "ml/pack-padded-sequence-before-rnn": "error",
+        "ml/train-mode-restored": "error",
+        "ml/optimizer-zero-grad": "error",
+        "ml/tensor-to-device-result-ignored": "error",
+        "ml/no-network-in-tests": "error",
+        "ml/no-cuda-hardcoded": "error",
       },
     },
   },

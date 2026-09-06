@@ -1,0 +1,7 @@
+{
+  "plugins": ["../../../python/dist/index.js", "../../dist/index.js"],
+  "rules": {
+    "ml/train-mode-restored": "error"
+  },
+  "biome": false
+}

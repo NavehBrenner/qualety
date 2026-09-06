@@ -16,6 +16,7 @@ import {
   optionsSchema,
   parseEntryPoints,
   treeHas,
+  walkFunctionBody,
   walkSkipDefs,
 } from "./ast.ts";
 
@@ -37,4 +38,5 @@ test("ml ast helpers", () => {
   expect(parseEntryPoints).toBeTypeOf("function");
   expect(optionsSchema.parse).toBeTypeOf("function");
   expect(walkSkipDefs).toBeTypeOf("function");
+  expect(walkFunctionBody).toBeTypeOf("function");
 });
