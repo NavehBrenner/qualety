@@ -3,8 +3,10 @@ import { artifactHashRecorded } from "./artifact-hash-recorded.ts";
 import { dataloaderWorkerSeeding } from "./dataloader-worker-seeding.ts";
 import { determinismTestRequired } from "./determinism-test-required.ts";
 import { deterministicAlgorithmsOptIn } from "./deterministic-algorithms-opt-in.ts";
+import { inferenceModeRequired } from "./inference-mode-required.ts";
 import { metadataWriterRequired } from "./metadata-writer-required.ts";
 import { noInplaceArtifactClobber } from "./no-inplace-artifact-clobber.ts";
+import { noRefitAtInference } from "./no-refit-at-inference.ts";
 import { recordCodeVersion } from "./record-code-version.ts";
 import { requireGlobalSeed } from "./require-global-seed.ts";
 import { runMetadataCompleteness } from "./run-metadata-completeness.ts";
@@ -25,6 +27,8 @@ const plugin: Plugin = {
     "run-metadata-completeness": runMetadataCompleteness,
     "artifact-hash-recorded": artifactHashRecorded,
     "no-inplace-artifact-clobber": noInplaceArtifactClobber,
+    "no-refit-at-inference": noRefitAtInference,
+    "inference-mode-required": inferenceModeRequired,
   },
   configs: {
     recommended: {
@@ -40,6 +44,8 @@ const plugin: Plugin = {
         "ml/run-metadata-completeness": "error",
         "ml/artifact-hash-recorded": "error",
         "ml/no-inplace-artifact-clobber": "error",
+        "ml/no-refit-at-inference": "error",
+        "ml/inference-mode-required": "error",
       },
     },
   },
