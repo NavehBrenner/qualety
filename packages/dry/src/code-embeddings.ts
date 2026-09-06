@@ -4,6 +4,15 @@ import { type CodeChunk, collectChunks } from "./chunks.ts";
 import { embeddingsCacheDir, readCachedVector, writeCachedVector } from "./embed-cache.ts";
 import { type EmbedModule, resolveEmbedModule } from "./embed-module.ts";
 
+// A cold cache used to become one embed() call holding every miss, so the pipeline padded
+// the whole repo into a single tensor: this repo is already 647 chunks, and MiniLM's
+// per-layer attention at 647 x 512 runs to gigabytes. That does not fail the rule, it takes
+// the runner down with it (opencode jobs died on `pnpm qualety` with a runner shutdown,
+// exit 143). CI never saw it because actions/cache restores the vectors under a fixed key,
+// so misses there are only the touched files. Batch so peak memory tracks the batch size
+// rather than the size of the repository.
+const EMBED_BATCH = 32;
+
 export type EmbeddedChunk = {
   path: string;
   name: string;
@@ -86,15 +95,18 @@ async function embedChunks(
   if (misses.length === 0) {
     return embedded;
   }
-  const vectors = await embedder.embed(misses.map((item) => item.chunk.text));
-  for (let i = 0; i < misses.length; i += 1) {
-    const miss = misses[i];
-    const vector = vectorAt(vectors, i, embedder.dims);
-    if (miss === undefined || vector === undefined) {
-      continue;
+  for (let start = 0; start < misses.length; start += EMBED_BATCH) {
+    const batch = misses.slice(start, start + EMBED_BATCH);
+    const vectors = await embedder.embed(batch.map((item) => item.chunk.text));
+    for (let i = 0; i < batch.length; i += 1) {
+      const miss = batch[i];
+      const vector = vectorAt(vectors, i, embedder.dims);
+      if (miss === undefined || vector === undefined) {
+        continue;
+      }
+      writeCachedVector(cacheDir, embedder.id, embedder.revision, miss.hash, vector);
+      embedded.push(toEmbedded(miss.chunk, vector));
     }
-    writeCachedVector(cacheDir, embedder.id, embedder.revision, miss.hash, vector);
-    embedded.push(toEmbedded(miss.chunk, vector));
   }
   embedded.sort(
     (left, right) => left.path.localeCompare(right.path) || left.name.localeCompare(right.name),
