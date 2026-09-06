@@ -232,3 +232,46 @@ test.skipIf(!hasMiniLm)(
 test("modelDir defaults to .tools/minilm-l6", () => {
   expect(modelDir("/repo", {})).toBe("/repo/.tools/minilm-l6");
 });
+
+test("a cold miss set is embedded in bounded batches", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "ci-embed-build-"));
+  const cacheDir = await mkdtemp(join(tmpdir(), "ci-embed-cache-"));
+  await mkdir(join(dir, "src"), { recursive: true });
+  const many = Array.from(
+    { length: 80 },
+    (_, i) => `export function total${i}(rows: readonly number[]): number {
+  let sum${i} = 0;
+  for (const row of rows) {
+    sum${i} += row * ${i + 2};
+  }
+  return sum${i};
+}
+`,
+  ).join("\n");
+  await writeFile(join(dir, "src/a.ts"), many);
+  const ts = await typescriptArtifact(dir);
+  const batches: number[] = [];
+  const embedder = {
+    id: "stub",
+    revision: "1",
+    dims: 4,
+    async embed(texts: string[]) {
+      batches.push(texts.length);
+      return texts.map(() => new Float32Array([1, 0, 0, 0]));
+    },
+  };
+  const index = await buildCodeEmbeddingsIndex({
+    cwd: dir,
+    files: ["src/a.ts"],
+    exclude: [],
+    requiredBy: ["dry/no-semantic-duplicate"],
+    getArtifact: (id: string) => (id === "typescript" ? ts : undefined),
+    embedder,
+    cacheDir,
+  });
+  // Every miss still gets a vector, but no single call carries the whole repo.
+  expect(index.chunks.length).toBe(80);
+  expect(batches.length).toBeGreaterThan(1);
+  expect(Math.max(...batches)).toBeLessThanOrEqual(32);
+  expect(batches.reduce((a, b) => a + b, 0)).toBe(80);
+});
