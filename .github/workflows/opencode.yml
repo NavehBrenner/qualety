@@ -73,6 +73,16 @@ jobs:
         with:
           fetch-depth: 0 # agent needs history to branch/rebase
           token: ${{ steps.app-token.outputs.token }} # so pushes are App-attributed too
+      # ci.yml restores these vectors under a fixed key, so its `pnpm qualety` only ever
+      # embeds the touched files. The agent's runner had no such cache: `pnpm qualety`
+      # there embedded the whole repo cold, which is the run that kept taking the runner
+      # down. Restore-only — the agent must never write CI's cache.
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ~/.cache/qualety/code-embeddings
+            .tools/minilm-l6
+          key: code-embeddings-onnx-quantized-1-${{ runner.os }}
       # use_github_token skips the action's configureGit(), which is what would
       # normally set these. Without them `git commit` dies on an unknown author.
       - name: git identity
