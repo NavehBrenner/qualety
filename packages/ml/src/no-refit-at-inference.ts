@@ -52,21 +52,31 @@ export const noRefitAtInference = defineRule({
   create(context) {
     for (const python of [context.getArtifact("python")]) {
       forEachMlSource(python.sources, context.getCwd(), { trainingOnly: false }, (unit) => {
-        scanUnit(context, unit, context.getCwd());
+        const moduleNames = transformerNames(unit.tree, new Set());
+        const moduleInfer =
+          INFER_PATH.test(relative(context.getCwd(), unit.file).split("\\").join("/")) ||
+          treeHas(unit.tree, (node) => {
+            if (node._type !== "Call") {
+              return false;
+            }
+            const name = lastAttr(node.func);
+            if (name === "load_state_dict" || name === "from_pretrained") {
+              return true;
+            }
+            return name === "load" && attrChain(node.func).includes("torch");
+          });
+        reportScope(context, unit, unit.tree, moduleNames, moduleInfer);
+        walkCallables(unit.tree, "", false, (fn, className) => {
+          const name = typeof fn.name === "string" ? fn.name : "";
+          const hasInference =
+            moduleInfer ||
+            ((nameHits(name) || nameHits(className)) && treeHas(fn, isModelForwardCall));
+          reportScope(context, unit, fn, transformerNames(fn, moduleNames), hasInference);
+        });
       });
     }
   },
 });
-
-function scanUnit(context: RuleContext, unit: PythonSource, cwd: string) {
-  const moduleNames = transformerNames(unit.tree, new Set());
-  const moduleInfer = pathIsInfer(unit.file, cwd) || treeHasLoad(unit.tree);
-  reportScope(context, unit, unit.tree, moduleNames, moduleInfer);
-  walkCallables(unit.tree, "", false, (fn, className) => {
-    const hasInference = moduleInfer || functionInfer(fn, className);
-    reportScope(context, unit, fn, transformerNames(fn, moduleNames), hasInference);
-  });
-}
 
 function reportScope(
   context: RuleContext,
@@ -79,7 +89,13 @@ function reportScope(
     return;
   }
   walkBody(scope, (node) => {
-    if (!isFitCall(node) || !isPythonNode(node.func) || !isPythonNode(node.func.value)) {
+    if (node._type !== "Call" || !isPythonNode(node.func) || node.func._type !== "Attribute") {
+      return;
+    }
+    if (node.func.attr !== "fit" && node.func.attr !== "fit_transform") {
+      return;
+    }
+    if (!isPythonNode(node.func.value)) {
       return;
     }
     if (!isTransformerExpr(node.func.value, names)) {
@@ -139,25 +155,6 @@ function isTransformerExpr(node: PythonNode, names: ReadonlySet<string>): boolea
   return name !== undefined && TRANSFORMERS.has(name);
 }
 
-function isFitCall(node: PythonNode): node is PythonNode & { readonly _type: "Call" } {
-  if (node._type !== "Call" || !isPythonNode(node.func) || node.func._type !== "Attribute") {
-    return false;
-  }
-  return node.func.attr === "fit" || node.func.attr === "fit_transform";
-}
-
-function pathIsInfer(file: string, cwd: string): boolean {
-  return INFER_PATH.test(relative(cwd, file).split("\\").join("/"));
-}
-
-function functionInfer(fn: PythonNode, className: string): boolean {
-  const name = typeof fn.name === "string" ? fn.name : "";
-  if (!nameHits(name) && !nameHits(className)) {
-    return false;
-  }
-  return treeHas(fn, isModelForwardCall);
-}
-
 function nameHits(name: string): boolean {
   if (name === "act") {
     return true;
@@ -169,21 +166,6 @@ function nameHits(name: string): boolean {
       name.endsWith(`_${part}`) ||
       name.includes(`_${part}_`),
   );
-}
-
-function treeHasLoad(tree: PythonNode): boolean {
-  return treeHas(tree, isCheckpointLoad);
-}
-
-function isCheckpointLoad(node: PythonNode): boolean {
-  if (node._type !== "Call") {
-    return false;
-  }
-  const name = lastAttr(node.func);
-  if (name === "load_state_dict" || name === "from_pretrained") {
-    return true;
-  }
-  return name === "load" && attrChain(node.func).includes("torch");
 }
 
 function statsSites(scope: PythonNode): PythonNode[] {
@@ -233,7 +215,7 @@ function statsSource(
   return undefined;
 }
 
-function isMeanStdCall(node: PythonNode): boolean {
+function isMeanStdCall(node: PythonNode): node is PythonNode & { readonly _type: "Call" } {
   if (node._type !== "Call") {
     return false;
   }
