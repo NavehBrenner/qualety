@@ -44,7 +44,7 @@ function isHardcodedCuda(node: PythonNode): boolean {
   if (node._type !== "Call") {
     return false;
   }
-  if (isCudaMethod(node)) {
+  if (isPythonNode(node.func) && node.func._type === "Attribute" && node.func.attr === "cuda") {
     return true;
   }
   if (cudaLiteral(callKeyword(node, "device"))) {
@@ -55,13 +55,6 @@ function isHardcodedCuda(node: PythonNode): boolean {
     return false;
   }
   return cudaLiteral(asNodes(node.args)[0]);
-}
-
-function isCudaMethod(node: PythonNode): boolean {
-  if (!isPythonNode(node.func)) {
-    return false;
-  }
-  return node.func._type === "Attribute" && node.func.attr === "cuda";
 }
 
 function cudaLiteral(node: PythonNode | undefined): boolean {

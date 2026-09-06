@@ -1,6 +1,6 @@
-import { childNodes, nodeRange, type PythonNode, walkCallables } from "@qualety/python/walk";
+import { nodeRange, type PythonNode, walkCallables } from "@qualety/python/walk";
 import { defineRule } from "qualety";
-import { attrChain, forEachMlSource, isBackwardCall, lastAttr, walkSkipDefs } from "./ast.ts";
+import { attrChain, forEachMlSource, isBackwardCall, lastAttr, walkFunctionBody } from "./ast.ts";
 
 const ZERO_HINT =
   "Call optimizer.zero_grad() before each accumulation window (or once per step if not accumulating).";
@@ -35,12 +35,6 @@ export const optimizerZeroGrad = defineRule({
   },
 });
 
-function walkFn(fn: PythonNode, visit: (node: PythonNode) => void): void {
-  for (const child of childNodes(fn)) {
-    walkSkipDefs(child, visit);
-  }
-}
-
 function scanTrainingStep(fn: PythonNode): {
   backward: boolean;
   zero: boolean;
@@ -51,7 +45,7 @@ function scanTrainingStep(fn: PythonNode): {
     zero: false,
     step: undefined,
   };
-  walkFn(fn, (node) => {
+  walkFunctionBody(fn, (node) => {
     noteTrainingCall(node, scan);
   });
   return scan;
@@ -64,19 +58,15 @@ function noteTrainingCall(
   if (isBackwardCall(node)) {
     scan.backward = true;
   }
-  if (isZeroGrad(node)) {
+  if (node._type === "Call" && lastAttr(node.func) === "zero_grad") {
     scan.zero = true;
   }
-  if (scan.step === undefined && isOptimizerStep(node)) {
-    scan.step = node;
+  if (isOptimizerStep(node)) {
+    scan.step ??= node;
   }
 }
 
-function isZeroGrad(node: PythonNode): boolean {
-  return node._type === "Call" && lastAttr(node.func) === "zero_grad";
-}
-
-function isOptimizerStep(node: PythonNode): boolean {
+function isOptimizerStep(node: PythonNode): node is PythonNode & { readonly _type: "Call" } {
   if (node._type !== "Call" || lastAttr(node.func) !== "step") {
     return false;
   }

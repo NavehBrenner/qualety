@@ -48,30 +48,21 @@ function isDownloadCall(node: PythonNode): boolean {
     return true;
   }
   const pretrained = callKeyword(node, "pretrained");
-  if (pretrained !== undefined && isTrueConst(pretrained)) {
+  if (pretrained !== undefined && pretrained._type === "Constant" && pretrained.value === true) {
     return true;
   }
   const weights = callKeyword(node, "weights");
-  return weights !== undefined && isDownloadWeights(weights);
-}
-
-function isTrueConst(node: PythonNode): boolean {
-  return node._type === "Constant" && node.value === true;
-}
-
-function isDownloadWeights(node: PythonNode): boolean {
-  if (isNoneOrFalse(node)) {
+  if (weights === undefined) {
     return false;
   }
-  if (node._type === "Constant" && (typeof node.value === "string" || node.value === true)) {
+  if (weights._type === "Constant" && (weights.value === null || weights.value === false)) {
+    return false;
+  }
+  if (
+    weights._type === "Constant" &&
+    (typeof weights.value === "string" || weights.value === true)
+  ) {
     return true;
   }
-  return node._type === "Attribute";
-}
-
-function isNoneOrFalse(node: PythonNode): boolean {
-  if (node._type === "Constant") {
-    return node.value === null || node.value === false;
-  }
-  return false;
+  return weights._type === "Attribute";
 }

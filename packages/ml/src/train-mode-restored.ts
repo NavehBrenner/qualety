@@ -1,10 +1,4 @@
-import {
-  childNodes,
-  isPythonNode,
-  nodeRange,
-  type PythonNode,
-  walkCallables,
-} from "@qualety/python/walk";
+import { isPythonNode, nodeRange, type PythonNode, walkCallables } from "@qualety/python/walk";
 import { defineRule } from "qualety";
 import {
   forEachMlSource,
@@ -12,7 +6,7 @@ import {
   isBefore,
   type NodePos,
   nodePos,
-  walkSkipDefs,
+  walkFunctionBody,
 } from "./ast.ts";
 
 const TRAIN_HINT =
@@ -30,14 +24,11 @@ export const trainModeRestored = defineRule({
     for (const python of [context.getArtifact("python")]) {
       forEachMlSource(python.sources, context.getCwd(), { trainingOnly: false }, (unit) => {
         walkCallables(unit.tree, "", false, (fn) => {
-          const evals: PythonNode[] = [];
           const trains: NodePos[] = [];
           const backwards: NodePos[] = [];
-          walkFn(fn, (node) => {
+          walkFunctionBody(fn, (node) => {
             if (isBackwardCall(node)) {
               backwards.push(nodePos(node));
-            } else if (isAttrMethod(node, "eval")) {
-              evals.push(node);
             } else if (isAttrMethod(node, "train")) {
               trains.push(nodePos(node));
             }
@@ -45,47 +36,41 @@ export const trainModeRestored = defineRule({
           if (backwards.length === 0) {
             return;
           }
-          for (const evalCall of evals) {
-            const start = nodePos(evalCall);
-            if (!needsTrainRestore(start, trains, backwards)) {
-              continue;
+          walkFunctionBody(fn, (node) => {
+            if (!isAttrMethod(node, "eval")) {
+              return;
+            }
+            const start = nodePos(node);
+            if (
+              !backwards.some(
+                (backward) =>
+                  isBefore(start, backward) &&
+                  !trains.some((train) => isBefore(start, train) && isBefore(train, backward)),
+              )
+            ) {
+              return;
             }
             context.report({
               severity: "error",
               file: unit.file,
-              range: nodeRange(evalCall),
+              range: nodeRange(node),
               message:
                 "model.eval() in a training function is not followed by model.train() before the next backward.",
               suggestion: TRAIN_HINT,
             });
-          }
+          });
         });
       });
     }
   },
 });
 
-function walkFn(fn: PythonNode, visit: (node: PythonNode) => void): void {
-  for (const child of childNodes(fn)) {
-    walkSkipDefs(child, visit);
-  }
-}
-
-function isAttrMethod(node: PythonNode, attr: string): boolean {
+function isAttrMethod(
+  node: PythonNode,
+  attr: string,
+): node is PythonNode & { readonly _type: "Call" } {
   if (node._type !== "Call" || !isPythonNode(node.func)) {
     return false;
   }
   return node.func._type === "Attribute" && node.func.attr === attr;
-}
-
-function needsTrainRestore(
-  evalPos: NodePos,
-  trains: readonly NodePos[],
-  backwards: readonly NodePos[],
-): boolean {
-  return backwards.some(
-    (backward) =>
-      isBefore(evalPos, backward) &&
-      !trains.some((train) => isBefore(evalPos, train) && isBefore(train, backward)),
-  );
 }

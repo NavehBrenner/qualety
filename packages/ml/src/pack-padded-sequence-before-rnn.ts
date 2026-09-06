@@ -1,13 +1,12 @@
 import {
   asNodes,
-  childNodes,
   intConstant,
   isPythonNode,
   nodeRange,
   type PythonNode,
   walkCallables,
 } from "@qualety/python/walk";
-import { defineRule, type RuleContext } from "qualety";
+import { defineRule } from "qualety";
 import {
   assignTarget,
   attrChain,
@@ -16,7 +15,7 @@ import {
   lastAttr,
   type NodePos,
   nodePos,
-  walkSkipDefs,
+  walkFunctionBody,
 } from "./ast.ts";
 
 const RNN_NAMES = new Set(["rnn", "lstm", "gru"]);
@@ -33,50 +32,54 @@ export const packPaddedSequenceBeforeRnn = defineRule({
   create(context) {
     for (const python of [context.getArtifact("python")]) {
       forEachMlSource(python.sources, context.getCwd(), { trainingOnly: false }, (unit) => {
+        // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: inlined pack/rnn + hidden scan
         walkCallables(unit.tree, "", false, (fn) => {
-          checkFn(fn, unit.file, context);
+          const body: PythonNode[] = [];
+          walkFunctionBody(fn, (node) => {
+            body.push(node);
+          });
+          const packs: NodePos[] = [];
+          const rnns: PythonNode[] = [];
+          for (const node of body) {
+            if (node._type === "Call") {
+              const name = lastAttr(node.func);
+              if (name === "pack_padded_sequence" || name === "pack_sequence") {
+                packs.push(nodePos(node));
+              }
+            }
+            if (isRnnCall(node)) {
+              rnns.push(node);
+            }
+          }
+          for (const rnn of rnns) {
+            const pos = nodePos(rnn);
+            if (packs.some((pack) => isBefore(pack, pos))) {
+              continue;
+            }
+            if (
+              !body.some(
+                (node) =>
+                  (isIndexOne(node) && node.value === rnn) || assignConsumesHidden(node, rnn, body),
+              )
+            ) {
+              continue;
+            }
+            context.report({
+              severity: "error",
+              file: unit.file,
+              range: nodeRange(rnn),
+              message:
+                "RNN/LSTM/GRU consumes h_n from a padded sequence without pack_padded_sequence.",
+              suggestion: PACK_HINT,
+            });
+          }
         });
       });
     }
   },
 });
 
-function checkFn(fn: PythonNode, file: string, context: Pick<RuleContext, "report">): void {
-  const packs: NodePos[] = [];
-  const rnns: PythonNode[] = [];
-  walkFn(fn, (node) => {
-    if (isPackCall(node)) {
-      packs.push(nodePos(node));
-    }
-    if (isRnnCall(node)) {
-      rnns.push(node);
-    }
-  });
-  for (const rnn of rnns) {
-    const pos = nodePos(rnn);
-    if (packs.some((pack) => isBefore(pack, pos))) {
-      continue;
-    }
-    if (!consumesHidden(fn, rnn)) {
-      continue;
-    }
-    context.report({
-      severity: "error",
-      file,
-      range: nodeRange(rnn),
-      message: "RNN/LSTM/GRU consumes h_n from a padded sequence without pack_padded_sequence.",
-      suggestion: PACK_HINT,
-    });
-  }
-}
-
-function walkFn(fn: PythonNode, visit: (node: PythonNode) => void): void {
-  for (const child of childNodes(fn)) {
-    walkSkipDefs(child, visit);
-  }
-}
-
-function isRnnCall(node: PythonNode): boolean {
+function isRnnCall(node: PythonNode): node is PythonNode & { readonly _type: "Call" } {
   if (node._type !== "Call") {
     return false;
   }
@@ -88,32 +91,11 @@ function isRnnCall(node: PythonNode): boolean {
   return last === "forward" && chain.some((part) => RNN_NAMES.has(part));
 }
 
-function isPackCall(node: PythonNode): boolean {
-  if (node._type !== "Call") {
-    return false;
-  }
-  const name = lastAttr(node.func);
-  return name === "pack_padded_sequence" || name === "pack_sequence";
-}
-
-function consumesHidden(fn: PythonNode, rnn: PythonNode): boolean {
-  let consumed = false;
-  walkFn(fn, (node) => {
-    if (consumed) {
-      return;
-    }
-    if (isIndexOne(node) && node.value === rnn) {
-      consumed = true;
-      return;
-    }
-    if (assignConsumesHidden(node, rnn, fn)) {
-      consumed = true;
-    }
-  });
-  return consumed;
-}
-
-function assignConsumesHidden(node: PythonNode, rnn: PythonNode, fn: PythonNode): boolean {
+function assignConsumesHidden(
+  node: PythonNode,
+  rnn: PythonNode,
+  body: readonly PythonNode[],
+): boolean {
   if (node.value !== rnn) {
     return false;
   }
@@ -122,14 +104,34 @@ function assignConsumesHidden(node: PythonNode, rnn: PythonNode, fn: PythonNode)
     return false;
   }
   if (target._type === "Name" && typeof target.id === "string") {
-    return resultIndexUsed(fn, target.id, node);
+    const name = target.id;
+    const pos = nodePos(node);
+    return body.some((item) => {
+      if (!isIndexOne(item) || !isPythonNode(item.value)) {
+        return false;
+      }
+      if (item.value._type !== "Name" || item.value.id !== name) {
+        return false;
+      }
+      return isBefore(pos, nodePos(item));
+    });
   }
   const names = hiddenUnpackNames(target);
   if (names === undefined || names.length === 0) {
     return false;
   }
   const pos = nodePos(node);
-  return names.some((name) => nameLoadedAfter(fn, name, pos));
+  return names.some((name) =>
+    body.some((item) => {
+      if (item._type !== "Name" || item.id !== name) {
+        return false;
+      }
+      if (!isPythonNode(item.ctx) || item.ctx._type !== "Load") {
+        return false;
+      }
+      return isBefore(pos, nodePos(item));
+    }),
+  );
 }
 
 function hiddenUnpackNames(target: PythonNode): string[] | undefined {
@@ -155,24 +157,7 @@ function hiddenUnpackNames(target: PythonNode): string[] | undefined {
   return names;
 }
 
-function resultIndexUsed(fn: PythonNode, name: string, assign: PythonNode): boolean {
-  const pos = nodePos(assign);
-  let used = false;
-  walkFn(fn, (node) => {
-    if (used || !isIndexOne(node) || !isPythonNode(node.value)) {
-      return;
-    }
-    if (node.value._type !== "Name" || node.value.id !== name) {
-      return;
-    }
-    if (isBefore(pos, nodePos(node))) {
-      used = true;
-    }
-  });
-  return used;
-}
-
-function isIndexOne(node: PythonNode): boolean {
+function isIndexOne(node: PythonNode): node is PythonNode & { readonly _type: "Subscript" } {
   if (node._type !== "Subscript" || !isPythonNode(node.slice)) {
     return false;
   }
@@ -181,20 +166,4 @@ function isIndexOne(node: PythonNode): boolean {
     slice = slice.value;
   }
   return intConstant(slice) === 1;
-}
-
-function nameLoadedAfter(fn: PythonNode, name: string, pos: NodePos): boolean {
-  let found = false;
-  walkFn(fn, (node) => {
-    if (found || node._type !== "Name" || node.id !== name) {
-      return;
-    }
-    if (!isPythonNode(node.ctx) || node.ctx._type !== "Load") {
-      return;
-    }
-    if (isBefore(pos, nodePos(node))) {
-      found = true;
-    }
-  });
-  return found;
 }

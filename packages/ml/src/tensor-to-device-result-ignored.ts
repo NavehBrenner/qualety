@@ -17,13 +17,22 @@ export const tensorToDeviceResultIgnored = defineRule({
   create(context) {
     for (const python of [context.getArtifact("python")]) {
       forEachMlSource(python.sources, context.getCwd(), { trainingOnly: false }, (unit) => {
+        // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: inlined module-recv quiet
         walkNodes(unit.tree, (node) => {
           if (node._type !== "Expr" || !isPythonNode(node.value) || node.value._type !== "Call") {
             return;
           }
           const call = node.value;
-          if (!isDeviceCast(call) || isModuleInPlace(call)) {
+          if (!isDeviceCast(call)) {
             return;
+          }
+          const name = lastAttr(call.func);
+          if (name === "to" || name === "cuda") {
+            const chain = attrChain(call.func);
+            const recv = chain[chain.length - 2];
+            if (recv !== undefined && MODULE_RECV.has(recv)) {
+              return;
+            }
           }
           context.report({
             severity: "error",
@@ -51,14 +60,4 @@ function isDeviceCast(node: PythonNode): boolean {
     return true;
   }
   return callKeyword(node, "device") !== undefined || callKeyword(node, "dtype") !== undefined;
-}
-
-function isModuleInPlace(node: PythonNode): boolean {
-  const name = lastAttr(node.func);
-  if (name !== "to" && name !== "cuda") {
-    return false;
-  }
-  const chain = attrChain(node.func);
-  const recv = chain[chain.length - 2];
-  return recv !== undefined && MODULE_RECV.has(recv);
 }
