@@ -19,6 +19,8 @@ const RULES = [
   "run-metadata-completeness",
   "artifact-hash-recorded",
   "no-inplace-artifact-clobber",
+  "no-refit-at-inference",
+  "inference-mode-required",
   "pack-padded-sequence-before-rnn",
   "train-mode-restored",
   "optimizer-zero-grad",
@@ -27,7 +29,7 @@ const RULES = [
   "no-cuda-hardcoded",
 ] as const;
 
-test("plugin exports name, seventeen rules, recommended including opt-in off, no provides", () => {
+test("plugin exports name, nineteen rules, recommended including opt-in off, no provides", () => {
   expect(namedPlugin).toBe(plugin);
   expect(plugin.name).toBe("ml");
   expect(plugin.provides).toBeUndefined();
@@ -45,6 +47,8 @@ test("plugin exports name, seventeen rules, recommended including opt-in off, no
   expect(plugin.configs?.recommended?.rules?.["ml/run-metadata-completeness"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["ml/artifact-hash-recorded"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["ml/no-inplace-artifact-clobber"]).toBe("error");
+  expect(plugin.configs?.recommended?.rules?.["ml/no-refit-at-inference"]).toBe("error");
+  expect(plugin.configs?.recommended?.rules?.["ml/inference-mode-required"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["ml/pack-padded-sequence-before-rnn"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["ml/train-mode-restored"]).toBe("error");
   expect(plugin.configs?.recommended?.rules?.["ml/optimizer-zero-grad"]).toBe("error");

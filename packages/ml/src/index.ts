@@ -3,10 +3,12 @@ import { artifactHashRecorded } from "./artifact-hash-recorded.ts";
 import { dataloaderWorkerSeeding } from "./dataloader-worker-seeding.ts";
 import { determinismTestRequired } from "./determinism-test-required.ts";
 import { deterministicAlgorithmsOptIn } from "./deterministic-algorithms-opt-in.ts";
+import { inferenceModeRequired } from "./inference-mode-required.ts";
 import { metadataWriterRequired } from "./metadata-writer-required.ts";
 import { noCudaHardcoded } from "./no-cuda-hardcoded.ts";
 import { noInplaceArtifactClobber } from "./no-inplace-artifact-clobber.ts";
 import { noNetworkInTests } from "./no-network-in-tests.ts";
+import { noRefitAtInference } from "./no-refit-at-inference.ts";
 import { optimizerZeroGrad } from "./optimizer-zero-grad.ts";
 import { packPaddedSequenceBeforeRnn } from "./pack-padded-sequence-before-rnn.ts";
 import { recordCodeVersion } from "./record-code-version.ts";
@@ -31,6 +33,8 @@ const plugin: Plugin = {
     "run-metadata-completeness": runMetadataCompleteness,
     "artifact-hash-recorded": artifactHashRecorded,
     "no-inplace-artifact-clobber": noInplaceArtifactClobber,
+    "no-refit-at-inference": noRefitAtInference,
+    "inference-mode-required": inferenceModeRequired,
     "pack-padded-sequence-before-rnn": packPaddedSequenceBeforeRnn,
     "train-mode-restored": trainModeRestored,
     "optimizer-zero-grad": optimizerZeroGrad,
@@ -52,6 +56,8 @@ const plugin: Plugin = {
         "ml/run-metadata-completeness": "error",
         "ml/artifact-hash-recorded": "error",
         "ml/no-inplace-artifact-clobber": "error",
+        "ml/no-refit-at-inference": "error",
+        "ml/inference-mode-required": "error",
         "ml/pack-padded-sequence-before-rnn": "error",
         "ml/train-mode-restored": "error",
         "ml/optimizer-zero-grad": "error",
