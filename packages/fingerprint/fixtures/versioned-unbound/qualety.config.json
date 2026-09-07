@@ -1,0 +1,7 @@
+{
+  "plugins": ["../../../python/dist/index.js", "../../dist/index.js"],
+  "rules": {
+    "fingerprint/versioned-hash-payload": "error"
+  },
+  "biome": false
+}

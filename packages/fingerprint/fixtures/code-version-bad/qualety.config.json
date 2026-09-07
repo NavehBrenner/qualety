@@ -1,0 +1,12 @@
+{
+  "plugins": ["../../../python/dist/index.js", "../../dist/index.js"],
+  "rules": {
+    "fingerprint/hash-includes-code-version": [
+      "error",
+      {
+        "hashFunctions": ["generate.fingerprint"]
+      }
+    ]
+  },
+  "biome": false
+}

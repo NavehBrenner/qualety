@@ -1,0 +1,17 @@
+from dataclasses import dataclass
+import hashlib
+import json
+
+
+@dataclass
+class GenerationConfig:
+    n_episodes: int
+    output_dir: str
+    seed: int
+    terminate_at: float
+
+
+def fingerprint(config: GenerationConfig) -> str:
+    payload = hashlib.sha256()
+    payload.update(json.dumps({"seed": config.seed}).encode())
+    return payload.hexdigest()

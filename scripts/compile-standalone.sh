@@ -14,7 +14,7 @@ fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 mkdir -p "$ROOT/packages/qualety/node_modules/@qualety"
-for pkg in typescript react dry python ml; do
+for pkg in typescript react dry python ml fingerprint; do
   ln -sfn "$ROOT/packages/$pkg" "$ROOT/packages/qualety/node_modules/@qualety/$pkg"
 done
 args=(build --compile --define STANDALONE=true)

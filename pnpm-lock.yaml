@@ -74,6 +74,19 @@ importers:
         specifier: ^26.2.0
         version: 26.2.0
 
+  packages/fingerprint:
+    dependencies:
+      '@qualety/python':
+        specifier: workspace:*
+        version: link:../python
+      qualety:
+        specifier: workspace:*
+        version: link:../qualety
+    devDependencies:
+      '@types/node':
+        specifier: ^26.2.0
+        version: 26.2.0
+
   packages/ml:
     dependencies:
       '@qualety/python':

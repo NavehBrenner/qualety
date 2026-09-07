@@ -11,6 +11,7 @@ export const PRODUCT_PLUGIN_DIRS = [
   "dry",
   "python",
   "ml",
+  "fingerprint",
   "dev",
   "plugin-kit",
 ] as const;

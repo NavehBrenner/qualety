@@ -7,12 +7,13 @@
 | [dry.md](./dry.md) | **Binding catalog** for `@qualety/dry` — structural + semantic DRY |
 | [python.md](./python.md) | **Binding catalog** for `@qualety/python` — `python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public` |
 | [ml.md](./ml.md) | **Binding catalog** for `@qualety/ml` — determinism / seeding / run provenance (`ml/require-global-seed` … `ml/run-metadata-completeness`) |
+| [fingerprint.md](./fingerprint.md) | **Binding catalog** for `@qualety/fingerprint` — content-hash / cache-key integrity (`fingerprint/hash-covers-every-config-field`, `fingerprint/versioned-hash-payload`, `fingerprint/hash-includes-code-version`) |
 | [plugin-kit.md](./plugin-kit.md) | **Portable authoring** for `@qualety/plugin-kit` — not a product app catalog |
 | [dev.md](./dev.md) | **Monorepo dogfood** for `@qualety/dev` — **not** a consumer ruleset |
 | [typescript-baseline.md](./typescript-baseline.md) | Research inventory (must-have ideas). **Not** an implementation backlog |
 | [typescript-nice-to-have.md](./typescript-nice-to-have.md) | Research inventory (optional ideas). **Not** an implementation backlog |
 
-Core has no built-in rule bag. Language/framework/DRY/ML rules live in `@qualety/typescript`, `@qualety/react`, `@qualety/dry`, `@qualety/python`, and `@qualety/ml`. Portable plugin-authoring rules live in `@qualety/plugin-kit` (not core, not `@qualety/dev`). `@qualety/dev` is this repository’s dogfood plugin only — not a consumer ruleset. Loading a plugin via `plugins[]` applies its `configs.recommended`.
+Core has no built-in rule bag. Language/framework/DRY/ML/fingerprint rules live in `@qualety/typescript`, `@qualety/react`, `@qualety/dry`, `@qualety/python`, `@qualety/ml`, and `@qualety/fingerprint`. Portable plugin-authoring rules live in `@qualety/plugin-kit` (not core, not `@qualety/dev`). `@qualety/dev` is this repository’s dogfood plugin only — not a consumer ruleset. Loading a plugin via `plugins[]` applies its `configs.recommended`.
 
 We may **invoke and merge Biome** as a composed gate (plugin `biome` sections). We do **not** reimplement Biome / ESLint / dependency-cruiser (cycles, deep imports, path bans, generic layer charts). See SPECS locked #7 and [typescript.md](./typescript.md). We do **not** own classic eslint-plugin-react / react-hooks / jsx-a11y or TanStack eslint mechanics. See [react.md](./react.md).
 
