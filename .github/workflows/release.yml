@@ -180,6 +180,7 @@ jobs:
             "packages/plugin-kit/package.json",
             "packages/python/package.json",
             "packages/ml/package.json",
+            "packages/fingerprint/package.json",
           ];
           for (const file of pkgs) {
             const json = JSON.parse(fs.readFileSync(file, "utf8"));
@@ -201,6 +202,7 @@ jobs:
           pnpm --filter @qualety/plugin-kit publish --access public --provenance --no-git-checks
           pnpm --filter @qualety/python publish --access public --provenance --no-git-checks
           pnpm --filter @qualety/ml publish --access public --provenance --no-git-checks
+          pnpm --filter @qualety/fingerprint publish --access public --provenance --no-git-checks
 
   pypi:
     needs: compile

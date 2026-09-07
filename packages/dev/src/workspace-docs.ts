@@ -9,6 +9,7 @@ export const WORKSPACE_DOC_PATHS = [
   "docs/rulesets/dry.md",
   "docs/rulesets/python.md",
   "docs/rulesets/ml.md",
+  "docs/rulesets/fingerprint.md",
   "docs/rulesets/dev.md",
   "docs/rulesets/plugin-kit.md",
   "packages/qualety/package.json",

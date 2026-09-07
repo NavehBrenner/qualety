@@ -42,6 +42,9 @@ const officialLoaders: Record<string, () => Promise<unknown>> = {
   "@qualety/ml": () =>
     // @ts-expect-error official plugin; not a qualety dependency
     import("@qualety/ml"),
+  "@qualety/fingerprint": () =>
+    // @ts-expect-error official plugin; not a qualety dependency
+    import("@qualety/fingerprint"),
 };
 
 export type CheckFilters = {
