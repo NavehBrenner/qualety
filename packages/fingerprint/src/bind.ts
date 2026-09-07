@@ -286,14 +286,13 @@ function moduleFn(tree: PythonNode, name: string): PythonNode | undefined {
 }
 
 function classMethod(tree: PythonNode, className: string, method: string): PythonNode | undefined {
-  for (const stmt of asNodes(tree.body)) {
-    if (stmt._type !== "ClassDef" || stmt.name !== className) {
-      continue;
-    }
-    for (const member of asNodes(stmt.body)) {
-      if (isFn(member) && member.name === method) {
-        return member;
-      }
+  const cls = classDef(tree, className);
+  if (cls === undefined) {
+    return undefined;
+  }
+  for (const member of asNodes(cls.body)) {
+    if (isFn(member) && member.name === method) {
+      return member;
     }
   }
   return undefined;
