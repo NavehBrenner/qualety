@@ -4,6 +4,7 @@ import {
   collectImports,
   isDunder,
   isPythonNode,
+  nameRange,
   type PythonNode,
   type PythonSource,
   stringConstant,
@@ -12,7 +13,6 @@ import {
 import type { RuleContext } from "qualety";
 
 const SETUP_RANGE = { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } };
-const VERSION_RE = /(schema_)?version|_VERSION$/i;
 const HASH_CALLEES = new Set([
   "update",
   "sha256",
@@ -23,11 +23,10 @@ const HASH_CALLEES = new Set([
   "dumps",
   "hash",
 ]);
-const CODE_DEFAULTS = ["CODE_VERSION", "GIT_SHA", "git_sha"];
 const UNBOUND_HINT =
   "Name at least one fully-qualified callable in hashFunctions, or turn the rule off.";
 
-export type BoundHashFn = {
+type BoundHashFn = {
   fq: string;
   unit: PythonSource;
   def: PythonNode;
@@ -49,7 +48,7 @@ export function parseHashFunctions(options: unknown): string[] {
   return parseStringList(options, "hashFunctions");
 }
 
-export function parseStringList(options: unknown, key: string): string[] {
+function parseStringList(options: unknown, key: string): string[] {
   const raw = readOption(options, key);
   if (!Array.isArray(raw)) {
     return [];
@@ -124,21 +123,100 @@ export function missingConfigFields(
   }
   const fields = classFields(hit, sources, new Set());
   const holes = exclude.get(hit.name) ?? new Set();
-  const reads = collectReads(bound.def, param.name, moduleCallables(bound.unit.tree), 0, new Set());
+  const reads = new Set<string>();
+  walkBoundFunction(
+    bound.def,
+    param.name,
+    moduleCallables(bound.unit.tree),
+    forwardedName,
+    (node, configName) => {
+      addConfigRead(node, configName, reads);
+    },
+  );
   return [...fields].filter((field) => !holes.has(field) && !reads.has(field)).sort();
 }
 
-export function hasVersionInPayload(bound: BoundHashFn, extraKeys: readonly string[]): boolean {
-  return payloadMatches(bound, (name) => extraKeys.includes(name) || VERSION_RE.test(name));
+export function boundPayloadRule(spec: {
+  extraKey: string;
+  match: (name: string, extra: readonly string[]) => boolean;
+  message: (fq: string) => string;
+  suggestion: string;
+}): (context: RuleContext<["python"]>) => void {
+  return (context) => {
+    const names = parseHashFunctions(context.options);
+    if (names.length === 0) {
+      reportUnbound(context);
+      return;
+    }
+    const extra = parseStringList(context.options, spec.extraKey);
+    const python = context.getArtifact("python");
+    for (const bound of bindHashFunctions(names, python.sources, context.getCwd())) {
+      if (payloadContains(bound, (name) => spec.match(name, extra))) {
+        continue;
+      }
+      context.report({
+        severity: "error",
+        file: bound.unit.file,
+        range: nameRange(bound.def),
+        message: spec.message(bound.fq),
+        suggestion: spec.suggestion,
+      });
+    }
+  };
 }
 
-// hasCodeVersionInPayload
-export function hasCodeVersion(bound: BoundHashFn, extraNames: readonly string[]): boolean {
-  return payloadMatches(bound, (name) => CODE_DEFAULTS.includes(name) || extraNames.includes(name));
+function payloadContains(bound: BoundHashFn, match: (name: string) => boolean): boolean {
+  let found = false;
+  walkBoundFunction(
+    bound.def,
+    null,
+    moduleCallables(bound.unit.tree),
+    () => null,
+    (node) => {
+      if (found || node._type !== "Call") {
+        return;
+      }
+      const name = calleeName(node);
+      if (name !== undefined && HASH_CALLEES.has(name) && argsMatch(node, match)) {
+        found = true;
+      }
+    },
+  );
+  return found;
 }
 
-function payloadMatches(bound: BoundHashFn, match: (name: string) => boolean): boolean {
-  return foldHasName(bound.def, moduleCallables(bound.unit.tree), match, 0, new Set());
+function walkBoundFunction<State>(
+  start: PythonNode,
+  startState: State,
+  callables: ReadonlyMap<string, PythonNode>,
+  nextState: (call: PythonNode, callee: PythonNode, state: State) => State | undefined,
+  visit: (node: PythonNode, state: State) => void,
+): void {
+  const seen = new Set<PythonNode>();
+  const stack: { fn: PythonNode; state: State; depth: number }[] = [
+    { fn: start, state: startState, depth: 0 },
+  ];
+  while (stack.length > 0) {
+    const item = stack.pop();
+    if (item === undefined || seen.has(item.fn) || item.depth > 2) {
+      continue;
+    }
+    seen.add(item.fn);
+    walkNodes(item.fn, (node) => {
+      visit(node, item.state);
+      if (item.depth >= 2) {
+        return;
+      }
+      const callee = namedCallee(node, callables);
+      if (callee === undefined) {
+        return;
+      }
+      const next = nextState(node, callee, item.state);
+      if (next !== undefined) {
+        stack.push({ fn: callee, state: next, depth: item.depth + 1 });
+      }
+    });
+  }
 }
 
 function resolveFq(
@@ -186,30 +264,16 @@ function moduleFile(
     dirs.add(dirname(unit.file));
   }
   for (const dir of dirs) {
-    const hit =
-      moduleHit(join(dir, ...parts), sources) ?? moduleHit(join(dir, "src", ...parts), sources);
-    if (hit !== undefined) {
-      return hit;
+    for (const root of [join(dir, ...parts), join(dir, "src", ...parts)]) {
+      const hit = [`${root}.py`, join(root, "__init__.py")]
+        .flatMap((path) => [path, resolve(path)])
+        .find((path) => sources.has(path));
+      if (hit !== undefined) {
+        return hit;
+      }
     }
   }
   return undefined;
-}
-
-function moduleHit(base: string, sources: ReadonlyMap<string, PythonSource>): string | undefined {
-  const py = `${base}.py`;
-  if (sources.has(py)) {
-    return py;
-  }
-  const init = join(base, "__init__.py");
-  if (sources.has(init)) {
-    return init;
-  }
-  const resolvedPy = resolve(py);
-  if (sources.has(resolvedPy)) {
-    return resolvedPy;
-  }
-  const resolvedInit = resolve(init);
-  return sources.has(resolvedInit) ? resolvedInit : undefined;
 }
 
 function moduleFn(tree: PythonNode, name: string): PythonNode | undefined {
@@ -291,6 +355,16 @@ function unwrapSubscript(node: PythonNode): PythonNode | undefined {
   return nonNone.length === 1 ? nonNone[0] : undefined;
 }
 
+function sliceNode(node: PythonNode): PythonNode | undefined {
+  if (!isPythonNode(node.slice)) {
+    return undefined;
+  }
+  if (node.slice._type === "Index" && isPythonNode(node.slice.value)) {
+    return node.slice.value;
+  }
+  return node.slice;
+}
+
 function unwrapBitOr(node: PythonNode): PythonNode | undefined {
   if (node._type !== "BinOp" || !isPythonNode(node.op) || node.op._type !== "BitOr") {
     return undefined;
@@ -304,16 +378,6 @@ function unwrapBitOr(node: PythonNode): PythonNode | undefined {
     return left;
   }
   return isNone(left) ? right : undefined;
-}
-
-function sliceNode(node: PythonNode): PythonNode | undefined {
-  if (!isPythonNode(node.slice)) {
-    return undefined;
-  }
-  if (node.slice._type === "Index" && isPythonNode(node.slice.value)) {
-    return node.slice.value;
-  }
-  return node.slice;
 }
 
 function isNone(node: PythonNode): boolean {
@@ -403,21 +467,18 @@ function addAnnField(stmt: PythonNode, fields: Set<string>): void {
     return;
   }
   const id = stmt.target.id;
-  if (isDunder(id) || isClassVar(stmt.annotation)) {
+  if (isDunder(id)) {
+    return;
+  }
+  if (
+    isPythonNode(stmt.annotation) &&
+    stmt.annotation._type === "Subscript" &&
+    isPythonNode(stmt.annotation.value) &&
+    nameOf(stmt.annotation.value) === "ClassVar"
+  ) {
     return;
   }
   fields.add(id);
-}
-
-function isClassVar(annotation: unknown): boolean {
-  if (
-    !isPythonNode(annotation) ||
-    annotation._type !== "Subscript" ||
-    !isPythonNode(annotation.value)
-  ) {
-    return false;
-  }
-  return nameOf(annotation.value) === "ClassVar";
 }
 
 function moduleCallables(tree: PythonNode): Map<string, PythonNode> {
@@ -430,38 +491,6 @@ function moduleCallables(tree: PythonNode): Map<string, PythonNode> {
   return out;
 }
 
-function collectReads(
-  fn: PythonNode,
-  configName: string,
-  callables: ReadonlyMap<string, PythonNode>,
-  depth: number,
-  seen: Set<PythonNode>,
-): Set<string> {
-  const reads = new Set<string>();
-  if (seen.has(fn) || depth > 2) {
-    return reads;
-  }
-  seen.add(fn);
-  walkNodes(fn, (node) => {
-    addConfigRead(node, configName, reads);
-    if (depth >= 2) {
-      return;
-    }
-    const callee = namedCallee(node, callables);
-    if (callee === undefined) {
-      return;
-    }
-    const passed = forwardedName(node, callee, configName);
-    if (passed === undefined) {
-      return;
-    }
-    for (const field of collectReads(callee, passed, callables, depth + 1, seen)) {
-      reads.add(field);
-    }
-  });
-  return reads;
-}
-
 function addConfigRead(node: PythonNode, configName: string, reads: Set<string>): void {
   if (
     node._type === "Attribute" &&
@@ -472,7 +501,8 @@ function addConfigRead(node: PythonNode, configName: string, reads: Set<string>)
     return;
   }
   if (node._type === "Subscript" && isNameId(node.value, configName)) {
-    const key = subscriptKey(node);
+    const inner = sliceNode(node);
+    const key = inner === undefined ? undefined : stringConstant(inner);
     if (key !== undefined) {
       reads.add(key);
     }
@@ -492,45 +522,8 @@ function isNameId(node: unknown, id: string): boolean {
   return isPythonNode(node) && node._type === "Name" && node.id === id;
 }
 
-function subscriptKey(node: PythonNode): string | undefined {
-  if (!isPythonNode(node.slice)) {
-    return undefined;
-  }
-  if (node.slice._type === "Index" && isPythonNode(node.slice.value)) {
-    return stringConstant(node.slice.value);
-  }
-  return stringConstant(node.slice);
-}
-
-function foldHasName(
-  fn: PythonNode,
-  callables: ReadonlyMap<string, PythonNode>,
-  match: (name: string) => boolean,
-  depth: number,
-  seen: Set<PythonNode>,
-): boolean {
-  if (seen.has(fn) || depth > 2) {
-    return false;
-  }
-  seen.add(fn);
-  let found = false;
-  walkNodes(fn, (node) => {
-    if (found) {
-      return;
-    }
-    if (isHashFold(node) && argsMatch(node, match)) {
-      found = true;
-      return;
-    }
-    if (depth >= 2) {
-      return;
-    }
-    const callee = namedCallee(node, callables);
-    if (callee !== undefined && foldHasName(callee, callables, match, depth + 1, seen)) {
-      found = true;
-    }
-  });
-  return found;
+function calleeName(node: PythonNode): string | undefined {
+  return isPythonNode(node.func) ? nameOf(node.func) : undefined;
 }
 
 function argsMatch(call: PythonNode, match: (name: string) => boolean): boolean {
@@ -543,7 +536,7 @@ function argsMatch(call: PythonNode, match: (name: string) => boolean): boolean 
   let found = false;
   for (const arg of args) {
     walkNodes(arg, (node) => {
-      const name = symbolName(node);
+      const name = nameOf(node) ?? stringConstant(node);
       if (name !== undefined && match(name)) {
         found = true;
       }
@@ -552,29 +545,16 @@ function argsMatch(call: PythonNode, match: (name: string) => boolean): boolean 
   return found;
 }
 
-function isHashFold(node: PythonNode): boolean {
-  if (node._type !== "Call") {
-    return false;
-  }
-  const name = calleeName(node);
-  return name !== undefined && HASH_CALLEES.has(name);
-}
-
-function calleeName(node: PythonNode): string | undefined {
-  return isPythonNode(node.func) ? nameOf(node.func) : undefined;
-}
-
 function namedCallee(
   node: PythonNode,
   callables: ReadonlyMap<string, PythonNode>,
 ): PythonNode | undefined {
-  if (node._type !== "Call" || !isPythonNode(node.func) || node.func._type !== "Name") {
-    return undefined;
+  if (node._type === "Call" && isPythonNode(node.func) && node.func._type === "Name") {
+    if (typeof node.func.id === "string") {
+      return callables.get(node.func.id);
+    }
   }
-  if (typeof node.func.id !== "string") {
-    return undefined;
-  }
-  return callables.get(node.func.id);
+  return undefined;
 }
 
 function forwardedName(
@@ -613,14 +593,4 @@ function fnParamNames(fn: PythonNode): string[] {
     }
   }
   return names;
-}
-
-function symbolName(node: PythonNode): string | undefined {
-  if (node._type === "Name" && typeof node.id === "string") {
-    return node.id;
-  }
-  if (node._type === "Attribute" && typeof node.attr === "string") {
-    return node.attr;
-  }
-  return stringConstant(node);
 }

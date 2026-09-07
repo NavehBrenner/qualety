@@ -1,15 +1,9 @@
-import { nameRange } from "@qualety/python/walk";
 import { defineRule } from "qualety";
-import {
-  bindHashFunctions,
-  hasCodeVersion,
-  parseHashFunctions,
-  parseStringList,
-  reportUnbound,
-} from "./bind.ts";
+import { boundPayloadRule } from "./bind.ts";
 
 const CODE_HINT =
   "Fold CODE_VERSION, GIT_SHA, or git_sha (or a codeVersionNames symbol) into the hash payload. Config-only fingerprints mean same knobs, not same data.";
+const CODE_DEFAULTS = ["CODE_VERSION", "GIT_SHA", "git_sha"];
 
 export const hashIncludesCodeVersion = defineRule({
   meta: {
@@ -27,25 +21,10 @@ export const hashIncludesCodeVersion = defineRule({
       },
     },
   },
-  create(context) {
-    const names = parseHashFunctions(context.options);
-    if (names.length === 0) {
-      reportUnbound(context);
-      return;
-    }
-    const extra = parseStringList(context.options, "codeVersionNames");
-    const python = context.getArtifact("python");
-    for (const bound of bindHashFunctions(names, python.sources, context.getCwd())) {
-      if (hasCodeVersion(bound, extra)) {
-        continue;
-      }
-      context.report({
-        severity: "error",
-        file: bound.unit.file,
-        range: nameRange(bound.def),
-        message: `Hash function "${bound.fq}" does not fold a code version into the hash payload.`,
-        suggestion: CODE_HINT,
-      });
-    }
-  },
+  create: boundPayloadRule({
+    extraKey: "codeVersionNames",
+    match: (name, extra) => CODE_DEFAULTS.includes(name) || extra.includes(name),
+    message: (fq) => `Hash function "${fq}" does not fold a code version into the hash payload.`,
+    suggestion: CODE_HINT,
+  }),
 });
