@@ -1,4 +1,4 @@
-import { defineRule, type Violation } from "qualety";
+import { clusterByPredicate, cosineSimilarity, defineRule, type Violation } from "qualety";
 import type { CodeEmbeddingsIndex, EmbeddedChunk } from "./code-embeddings.ts";
 
 export const COSINE_THRESHOLD = 0.9;
@@ -50,69 +50,15 @@ export function reportsFromEmbeddings(
   return reports;
 }
 
-export function cosineSimilarity(left: Float32Array, right: Float32Array): number {
-  const length = Math.min(left.length, right.length);
-  let dot = 0;
-  let leftNorm = 0;
-  let rightNorm = 0;
-  for (let i = 0; i < length; i += 1) {
-    const a = left[i] ?? 0;
-    const b = right[i] ?? 0;
-    dot += a * b;
-    leftNorm += a * a;
-    rightNorm += b * b;
-  }
-  const denom = Math.sqrt(leftNorm) * Math.sqrt(rightNorm);
-  return denom === 0 ? 0 : dot / denom;
-}
-
 function clusterChunks(chunks: readonly EmbeddedChunk[], threshold: number): EmbeddedChunk[][] {
-  const parent = chunks.map((_, index) => index);
-  for (let i = 0; i < chunks.length; i += 1) {
-    const left = chunks[i];
-    if (left === undefined) {
-      continue;
-    }
-    for (let j = i + 1; j < chunks.length; j += 1) {
-      const right = chunks[j];
-      if (right !== undefined && cosineSimilarity(left.vector, right.vector) >= threshold) {
-        parent[findRoot(parent, i)] = findRoot(parent, j);
-      }
-    }
-  }
-  return groupsFromParent(chunks, parent);
-}
-
-function findRoot(parent: number[], index: number): number {
-  const current = parent[index] ?? index;
-  if (current !== index) {
-    parent[index] = findRoot(parent, current);
-  }
-  return parent[index] ?? index;
-}
-
-function groupsFromParent(chunks: readonly EmbeddedChunk[], parent: number[]): EmbeddedChunk[][] {
-  const groups = new Map<number, EmbeddedChunk[]>();
-  for (let i = 0; i < chunks.length; i += 1) {
-    const chunk = chunks[i];
-    if (chunk === undefined) {
-      continue;
-    }
-    const root = findRoot(parent, i);
-    const group = groups.get(root) ?? [];
-    if (group.length === 0) {
-      groups.set(root, group);
-    }
-    group.push(chunk);
-  }
-  const clusters: EmbeddedChunk[][] = [];
-  for (const group of groups.values()) {
-    if (group.length >= 2) {
-      group.sort(
-        (left, right) => left.path.localeCompare(right.path) || left.name.localeCompare(right.name),
-      );
-      clusters.push(group);
-    }
+  const clusters = clusterByPredicate(
+    chunks,
+    (left, right) => cosineSimilarity(left.vector, right.vector) >= threshold,
+  );
+  for (const group of clusters) {
+    group.sort(
+      (left, right) => left.path.localeCompare(right.path) || left.name.localeCompare(right.name),
+    );
   }
   clusters.sort((left, right) => {
     const a = left[0];

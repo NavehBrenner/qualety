@@ -1,4 +1,4 @@
-import { defineRule } from "qualety";
+import { clusterByPredicate, cosineSimilarity, defineRule } from "qualety";
 import type { PythonSource } from "./python.ts";
 import {
   displayRel,
@@ -126,7 +126,7 @@ function collectHits(
     if (options.arms.normalized) {
       pushArmHits(
         hits,
-        clustered(group, (left, right) => {
+        clusterByPredicate(group, (left, right) => {
           if (!nameIsGated(left.name, options.names) && !nameIsGated(right.name, options.names)) {
             return false;
           }
@@ -144,7 +144,7 @@ function collectHits(
     if (options.arms.embedNames) {
       pushArmHits(
         hits,
-        clustered(group, (left, right) => embedMatch(left, right, options, vectors, cwd)),
+        clusterByPredicate(group, (left, right) => embedMatch(left, right, options, vectors, cwd)),
         sources,
         "embed",
       );
@@ -181,39 +181,6 @@ function exactClusters(group: readonly ThresholdNameCard[]): ThresholdNameCard[]
     list.push(card);
   }
   return [...byName.values()].filter((list) => list.length >= 2);
-}
-
-function clustered(
-  group: readonly ThresholdNameCard[],
-  same: (left: ThresholdNameCard, right: ThresholdNameCard) => boolean,
-): ThresholdNameCard[][] {
-  const parent = group.map((_, index) => index);
-  for (let i = 0; i < group.length; i += 1) {
-    const left = group[i];
-    if (left === undefined) {
-      continue;
-    }
-    for (let j = i + 1; j < group.length; j += 1) {
-      const right = group[j];
-      if (right !== undefined && same(left, right)) {
-        parent[findRoot(parent, i)] = findRoot(parent, j);
-      }
-    }
-  }
-  const buckets = new Map<number, ThresholdNameCard[]>();
-  for (let i = 0; i < group.length; i += 1) {
-    const card = group[i];
-    if (card === undefined) {
-      continue;
-    }
-    const root = findRoot(parent, i);
-    const list = buckets.get(root) ?? [];
-    if (list.length === 0) {
-      buckets.set(root, list);
-    }
-    list.push(card);
-  }
-  return [...buckets.values()].filter((list) => list.length >= 2);
 }
 
 function pushArmHits(
@@ -325,35 +292,6 @@ function nameVectors(artifact: unknown): Map<string, Float32Array> {
 
 function vectorKey(card: ThresholdNameCard, cwd: string): string {
   return `${displayRel(cwd, card.file)}:${card.name}`;
-}
-
-function cosineSimilarity(left: Float32Array, right: Float32Array): number {
-  const length = Math.min(left.length, right.length);
-  let dot = 0;
-  let leftNorm = 0;
-  let rightNorm = 0;
-  for (let i = 0; i < length; i += 1) {
-    const a = left[i] ?? 0;
-    const b = right[i] ?? 0;
-    dot += a * b;
-    leftNorm += a * a;
-    rightNorm += b * b;
-  }
-  const denom = Math.sqrt(leftNorm) * Math.sqrt(rightNorm);
-  return denom === 0 ? 0 : dot / denom;
-}
-
-function findRoot(parent: number[], index: number): number {
-  let current = index;
-  while (parent[current] !== current) {
-    const next = parent[current];
-    if (next === undefined) {
-      return current;
-    }
-    parent[current] = parent[next] ?? next;
-    current = next;
-  }
-  return current;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

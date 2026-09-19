@@ -16,6 +16,8 @@ import type { UserConfig } from "./index.ts";
 import {
   defineConfig as exportedDefineConfig,
   artifactProviderSchema as indexArtifactProviderSchema,
+  clusterByPredicate as indexClusterByPredicate,
+  cosineSimilarity as indexCosineSimilarity,
   defineRule as indexDefineRule,
   functionSchema as indexFunctionSchema,
   pluginProvidesSchema as indexPluginProvidesSchema,
@@ -53,6 +55,8 @@ test("defineConfig is exported and returns the same reference", () => {
   expect(indexRuleMetaSchema).toBeDefined();
   expect(indexRuleSchema).toBeDefined();
   expect(indexRunTimedCommand).toEqual(expect.any(Function));
+  expect(indexClusterByPredicate).toEqual(expect.any(Function));
+  expect(indexCosineSimilarity).toEqual(expect.any(Function));
   expect(rootVitestConfig).toBeDefined();
 });
 

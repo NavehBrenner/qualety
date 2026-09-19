@@ -10,6 +10,8 @@ Inventory of names on the `qualety` package public entry (`package.json` `export
 | `defineConfig` | value |
 | `defineRule` | value |
 | `runTimedCommand` | value |
+| `cosineSimilarity` | value |
+| `clusterByPredicate` | value |
 | `artifactProviderSchema` | value |
 | `functionSchema` | value |
 | `pluginProvidesSchema` | value |

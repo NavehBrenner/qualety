@@ -4,15 +4,11 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, test } from "vitest";
 import { check } from "../../qualety/src/engine.ts";
-import { NO_SUGGESTION } from "../../qualety/src/index.ts";
+import { cosineSimilarity, NO_SUGGESTION } from "../../qualety/src/index.ts";
 import type { EmbeddedChunk } from "./code-embeddings.ts";
 import { CACHE_ENV } from "./embed-cache.ts";
 import { MODULE_ENV } from "./embed-module.ts";
-import {
-  COSINE_THRESHOLD,
-  cosineSimilarity,
-  reportsFromEmbeddings,
-} from "./no-semantic-duplicate.ts";
+import { COSINE_THRESHOLD, reportsFromEmbeddings } from "./no-semantic-duplicate.ts";
 
 const here = fileURLToPath(new URL(".", import.meta.url));
 const fixtures = join(here, "../fixtures");

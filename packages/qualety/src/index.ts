@@ -172,8 +172,10 @@ export interface ArtifactMap {
 export function defineConfig<T extends UserConfig>(config: T): T {
   return config;
 }
+export { clusterByPredicate, cosineSimilarity } from "./cluster.ts";
 export { defineRule } from "./define-rule.ts";
 export { runTimedCommand } from "./run-command.ts";
+
 export {
   artifactProviderSchema,
   functionSchema,
