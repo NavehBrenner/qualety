@@ -7,6 +7,7 @@ const OBJECT_KEYS = new Set(["type", "properties", "required", "additionalProper
 const NUMBER_KEYS = new Set(["type", "minimum", "maximum", "exclusiveMinimum", "exclusiveMaximum"]);
 const STRING_KEYS = new Set(["type"]);
 const ARRAY_KEYS = new Set(["type", "items"]);
+const BOOLEAN_KEYS = new Set(["type"]);
 
 export function compileRuleOptions(schema: unknown, ruleId: string): z.ZodType {
   const record = requireRecord(schema, ruleId);
@@ -19,6 +20,10 @@ export function compileRuleOptions(schema: unknown, ruleId: string): z.ZodType {
   if (record.type === "string") {
     rejectUnknownKeys(record, STRING_KEYS, ruleId);
     return z.string();
+  }
+  if (record.type === "boolean") {
+    rejectUnknownKeys(record, BOOLEAN_KEYS, ruleId);
+    return z.boolean();
   }
   if (record.type === "array") {
     rejectUnknownKeys(record, ARRAY_KEYS, ruleId);

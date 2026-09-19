@@ -1,0 +1,10 @@
+{
+  "plugins": ["../../dist/index.js", "../../../dry/dist/index.js"],
+  "rules": {
+    "python/single-source-threshold": "error",
+    "dry/no-duplicate-code": "off",
+    "dry/no-semantic-duplicate": "off",
+    "dry/no-duplicate-python": "off"
+  },
+  "biome": false
+}

@@ -1,6 +1,9 @@
 import { existsSync } from "node:fs";
 import { dirname, extname, join, resolve } from "node:path";
 import { type ArtifactBuildContext, runTimedCommand } from "qualety";
+import { collectNameCards, type ThresholdNameCard } from "./threshold-names.ts";
+
+export type { ThresholdNameCard };
 
 const SCAN_TIMEOUT_MS = 60_000;
 
@@ -18,6 +21,7 @@ export type PythonSource = {
 
 export type ParsedPythonProject = {
   sources: ReadonlyMap<string, PythonSource>;
+  nameCards: readonly ThresholdNameCard[];
 };
 
 declare module "qualety" {
@@ -69,7 +73,7 @@ export async function buildPythonProject(
 ): Promise<ParsedPythonProject> {
   const paths = pythonFiles(options.cwd, options.files);
   if (paths.length === 0) {
-    return { sources: new Map() };
+    return { sources: new Map(), nameCards: [] };
   }
   const requiredBy = options.requiredBy;
   const timeoutMs = options.timeoutMs ?? SCAN_TIMEOUT_MS;
@@ -96,7 +100,8 @@ export async function buildPythonProject(
       `python3 produced invalid JSON (required by ${byLabel(requiredBy)}): ${detail}`,
     );
   }
-  return { sources: sourcesFromDump(dumped, options.cwd, requiredBy) };
+  const sources = sourcesFromDump(dumped, options.cwd, requiredBy);
+  return { sources, nameCards: collectNameCards(sources, options.cwd) };
 }
 
 async function dumpAst(

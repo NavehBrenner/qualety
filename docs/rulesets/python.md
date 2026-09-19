@@ -15,7 +15,7 @@ Installing `@qualety/python` pins `@astral-sh/ruff-wasm-nodejs`. With a `qualety
 | `python/no-open-without-with` | `SIM115` (default; not full `SIM`) |
 | `python/require-typed-public` | `ANN*` (not a delta) |
 | `python/no-public-any` | `ANN401` (not a delta) |
-| `python/no-unnecessary-def` / `no-unnecessary-class` / `public-exports-tested` / `no-sys-path-hack` | no Ruff twin |
+| `python/no-unnecessary-def` / `no-unnecessary-class` / `public-exports-tested` / `no-sys-path-hack` / `single-source-threshold` | no Ruff twin |
 
 ## Implemented
 
@@ -31,8 +31,9 @@ Installing `@qualety/python` pins `@astral-sh/ruff-wasm-nodejs`. With a `qualety
 | `python/no-open-without-with` | Do not call `open(...)` outside a `with` / `async with` in the same function. `defineRule` / `requires: ["python"]` | `error` |
 | `python/no-sys-path-hack` | Do not mutate `sys.path` / `sys.path_hooks` to fix imports. `defineRule` / `requires: ["python"]` | `error` |
 | `python/no-public-any` | Public callables must not annotate parameters or return type as bare `Any`. `defineRule` / `requires: ["python"]` | `error` |
+| `python/single-source-threshold` | Catch outcome-deciding module-level numeric constants redeclared in another module of the same package. Arms A exact name, B normalized/token, C name-embed via dry `code-embeddings`. `defineRule` / `requires: ["python", "code-embeddings"]` (C omitted when `arms.embedNames: false`) | off |
 
-Shared skip (unless a rule tightens): `.pyi`, `test_*.py` / `*_test.py`, path segment `tests` / `__tests__` / `fixtures`, `conftest.py`, `__pycache__`. Underapproximate — silence when uncertain. Concrete suggestion (not `NO_SUGGESTION`). Messaging does not say “in this file”. No framework decorator allowlists. No types/Protocol arm beyond annotation presence on `python/require-typed-public` and banning bare `Any` on `python/no-public-any`. No DRY/embeddings.
+Shared skip (unless a rule tightens): `.pyi`, `test_*.py` / `*_test.py`, path segment `tests` / `__tests__` / `fixtures`, `conftest.py`, `__pycache__`. Underapproximate — silence when uncertain. Concrete suggestion (not `NO_SUGGESTION`). Messaging does not say “in this file”. No framework decorator allowlists. No types/Protocol arm beyond annotation presence on `python/require-typed-public` and banning bare `Any` on `python/no-public-any`. Other python rules have no embeddings; `python/single-source-threshold` Arm C reuses dry `code-embeddings` (identifier text only).
 
 **Artifact:** empty `.py` set after filter → empty sources, do not spawn, success. Syntax error per file → omit that file. Missing / unrunnable `python3` or bad dump JSON when `.py` exist → exit 2, name the requiring rule. No `QUALETY_PYTHON` env.
 
@@ -138,6 +139,33 @@ Same public callables as `python/require-typed-public` (presence vs quality). Fl
 **Quiet:** missing annotations; `list[Any]`, `Any | None`, `Optional[Any]`; `*args: Any` / `**kwargs: Any`; non-trivial aliases; private / nested / dunder / overload / skipped paths / init-not-in-`__all__`.
 
 **Violation:** on the def name; suggestion: replace `Any` with a real type, `object`, or a Protocol/TypedDict.
+
+### `python/single-source-threshold`
+
+Catch outcome-deciding **module-level numeric constants** that are redeclared in another module of the **same package** instead of defined once and imported. Not in `configs.recommended`. Enabling the rule runs arms A+B+C under option defaults. Needs `@qualety/dry` in `plugins[]` whenever Arm C is on (dry provides `code-embeddings`).
+
+**Universe:** module-level `Assign` / `AnnAssign` whose target is a single `Name` and whose value is an `int`/`float` literal or unary `+`/`-` of that (`Final` / `typing.Final[...]` optional). Same skip family as other python rules. Package group = existing `groupByPackage` (`packageDir`). One candidate per `(file, name)`; extra rebinds in the same file skip that name. Unclear bind/value/package → silence.
+
+**Arm A — exact name.** Same identifier in ≥2 modules of the package. Report each non-canonical def. No lexicon gate. Canonical = first by `(path, name)`. Extra site silenced if that file imports the name from any defining module.
+
+**Arm B — normalized / token (no ML).** Upper-snake; strip prefixes `DEFAULT_`, `LEGACY_`, `CFG_`, `CONFIG_`; strip suffixes longest-first `_SECONDS`, `_STEPS`, `_COUNT`, `_SEC`, `_MS`, `_S`, `_N`; token set = split on `_`. Match if normalized strings are equal and non-empty **or** token-set Jaccard ≥ `tokenJaccard` (default `0.85`) with both token sets non-empty. **Gate required:** user `names` glob hits either raw identifier, **or** lexicon hits raw or normalized (case-insensitive substring / token): `cap`, `budget`, `threshold`, `timeout`, `tolerance`, `deadline`, `limit`, `max_steps`, `min_steps`; `force` **token only**. Different numeric literals still report.
+
+**Arm C — name embedding.** Identifier only (`DEFAULT_FORCE_CAP` → `default force cap`). Do not embed values. Same package, same gate as B, cosine default **0.92** (`nameCosine`, exclusiveMin 0 max 1). Reuses dry MiniLM / cache / `QUALETY_EMBEDDINGS_MODULE`. Fail closed if the model fails with ≥1 embeddable name card. `arms.embedNames: false` skips C and does not require `code-embeddings`.
+
+**Dedup:** one violation per extra site vs the same canonical (prefer A, then B, then C). Suggestion names the canonical module.name and says to import or re-export. Optional “values disagree — confirm split-brain” when literals differ. Do not claim values must be equal.
+
+**Options** (`additionalProperties: false`):
+
+```json
+{
+  "names": ["FORCE_CAP*", "*_BUDGET", "*_TOLERANCE", "MAX_STEPS*"],
+  "tokenJaccard": 0.85,
+  "nameCosine": 0.92,
+  "arms": { "exact": true, "normalized": true, "embedNames": true }
+}
+```
+
+`names` globs the **raw** identifier (`*` supported). Empty / omitted → no pattern hits; lexicon still gates B/C.
 
 ## Not planned in this plugin
 

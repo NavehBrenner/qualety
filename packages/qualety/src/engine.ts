@@ -461,7 +461,12 @@ function enableRule(
 }
 
 function requiresOf(item: Enabled): readonly string[] {
-  return item.rule.meta.requires ?? [];
+  const requires = item.rule.meta.requires ?? [];
+  const options = item.options;
+  if (!isRecord(options) || !isRecord(options.arms) || options.arms.embedNames !== false) {
+    return requires;
+  }
+  return requires.filter((id) => id !== "code-embeddings");
 }
 
 async function buildRequiredArtifacts(

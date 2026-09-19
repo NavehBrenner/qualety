@@ -81,6 +81,91 @@ test("cache hit skips embed", async () => {
   expect(calls).toBe(firstCalls);
 });
 
+test("name cards embed when required by python/single-source-threshold only", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "ci-embed-build-"));
+  const cacheDir = await mkdtemp(join(tmpdir(), "ci-embed-cache-"));
+  await mkdir(join(dir, "src"), { recursive: true });
+  await writeFile(join(dir, "src/a.ts"), sampleFn);
+  const ts = await typescriptArtifact(dir);
+  const pyFile = join(dir, "src/a.py");
+  const python = {
+    sources: new Map(),
+    nameCards: [
+      {
+        file: pyFile,
+        name: "FORCE_CAP",
+        value: 30,
+        packageDir: dir,
+        embedText: "force cap",
+        range: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } },
+      },
+    ],
+  };
+  let calls = 0;
+  const embedder = {
+    id: "stub",
+    revision: "1",
+    dims: 4,
+    async embed(texts: string[]) {
+      calls += texts.length;
+      return texts.map(() => new Float32Array([1, 0, 0, 0]));
+    },
+  };
+  const index = await buildCodeEmbeddingsIndex({
+    cwd: dir,
+    files: ["src/a.ts", "src/a.py"],
+    exclude: [],
+    requiredBy: ["python/single-source-threshold"],
+    getArtifact: (id: string) => (id === "typescript" ? ts : id === "python" ? python : undefined),
+    embedder,
+    cacheDir,
+  });
+  expect(index.chunks).toEqual([]);
+  expect(index.names).toHaveLength(1);
+  expect(index.names?.[0]?.name).toBe("FORCE_CAP");
+  expect(index.names?.[0]?.path).toBe("src/a.py");
+  expect(calls).toBe(1);
+});
+
+test("semantic-dupe only skips name cards", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "ci-embed-build-"));
+  const cacheDir = await mkdtemp(join(tmpdir(), "ci-embed-cache-"));
+  const python = {
+    sources: new Map(),
+    nameCards: [
+      {
+        file: join(dir, "src/a.py"),
+        name: "FORCE_CAP",
+        value: 30,
+        packageDir: dir,
+        embedText: "force cap",
+        range: { start: { line: 1, column: 1 }, end: { line: 1, column: 10 } },
+      },
+    ],
+  };
+  let calls = 0;
+  const embedder = {
+    id: "stub",
+    revision: "1",
+    dims: 4,
+    async embed(texts: string[]) {
+      calls += texts.length;
+      return texts.map(() => new Float32Array([1, 0, 0, 0]));
+    },
+  };
+  const index = await buildCodeEmbeddingsIndex({
+    cwd: dir,
+    files: ["src/a.py"],
+    exclude: [],
+    requiredBy: ["dry/no-semantic-duplicate"],
+    getArtifact: (id: string) => (id === "python" ? python : undefined),
+    embedder,
+    cacheDir,
+  });
+  expect(index.names ?? []).toEqual([]);
+  expect(calls).toBe(0);
+});
+
 test("dispose runs after successful embed build", async () => {
   const dir = await mkdtemp(join(tmpdir(), "ci-embed-build-"));
   const cacheDir = await mkdtemp(join(tmpdir(), "ci-embed-cache-"));

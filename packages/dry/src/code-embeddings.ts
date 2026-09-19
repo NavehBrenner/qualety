@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 import type { ArtifactBuildContext, Range } from "qualety";
-import { type CodeChunk, collectChunks } from "./chunks.ts";
+import { type CodeChunk, collectChunks, displayFile } from "./chunks.ts";
+
+const NAME_EMBED_RULE = "python/single-source-threshold";
+
 import { embeddingsCacheDir, readCachedVector, writeCachedVector } from "./embed-cache.ts";
 import { type EmbedModule, resolveEmbedModule } from "./embed-module.ts";
 
@@ -23,6 +26,7 @@ export type EmbeddedChunk = {
 
 export type CodeEmbeddingsIndex = {
   chunks: readonly EmbeddedChunk[];
+  names?: readonly EmbeddedChunk[];
 };
 
 declare module "qualety" {
@@ -37,24 +41,30 @@ export type BuildCodeEmbeddingsOptions = ArtifactBuildContext & {
   env?: NodeJS.ProcessEnv;
 };
 
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: name vs body inputs; splitting recreates single-use helpers
 export async function buildCodeEmbeddingsIndex(
   options: BuildCodeEmbeddingsOptions,
 ): Promise<CodeEmbeddingsIndex> {
-  const chunks = collectChunks(
-    options.cwd,
-    options.getArtifact("typescript"),
-    options.getArtifact("python"),
-  );
-  if (chunks.length === 0) {
-    return { chunks: [] };
+  const needNames = options.requiredBy.includes(NAME_EMBED_RULE);
+  const needChunks = options.requiredBy.some((id) => id !== NAME_EMBED_RULE);
+  const chunks = needChunks
+    ? collectChunks(options.cwd, options.getArtifact("typescript"), options.getArtifact("python"))
+    : [];
+  const nameChunks = needNames
+    ? nameChunksFromPython(options.getArtifact("python"), options.cwd)
+    : [];
+  if (chunks.length === 0 && nameChunks.length === 0) {
+    return { chunks: [], names: [] };
   }
   const env = options.env ?? process.env;
   let embedder: EmbedModule | undefined;
   try {
     embedder = options.embedder ?? (await resolveEmbedModule(options.cwd, env));
     const cacheDir = options.cacheDir ?? embeddingsCacheDir(env);
-    const embedded = await embedChunks(chunks, embedder, cacheDir);
-    return { chunks: embedded };
+    return {
+      chunks: await embedChunks(chunks, embedder, cacheDir),
+      names: await embedChunks(nameChunks, embedder, cacheDir),
+    };
   } catch (e) {
     const who = options.requiredBy.join(", ") || "dry/no-semantic-duplicate";
     const detail = e instanceof Error ? e.message : String(e);
@@ -139,4 +149,56 @@ function vectorAt(
     }
   }
   return vector;
+}
+
+function nameChunksFromPython(artifact: unknown, cwd: string): CodeChunk[] {
+  if (!isRecord(artifact) || !Array.isArray(artifact.nameCards)) {
+    return [];
+  }
+  const chunks: CodeChunk[] = [];
+  for (const card of artifact.nameCards) {
+    const chunk = nameChunkFromCard(card, cwd);
+    if (chunk !== undefined) {
+      chunks.push(chunk);
+    }
+  }
+  return chunks;
+}
+
+function nameChunkFromCard(card: unknown, cwd: string): CodeChunk | undefined {
+  if (!isRecord(card) || typeof card.name !== "string" || typeof card.embedText !== "string") {
+    return undefined;
+  }
+  if (typeof card.file !== "string" || card.embedText.length === 0) {
+    return undefined;
+  }
+  return {
+    path: displayFile(cwd, card.file),
+    name: card.name,
+    lang: "python",
+    range: nameCardRange(card.range),
+    text: card.embedText,
+  };
+}
+
+function nameCardRange(value: unknown): Range {
+  if (!isRecord(value) || !isRecord(value.start) || !isRecord(value.end)) {
+    return { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } };
+  }
+  if (
+    typeof value.start.line !== "number" ||
+    typeof value.start.column !== "number" ||
+    typeof value.end.line !== "number" ||
+    typeof value.end.column !== "number"
+  ) {
+    return { start: { line: 1, column: 1 }, end: { line: 1, column: 1 } };
+  }
+  return {
+    start: { line: value.start.line, column: value.start.column },
+    end: { line: value.end.line, column: value.end.column },
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

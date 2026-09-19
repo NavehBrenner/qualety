@@ -1,0 +1,7 @@
+{
+  "plugins": ["../../dist/index.js"],
+  "rules": {
+    "python/single-source-threshold": ["error", { "arms": { "embedNames": false } }]
+  },
+  "biome": false
+}
