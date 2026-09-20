@@ -25,10 +25,34 @@ test("extra key with additionalProperties false fails", () => {
 });
 
 test("unsupported schema keyword fails closed", () => {
-  expect(() => compileRuleOptions({ type: "boolean" }, "fixture/tuned")).toThrow(/fixture\/tuned/);
-  expect(() => compileRuleOptions({ type: "boolean" }, "fixture/tuned")).toThrow(
+  expect(() => compileRuleOptions({ type: "integer" }, "fixture/tuned")).toThrow(/fixture\/tuned/);
+  expect(() => compileRuleOptions({ type: "integer" }, "fixture/tuned")).toThrow(
     /unsupported meta\.schema/,
   );
+});
+
+test("boolean properties compile", () => {
+  const compiled = compileRuleOptions(
+    {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        arms: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            embedNames: { type: "boolean" },
+          },
+        },
+      },
+    },
+    "python/single-source-threshold",
+  );
+  expect(compiled.safeParse({ arms: { embedNames: false } })).toEqual({
+    success: true,
+    data: { arms: { embedNames: false } },
+  });
+  expect(compiled.safeParse({ arms: { embedNames: 1 } }).success).toBe(false);
 });
 
 test("string and string-array properties compile", () => {

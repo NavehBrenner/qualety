@@ -34,6 +34,7 @@ Behavior is locked in [SPECS.md](../SPECS.md) §3 R4 and Semantic DRY. Summary:
 - **Cache:** `$XDG_CACHE_HOME/qualety/code-embeddings/` (default `~/.cache/qualety/code-embeddings/`). Override `QUALETY_EMBEDDINGS_CACHE`. Key `modelId/revision/sha256(normalized)`. Corrupt entries re-embed.
 - **Report:** cosine threshold **0.90** by default (`COSINE_THRESHOLD`). Optional `{ threshold }` (`number`, `> 0` and `≤ 1`) via `["error", { threshold }]`. Omit options → 0.90. One violation per cluster ≥ 2. Primary = first by `(path, name)`; siblings named as `path:line`. Must not say “in this file”. Concrete suggestion to extract a shared helper or reuse a sibling. Never `NO_SUGGESTION`. Independent of structural dry.
 - **Fail closed:** model load failure with ≥1 embeddable chunk → exit 2 naming `dry/no-semantic-duplicate` and `code-embeddings`. Zero embeddable chunks → success (do not load the model). Per-chunk vector miss → omit that chunk.
+- **Name cards:** `"code-embeddings"` may also carry identifier `names` for `python/single-source-threshold`. Semantic-dupe still clusters body `chunks` only.
 
 ## Not planned in this plugin
 

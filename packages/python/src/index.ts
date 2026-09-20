@@ -10,6 +10,7 @@ import { noUnnecessaryDef } from "./no-unnecessary-def.ts";
 import { publicExportsTested } from "./public-exports-tested.ts";
 import { buildPythonProject } from "./python.ts";
 import { requireTypedPublic } from "./require-typed-public.ts";
+import { singleSourceThreshold } from "./single-source-threshold.ts";
 
 const plugin: Plugin = {
   name: "python",
@@ -29,6 +30,7 @@ const plugin: Plugin = {
     "no-open-without-with": noOpenWithoutWith,
     "no-sys-path-hack": noSysPathHack,
     "no-public-any": noPublicAny,
+    "single-source-threshold": singleSourceThreshold,
   },
   ruff: {
     rules: {

@@ -1,0 +1,1 @@
+STRENGTH_CAP = 50

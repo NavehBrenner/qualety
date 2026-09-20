@@ -1594,6 +1594,64 @@ test("unknown option key exits 2 naming the rule", async () => {
   expect(errors.join("\n")).toMatch(/fixture\/tuned/);
 });
 
+const embedNamesPlugin = `export default {
+  name: "fixture",
+  provides: {
+    "code-embeddings": {
+      build() {
+        throw new Error("model loaded");
+      },
+    },
+  },
+  rules: {
+    ping: {
+      meta: {
+        requires: ["code-embeddings"],
+        docs: { description: "optional embeddings" },
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            arms: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                embedNames: { type: "boolean" },
+              },
+            },
+          },
+        },
+      },
+      create() {},
+    },
+  },
+};
+`;
+
+test("arms.embedNames false omits code-embeddings", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": embedNamesPlugin,
+    "qualety.config.json": config({
+      "fixture/ping": ["error", { arms: { embedNames: false } }],
+    }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const errors: string[] = [];
+  expect(await check(dir, silent, (m) => errors.push(String(m)))).toBe(0);
+  expect(errors.join("\n")).toBe("");
+});
+
+test("omitted embedNames still loads code-embeddings", async () => {
+  const dir = await writeTree({
+    "plugin.mjs": embedNamesPlugin,
+    "qualety.config.json": config({ "fixture/ping": "error" }),
+    "src/hello.ts": "export const n = 1;\n",
+  });
+  const errors: string[] = [];
+  expect(await check(dir, silent, (m) => errors.push(String(m)))).toBe(2);
+  expect(errors.join("\n")).toMatch(/model loaded/);
+});
+
 test("options without meta.schema exit 2", async () => {
   const dir = await writeTree({
     "plugin.mjs": optionsPlugin,

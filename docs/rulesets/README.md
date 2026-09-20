@@ -5,7 +5,7 @@
 | [typescript.md](./typescript.md) | **Binding catalog** for `@qualety/typescript` — implemented vs not planned |
 | [react.md](./react.md) | **Binding catalog** for `@qualety/react` — implemented vs backlog |
 | [dry.md](./dry.md) | **Binding catalog** for `@qualety/dry` — structural + semantic DRY |
-| [python.md](./python.md) | **Binding catalog** for `@qualety/python` — `python/no-unnecessary-def`, `python/no-unnecessary-class`, `python/public-exports-tested`, `python/no-mutable-default`, `python/require-typed-public` |
+| [python.md](./python.md) | **Binding catalog** for `@qualety/python` — `python/no-unnecessary-def` … `python/no-public-any`, `python/single-source-threshold` |
 | [ml.md](./ml.md) | **Binding catalog** for `@qualety/ml` — determinism / seeding / run provenance (`ml/require-global-seed` … `ml/run-metadata-completeness`) |
 | [fingerprint.md](./fingerprint.md) | **Binding catalog** for `@qualety/fingerprint` — content-hash / cache-key integrity (`fingerprint/hash-covers-every-config-field`, `fingerprint/versioned-hash-payload`, `fingerprint/hash-includes-code-version`) |
 | [plugin-kit.md](./plugin-kit.md) | **Portable authoring** for `@qualety/plugin-kit` — not a product app catalog |

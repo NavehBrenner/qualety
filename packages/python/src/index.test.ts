@@ -27,9 +27,11 @@ test("plugin exports name, rules, recommended, and python provider", () => {
   expect(plugin.rules?.["no-open-without-with"]).toBeDefined();
   expect(plugin.rules?.["no-sys-path-hack"]).toBeDefined();
   expect(plugin.rules?.["no-public-any"]).toBeDefined();
+  expect(plugin.rules?.["single-source-threshold"]).toBeDefined();
   for (const id of RECOMMENDED) {
     expect(plugin.configs?.recommended?.rules?.[id]).toBe("error");
   }
+  expect(plugin.configs?.recommended?.rules?.["python/single-source-threshold"]).toBeUndefined();
   expect(typeof plugin.provides?.python?.build).toBe("function");
   expect(plugin.ruff).toEqual({ rules: { UP: "error", B: "error" } });
 });
